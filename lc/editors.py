@@ -51,7 +51,11 @@ function! s:LcOpenWeb() abort
   endif
   let l:slug = get(json_decode(join(readfile(l:meta_path), '')), 'slug', '')
   if l:slug !=# ''
-    let l:opener = has('mac') ? 'open' : 'xdg-open'
+    " Inside WSL the browser is on the Windows side; wslview/explorer.exe
+    " reach it where xdg-open does not exist.
+    let l:opener = has('mac') ? 'open'
+        \ : has('wsl') ? (executable('wslview') ? 'wslview' : 'explorer.exe')
+        \ : 'xdg-open'
     call system(l:opener . ' ' . shellescape('https://leetcode.com/problems/' . l:slug . '/'))
   endif
 endfunction

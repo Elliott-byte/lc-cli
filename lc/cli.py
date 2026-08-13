@@ -6,7 +6,6 @@ import json
 import os
 import sys
 import time
-import webbrowser
 from pathlib import Path
 from typing import Optional
 
@@ -18,7 +17,7 @@ from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
 
-from . import __version__, editors, store
+from . import __version__, browser, editors, store
 from .api import AuthError, JudgeResult, LeetCode, LeetCodeError, Problem, ProblemSummary
 from .config import (
     Credentials,
@@ -356,15 +355,19 @@ def _read_browser_cookies() -> list[dict[str, str]] | None:
 
     Each browser's jar stays separate — merging them (browser_cookie3.load)
     would let a stale session in one browser shadow the one you just signed
-    in with in another. Returns None when no cookie store is readable at all.
+    in with in another. Under WSL the Windows Firefox profiles are read too
+    (browser_cookie3 only knows Linux paths, and Windows Chrome/Edge encrypt
+    theirs beyond reach). Returns None when no store is readable at all.
     """
-    try:
-        import browser_cookie3  # type: ignore
-    except ImportError:
-        return None
     candidates: list[dict[str, str]] = []
     readable = False
-    for loader in browser_cookie3.all_browsers:
+
+    try:
+        import browser_cookie3  # type: ignore
+        loaders = list(browser_cookie3.all_browsers)
+    except ImportError:
+        loaders = []
+    for loader in loaders:
         try:
             jar = loader(domain_name="leetcode.com")
         except Exception:  # browser_cookie3 raises a wide variety of errors
@@ -373,6 +376,15 @@ def _read_browser_cookies() -> list[dict[str, str]] | None:
         cookies = {c.name: c.value for c in jar}
         if cookies.get("LEETCODE_SESSION") and cookies.get("csrftoken"):
             candidates.append(cookies)
+
+    if browser.is_wsl():
+        jars = browser.windows_firefox_cookies()
+        if jars is not None:
+            readable = True
+            for cookies in jars:
+                if cookies.get("LEETCODE_SESSION") and cookies.get("csrftoken"):
+                    candidates.append(cookies)
+
     return candidates if readable else None
 
 
@@ -403,7 +415,14 @@ def _login_via_browser(attempts: int = 5) -> tuple[str, str, dict] | None:
                 Text("no signed-in LeetCode session in your browser — opening the login page…",
                      style="dim")
             )
-            webbrowser.open(LOGIN_URL)
+            if not browser.open_url(LOGIN_URL):
+                console.print(Text(f"could not open a browser — go to {LOGIN_URL}",
+                                   style="dim"))
+            if browser.is_wsl():
+                console.print(
+                    Text("WSL can only read Windows Firefox cookies — signing in with "
+                         "Chrome or Edge? run `lc login --paste` instead", style="dim")
+                )
             opened = True
         try:
             # Browsers flush cookies to disk lazily; a beat before re-reading
@@ -497,7 +516,8 @@ def show(
         problem = resolve_problem(ref, lc, fresh=fresh)
 
     if web:
-        webbrowser.open(problem.url)
+        if not browser.open_url(problem.url):
+            console.print(problem.url)
         return
 
     console.print()

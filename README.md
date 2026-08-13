@@ -52,6 +52,12 @@ in there, press Enter, and `lc` picks up the fresh cookies. On macOS the OS
 may ask once for keychain access to the browser's cookie store; reading
 Safari's cookies needs Full Disk Access for your terminal.
 
+WSL works out of the box: pages open through the Windows browser
+(`explorer.exe`, or wslu's `wslview` when installed) and `lc login` reads
+Windows Firefox profiles straight through `/mnt/c`. Windows Chrome and Edge
+encrypt their cookie stores with keys only the browser itself can use, so
+sign in with `--paste` there.
+
 If no browser store is readable (remote box, exotic browser):
 
 ```bash

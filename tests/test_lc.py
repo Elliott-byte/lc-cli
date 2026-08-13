@@ -325,7 +325,7 @@ def test_login_opens_the_browser_and_waits_when_signed_out(tmp_path, monkeypatch
     monkeypatch.setattr(cli, "_read_browser_cookies", lambda: next(reads))
     monkeypatch.setattr(cli.time, "sleep", lambda _s: None)
     opened = []
-    monkeypatch.setattr(cli.webbrowser, "open", lambda url: opened.append(url))
+    monkeypatch.setattr(cli.browser, "open_url", lambda url: opened.append(url) or True)
 
     from typer.testing import CliRunner
     result = CliRunner().invoke(cli.app, ["login"], input="\n")
@@ -334,6 +334,119 @@ def test_login_opens_the_browser_and_waits_when_signed_out(tmp_path, monkeypatch
     assert opened == [cli.LOGIN_URL]
     from lc.config import load_credentials
     assert load_credentials().session == "sess"
+
+
+# ------------------------------------------------------------------ WSL
+
+def test_is_wsl_reads_the_kernel_banner(tmp_path, monkeypatch):
+    from lc import browser
+
+    monkeypatch.delenv("WSL_DISTRO_NAME", raising=False)
+    proc = tmp_path / "version"
+    monkeypatch.setattr(browser, "_PROC_VERSION", proc)
+    assert not browser.is_wsl()  # no such file
+    proc.write_text("Linux version 6.6.36-microsoft-standard-WSL2 (root@1) ...")
+    assert browser.is_wsl()
+    proc.write_text("Linux version 6.9.0-generic (buildd@lcy02) ...")
+    assert not browser.is_wsl()
+    monkeypatch.setenv("WSL_DISTRO_NAME", "Ubuntu")
+    assert browser.is_wsl()
+
+
+def test_open_url_uses_the_windows_opener_under_wsl(monkeypatch):
+    from lc import browser
+
+    monkeypatch.setattr(browser, "is_wsl", lambda: True)
+    monkeypatch.delenv("BROWSER", raising=False)
+    monkeypatch.setattr(
+        browser.shutil, "which",
+        lambda exe: "/mnt/c/Windows/explorer.exe" if exe == "explorer.exe" else None,
+    )
+    runs = []
+    monkeypatch.setattr(browser.subprocess, "run", lambda argv, **kw: runs.append(argv))
+
+    assert browser.open_url("https://example.com") is True
+    assert runs == [["/mnt/c/Windows/explorer.exe", "https://example.com"]]
+
+
+def test_open_url_respects_an_explicit_browser_env(monkeypatch):
+    from lc import browser
+
+    monkeypatch.setattr(browser, "is_wsl", lambda: True)
+    monkeypatch.setenv("BROWSER", "firefox")
+    opened = []
+    monkeypatch.setattr(browser.webbrowser, "open", lambda url: opened.append(url) or True)
+
+    assert browser.open_url("https://example.com") is True
+    assert opened == ["https://example.com"]
+
+
+def test_open_url_is_plain_webbrowser_off_wsl(monkeypatch):
+    from lc import browser
+
+    monkeypatch.setattr(browser, "is_wsl", lambda: False)
+    opened = []
+    monkeypatch.setattr(browser.webbrowser, "open", lambda url: opened.append(url) or True)
+
+    assert browser.open_url("https://example.com") is True
+    assert opened == ["https://example.com"]
+
+
+def _firefox_profile(root, cookies):
+    """A Windows-shaped Firefox profile under *root* with the given cookies."""
+    import sqlite3
+
+    profile = root / "AppData/Roaming/Mozilla/Firefox/Profiles/ab12cd34.default-release"
+    profile.mkdir(parents=True)
+    conn = sqlite3.connect(profile / "cookies.sqlite")
+    conn.execute("CREATE TABLE moz_cookies (host TEXT, name TEXT, value TEXT)")
+    conn.executemany("INSERT INTO moz_cookies VALUES (?, ?, ?)", cookies)
+    conn.commit()
+    conn.close()
+    return root
+
+
+def test_windows_firefox_cookies_reads_the_profile(tmp_path, monkeypatch):
+    from lc import browser
+
+    root = _firefox_profile(tmp_path, [
+        (".leetcode.com", "LEETCODE_SESSION", "sess"),
+        ("leetcode.com", "csrftoken", "tok"),
+        (".example.com", "LEETCODE_SESSION", "someone-elses"),
+    ])
+    monkeypatch.setattr(browser, "_windows_profile_roots", lambda: [root])
+
+    assert browser.windows_firefox_cookies() == [
+        {"LEETCODE_SESSION": "sess", "csrftoken": "tok"}
+    ]
+
+
+def test_windows_firefox_cookies_none_without_a_profile(tmp_path, monkeypatch):
+    from lc import browser
+
+    monkeypatch.setattr(browser, "_windows_profile_roots", lambda: [tmp_path])
+    assert browser.windows_firefox_cookies() is None
+
+
+def test_read_browser_cookies_includes_windows_firefox_under_wsl(monkeypatch):
+    import sys
+    import types
+
+    import lc.cli as cli
+
+    # No Linux-side browsers, a Windows Firefox with one complete session.
+    monkeypatch.setitem(sys.modules, "browser_cookie3",
+                        types.SimpleNamespace(all_browsers=[]))
+    monkeypatch.setattr(cli.browser, "is_wsl", lambda: True)
+    monkeypatch.setattr(
+        cli.browser, "windows_firefox_cookies",
+        lambda: [{"LEETCODE_SESSION": "sess", "csrftoken": "tok"},
+                 {"csrftoken": "incomplete"}],
+    )
+
+    assert cli._read_browser_cookies() == [
+        {"LEETCODE_SESSION": "sess", "csrftoken": "tok"}
+    ]
 
 
 # ------------------------------------------------------ workspace file choice

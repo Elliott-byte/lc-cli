@@ -6,7 +6,6 @@ that touches the network runs on a thread worker so the UI never blocks.
 
 from __future__ import annotations
 
-import webbrowser
 from typing import Iterable
 
 from textual import on, work
@@ -21,6 +20,7 @@ from rich.text import Text
 
 from . import store, workspace
 from .api import JudgeResult, LeetCode, LeetCodeError, Problem, ProblemSummary
+from .browser import open_url
 from .config import load_config, load_credentials
 from .langs import resolve
 from .render import difficulty_text, problem_header, render_statement, status_mark
@@ -225,8 +225,9 @@ class LeetCodeTUI(App):
         self.refresh_list()
 
     def action_open_web(self) -> None:
-        if self.current:
-            webbrowser.open(self.current.url)
+        if self.current and not open_url(self.current.url):
+            self.notify(f"could not open a browser — {self.current.url}",
+                        severity="warning")
 
     def action_pick(self) -> None:
         if not self.current:
