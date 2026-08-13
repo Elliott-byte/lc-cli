@@ -218,6 +218,8 @@ def print_result(result: JudgeResult, problem: Problem) -> None:
         for i in range(pairs):
             got = result.code_output[i] if i < len(result.code_output) else ""
             want = result.expected_output[i] if i < len(result.expected_output) else ""
+            if not got and not want:
+                continue  # the judge pads its answer arrays with a trailing ""
             ok = got == want
             table.add_row(
                 Text(str(i + 1), style="green" if ok else "red"),

@@ -11,9 +11,19 @@ lc test                         # run the samples on LeetCode's judge
 lc submit                       # submit for real
 ```
 
+![the full-screen browser](docs/tui.svg)
+
+![lc test against the real judge](docs/test.svg)
+
 ## Install
 
-The simplest way to get an `lc` on your `PATH`:
+```bash
+brew install elliott-byte/tap/lc-cli
+# or, with uv:
+uv tool install git+https://github.com/Elliott-byte/lc-cli
+```
+
+From a checkout of this repo:
 
 ```bash
 uv tool install .
@@ -57,6 +67,8 @@ them on disk.
 The session expires every couple of weeks — just run `lc login` again.
 
 ## Commands
+
+![lc list](docs/list.svg)
 
 | Command | What it does |
 | --- | --- |

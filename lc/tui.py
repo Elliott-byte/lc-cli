@@ -366,6 +366,8 @@ class LeetCodeTUI(App):
                     if i < len(result.expected_output)
                     else ""
                 )
+                if not got and not want:
+                    continue  # the judge pads its answer arrays with a trailing ""
                 ok = got == want
                 line = Text(f"{i + 1}. {got}", style="green" if ok else "red")
                 if not ok:
