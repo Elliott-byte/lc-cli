@@ -52,12 +52,6 @@ in there, press Enter, and `lc` picks up the fresh cookies. On macOS the OS
 may ask once for keychain access to the browser's cookie store; reading
 Safari's cookies needs Full Disk Access for your terminal.
 
-WSL works out of the box: pages open through the Windows browser
-(`explorer.exe`, or wslu's `wslview` when installed) and `lc login` reads
-Windows Firefox profiles straight through `/mnt/c`. Windows Chrome and Edge
-encrypt their cookie stores with keys only the browser itself can use, so
-sign in with `--paste` there.
-
 If no browser store is readable (remote box, exotic browser):
 
 ```bash
@@ -71,6 +65,18 @@ also read from `$LEETCODE_SESSION` / `$LEETCODE_CSRF` if you'd rather not store
 them on disk.
 
 The session expires every couple of weeks — just run `lc login` again.
+
+## WSL
+
+Everything above works inside the distro unchanged — install with the same
+`uv tool install` line, and the TUI, judge runs and vim plugin behave as on
+any Linux. The Windows boundary is handled where it shows: pages open through
+the Windows browser (`explorer.exe`, or wslu's `wslview` when you have it),
+and `lc login` reads Windows Firefox profiles straight through `/mnt/c`, so
+Firefox users log in automatically. Windows Chrome and Edge encrypt their
+cookie stores with keys only the browser itself can use — nothing outside the
+browser can read those — so sign in with `lc login --paste` there; the login
+flow reminds you.
 
 ## Commands
 
