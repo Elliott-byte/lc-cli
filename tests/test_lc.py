@@ -238,6 +238,7 @@ def test_setup_vim_installs_the_plugin(tmp_path, monkeypatch):
     assert path == tmp_path / ".vim" / "plugin" / "lc.vim"
     text = path.read_text()
     assert "lc test" in text and "lc submit" in text and ".lc.json" in text
+    assert "LcToggleStatement" in text and "README.md" in text
 
 
 def test_setup_vim_is_idempotent(tmp_path, monkeypatch):

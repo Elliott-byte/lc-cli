@@ -16,12 +16,41 @@ VIM_PLUGIN = r'''" lc.vim — Vim integration for the lc LeetCode CLI.
 " In a buffer whose directory contains .lc.json (an `lc pick` workspace):
 "   <leader>t   write the file, then run `lc test`
 "   <leader>s   write the file, then run `lc submit`
-" The leader key is backslash unless you have changed it.
+"   <leader>p   show/hide the problem statement (README.md) in a left split
+" The statement pane opens automatically when the solution file is the only
+" window; `let g:lc_auto_statement = 0` in your vimrc turns that off. Inside
+" the pane, q also closes it. The leader key is backslash unless changed.
 
 if exists('g:loaded_lc_cli')
   finish
 endif
 let g:loaded_lc_cli = 1
+
+function! s:LcReadme() abort
+  return expand('%:p:h') . '/README.md'
+endfunction
+
+function! s:LcOpenStatement() abort
+  let l:readme = s:LcReadme()
+  if !filereadable(l:readme)
+    return
+  endif
+  execute 'topleft vertical split ' . fnameescape(l:readme)
+  setlocal readonly nomodifiable wrap linebreak nonumber norelativenumber
+  setlocal winfixwidth
+  nnoremap <buffer> q :close<CR>
+  execute 'vertical resize ' . min([60, &columns / 2])
+  wincmd p
+endfunction
+
+function! s:LcToggleStatement() abort
+  let l:win = bufwinnr(bufnr(s:LcReadme()))
+  if l:win != -1 && winnr('$') > 1
+    execute l:win . 'close'
+  else
+    call s:LcOpenStatement()
+  endif
+endfunction
 
 function! s:LcSetup() abort
   if !filereadable(expand('%:p:h') . '/.lc.json')
@@ -30,6 +59,12 @@ function! s:LcSetup() abort
   " shellescape() so a workspace path with spaces survives the shell.
   nnoremap <buffer> <leader>t :w<CR>:execute '!cd ' . shellescape(expand('%:p:h')) . ' && lc test'<CR>
   nnoremap <buffer> <leader>s :w<CR>:execute '!cd ' . shellescape(expand('%:p:h')) . ' && lc submit'<CR>
+  nnoremap <buffer> <leader>p :call <SID>LcToggleStatement()<CR>
+  " Fresh `lc pick` / `lc edit`: put the statement alongside the solution.
+  if get(g:, 'lc_auto_statement', 1) && winnr('$') == 1
+        \ && expand('%:t') !=# 'README.md'
+    call s:LcOpenStatement()
+  endif
 endfunction
 
 augroup lc_cli

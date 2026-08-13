@@ -128,6 +128,12 @@ In a solution buffer (any file next to a `.lc.json`), normal mode:
 | --- | --- |
 | `\t` | save, then `lc test` |
 | `\s` | save, then `lc submit` |
+| `\p` | show/hide the problem statement in a left split |
+
+Opening a solution file also opens the statement (the directory's `README.md`,
+read-only) beside it automatically — hide it with `\p` (or `q` inside the
+pane), bring it back with `\p`. Put `let g:lc_auto_statement = 0` in your
+vimrc if you'd rather open it manually.
 
 The keys run from the file's own directory, so it doesn't matter where you
 launched Vim. They use `<leader>`, which is backslash unless you've remapped

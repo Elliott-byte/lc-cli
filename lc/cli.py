@@ -908,7 +908,8 @@ def setup_vim(
         save_config(cfg)
         console.print(Text("✔ editor: vim", style="green"))
     console.print(
-        Text("  in a solution buffer: \\t = save + test, \\s = save + submit", style="dim")
+        Text("  in a solution buffer: \\t = save + test, \\s = save + submit, "
+             "\\p = toggle statement", style="dim")
     )
 
 
