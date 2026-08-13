@@ -14,6 +14,7 @@ from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.widgets import DataTable, Footer, Input, Static
+from textual.widgets.data_table import RowDoesNotExist
 
 from rich.console import Group, RenderableType
 from rich.markup import escape
@@ -173,7 +174,7 @@ class LeetCodeTUI(App):
         table = self.query_one("#list", ProblemList)
         try:
             index = table.get_row_index(slug)
-        except KeyError:
+        except RowDoesNotExist:
             return False
         table.move_cursor(row=index)
         return True
@@ -326,6 +327,9 @@ class LeetCodeTUI(App):
         if cached:
             self._show(cached)
             return
+        # Until the fetch lands there is no current problem — pick/run/submit
+        # must not quietly act on the one shown before.
+        self.current = None
         self.query_one("#statement", Static).update(Text("loading…", style="dim"))
         self._fetch_worker(slug)
 
@@ -334,10 +338,11 @@ class LeetCodeTUI(App):
         try:
             problem = self.client.problem(slug)
         except LeetCodeError as exc:
-            self.call_from_thread(
-                self.query_one("#statement", Static).update,
-                Text(str(exc), style="red"),
-            )
+            if slug == self.current_slug:  # a stale error must not cover a newer pick
+                self.call_from_thread(
+                    self.query_one("#statement", Static).update,
+                    Text(str(exc), style="red"),
+                )
             return
         store.put_statement(problem)
         if slug == self.current_slug:

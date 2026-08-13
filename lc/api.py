@@ -428,34 +428,45 @@ class LeetCode:
         headers = {"Referer": f"{BASE}/problems/{slug}/"}
         deadline = time.monotonic() + timeout
         delay = 0.4
-        last_error: httpx.HTTPError | None = None
+        last_error: str | None = None
         while time.monotonic() < deadline:
             try:
                 resp = self._http.get(url, headers=headers)
             except httpx.HTTPError as exc:
                 # One dropped poll must not lose the verdict — the submission
                 # already went in, so keep asking until the deadline.
-                last_error = exc
+                last_error = str(exc)
                 time.sleep(delay)
                 delay = min(delay * 1.3, 2.0)
                 continue
-            last_error = None
             if resp.status_code in (401, 403):
                 raise AuthError("LeetCode rejected the session — run `lc login` again")
+            if resp.status_code == 429 or resp.status_code >= 500:
+                # Throttled or a transient server error — same as a dropped
+                # poll: the verdict still exists, keep asking.
+                last_error = f"HTTP {resp.status_code}"
+                time.sleep(delay)
+                delay = min(delay * 1.3, 2.0)
+                continue
             if resp.status_code >= 400:
                 raise LeetCodeError(f"judge poll failed: HTTP {resp.status_code}")
+            last_error = None
             try:
                 payload = resp.json()
             except json.JSONDecodeError:
                 payload = {}
-            if payload.get("state") == "SUCCESS":
+            state = payload.get("state")
+            if state == "SUCCESS":
                 return _to_result(payload, is_run=is_run)
+            if state == "FAILURE":
+                # Terminal: the judge gave up on this run — waiting is useless.
+                raise LeetCodeError(
+                    "the judge failed to process this submission — try again"
+                )
             time.sleep(delay)
             delay = min(delay * 1.3, 2.0)
         if last_error is not None:
-            raise LeetCodeError(
-                f"network error while waiting for the judge: {last_error}"
-            ) from last_error
+            raise LeetCodeError(f"lost the judge while waiting for the verdict: {last_error}")
         raise LeetCodeError("timed out waiting for the judge")
 
 

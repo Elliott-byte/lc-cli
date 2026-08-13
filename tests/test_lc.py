@@ -534,6 +534,36 @@ def test_poll_survives_a_dropped_connection():
     assert calls["n"] == 2
 
 
+def test_poll_retries_a_throttled_check(monkeypatch):
+    calls = {"n": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if str(request.url).endswith("/interpret_solution/"):
+            return httpx.Response(200, json={"interpret_id": "runcode_1"})
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return httpx.Response(429)
+        return httpx.Response(
+            200, json={"state": "SUCCESS", "status_msg": "Accepted", "correct_answer": True}
+        )
+
+    lc = LeetCode(CREDS, transport=httpx.MockTransport(handler))
+    result = lc.run(PROBLEM, "python3", "code", "[1]\n1")
+    assert result.accepted
+    assert calls["n"] == 2
+
+
+def test_poll_stops_on_a_terminal_judge_failure():
+    def handler(request: httpx.Request) -> httpx.Response:
+        if str(request.url).endswith("/interpret_solution/"):
+            return httpx.Response(200, json={"interpret_id": "runcode_1"})
+        return httpx.Response(200, json={"state": "FAILURE"})
+
+    lc = LeetCode(CREDS, transport=httpx.MockTransport(handler))
+    with pytest.raises(LeetCodeError, match="judge failed"):
+        lc.run(PROBLEM, "python3", "code", "[1]\n1")
+
+
 # ---------------------------------------------------------------------- config
 
 def test_config_preserves_unknown_keys(tmp_path, monkeypatch):
