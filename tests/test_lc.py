@@ -663,3 +663,21 @@ def test_choose_resolves_aliases_and_falls_back():
     # Nothing configured matches — fall back to anything lc understands.
     assert choose("python3", ["javascript"], {"mysql": "..."}).slug == "mysql"
     assert choose("python3", [], {}) is None
+
+
+# ----------------------------------------------------------------------- tui
+
+def test_pin_daily_moves_the_daily_to_the_front():
+    from lc.api import ProblemSummary
+    from lc.tui import pin_daily
+
+    rows = [
+        ProblemSummary("1", "Two Sum", "two-sum", "Easy", 50.0, False, None),
+        ProblemSummary("322", "Coin Change", "coin-change", "Medium", 45.0, False, None),
+    ]
+    assert pin_daily(rows, "coin-change") is True
+    assert [p.slug for p in rows] == ["coin-change", "two-sum"]
+    # Not in the filtered list (or unknown) — leave the order alone.
+    assert pin_daily(rows, "word-ladder") is False
+    assert pin_daily(rows, None) is False
+    assert [p.slug for p in rows] == ["coin-change", "two-sum"]

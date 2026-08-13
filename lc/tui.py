@@ -6,6 +6,7 @@ that touches the network runs on a thread worker so the UI never blocks.
 
 from __future__ import annotations
 
+import time
 from typing import Iterable
 
 from textual import on, work
@@ -22,11 +23,22 @@ from . import store, workspace
 from .api import JudgeResult, LeetCode, LeetCodeError, Problem, ProblemSummary
 from .browser import open_url
 from .config import load_config, load_credentials
-from .langs import resolve
+from .langs import choose
 from .render import difficulty_text, problem_header, render_statement, status_mark
 
 DIFFICULTIES = ("", "Easy", "Medium", "Hard")
 STATUSES = ("", "todo", "attempted", "solved")
+
+
+def pin_daily(rows: list[ProblemSummary], slug: str | None) -> bool:
+    """Move today's daily challenge to the front. True when it is in the list."""
+    if not slug:
+        return False
+    for i, p in enumerate(rows):
+        if p.slug == slug:
+            rows.insert(0, rows.pop(i))
+            return True
+    return False
 
 
 class ProblemList(DataTable):
@@ -38,6 +50,7 @@ class ProblemList(DataTable):
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
         self._rows_data: list[ProblemSummary] = []
+        self._daily: str | None = None
         self._title_width = 0
 
     def on_mount(self) -> None:
@@ -52,8 +65,9 @@ class ProblemList(DataTable):
     def _available(self) -> int:
         return max((self.size.width or 46) - self._CHROME, 14)
 
-    def load(self, rows: Iterable[ProblemSummary]) -> None:
+    def load(self, rows: Iterable[ProblemSummary], daily: str | None = None) -> None:
         self._rows_data = list(rows)
+        self._daily = daily
         self._render_rows()
 
     def _render_rows(self) -> None:
@@ -61,11 +75,15 @@ class ProblemList(DataTable):
         self._title_width = width
         self.clear()
         for p in self._rows_data:
+            is_daily = p.slug == self._daily
             label = p.title
-            budget = width - (2 if p.paid_only else 0)
+            budget = width - (2 if p.paid_only else 0) - (2 if is_daily else 0)
             if len(label) > budget:
                 label = label[: budget - 1] + "…"
-            title = Text(label)
+            title = Text()
+            if is_daily:
+                title.append("★ ", style="bold yellow")
+            title.append(label, style="bold yellow" if is_daily else "")
             if p.paid_only:
                 title.append(" 🔒", style="yellow")
             self.add_row(
@@ -107,6 +125,7 @@ class LeetCodeTUI(App):
         Binding("d", "cycle_difficulty", "Difficulty"),
         Binding("t", "cycle_status", "Status"),
         Binding("o", "open_web", "Web"),
+        Binding("D", "daily", "Daily"),
         Binding("R", "sync", "Sync"),
         Binding("escape", "focus_list", "", show=False),
     ]
@@ -121,6 +140,7 @@ class LeetCodeTUI(App):
         self.keyword = ""
         self.current: Problem | None = None
         self.current_slug: str = ""
+        self.daily_slug: str | None = None
         self._filter_timer = None
 
     # ----------------------------------------------------------------- layout
@@ -140,6 +160,7 @@ class LeetCodeTUI(App):
         self.refresh_list()
         if store.index_size() == 0:
             self.action_sync()
+        self._daily_worker()
         table = self.query_one("#list", ProblemList)
         if self.initial:
             summary = store.find(self.initial)
@@ -176,11 +197,17 @@ class LeetCodeTUI(App):
             status=self.status_filter,
             limit=1_000_000,  # the whole problem set; the table scrolls fine
         )
-        self.query_one("#list", ProblemList).load(rows)
+        pinned = pin_daily(rows, self.daily_slug)
+        self.query_one("#list", ProblemList).load(
+            rows, daily=self.daily_slug if pinned else None
+        )
         if not rows and store.index_size() == 0:
             self.set_status("no local index yet — press R to sync", "yellow")
         else:
-            self.set_status(f"{len(rows)} problems")
+            message = f"{len(rows)} problems"
+            if pinned:
+                message += "  ·  ★ today's daily"
+            self.set_status(message)
 
     # ----------------------------------------------------------------- events
 
@@ -237,14 +264,10 @@ class LeetCodeTUI(App):
             self.notify("premium problem — your account cannot open it",
                         severity="error")
             return
-        lang = resolve(self.config.lang)
-        if lang is None or lang.slug not in problem.snippets:
-            candidates = [
-                resolve(s) for s in self.config.favorite_langs if s in problem.snippets
-            ]
-            lang = next((c for c in candidates if c), None)
+        lang = choose(self.config.lang, self.config.favorite_langs, problem.snippets)
         if lang is None:
-            self.notify("no starter code available for your languages", severity="error")
+            self.notify("this problem has no starter code lc understands",
+                        severity="error")
             return
         try:
             solution = workspace.create(self.config, problem, lang)
@@ -270,7 +293,32 @@ class LeetCodeTUI(App):
         self.set_status("syncing problem index…", "yellow")
         self._sync_worker()
 
+    def action_daily(self) -> None:
+        if not self.daily_slug:
+            self.notify("today's daily is not known yet — check your connection",
+                        severity="warning")
+            return
+        if not self.select_slug(self.daily_slug):
+            self.notify("today's daily is hidden by the current filters",
+                        severity="warning")
+
     # ----------------------------------------------------------------- workers
+
+    @work(thread=True, exclusive=True, group="daily")
+    def _daily_worker(self) -> None:
+        """Resolve today's daily challenge, hitting the network once per day."""
+        today = time.strftime("%Y-%m-%d", time.gmtime())  # dailies rotate at midnight UTC
+        slug = store.get_meta("daily_slug")
+        if store.get_meta("daily_date") != today or not slug:
+            try:
+                date, summary = self.client.daily()
+            except LeetCodeError:
+                return  # offline — the list just stays unpinned
+            slug = summary.slug
+            store.set_meta("daily_date", date or today)
+            store.set_meta("daily_slug", slug)
+        self.daily_slug = slug
+        self.call_from_thread(self.refresh_list)
 
     def load_problem(self, slug: str) -> None:
         self.current_slug = slug
@@ -343,8 +391,14 @@ class LeetCodeTUI(App):
             self.call_from_thread(self.set_status, "judge failed", "red")
             return
 
-        if submit and result.accepted:
-            store.update_status(problem.slug, "ac")
+        if submit:
+            # Mirror the CLI: record the attempt, but never downgrade a solve.
+            if result.accepted:
+                store.update_status(problem.slug, "ac")
+            else:
+                known = store.find(problem.slug)
+                if known is not None and not known.solved:
+                    store.update_status(problem.slug, "notac")
             self.call_from_thread(self.refresh_list)
 
         self.call_from_thread(self._show_result, result)

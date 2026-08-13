@@ -174,6 +174,10 @@ write, quit the editor back to the list, `r` to run the samples, `s` to
 submit — repeat. `enter` on a problem you already started reopens your
 existing file.
 
+Today's daily challenge is pinned to the top of the list with a yellow `★`
+(and selected when the app opens), so the day's problem is always one
+keypress away; `D` jumps back to it from anywhere.
+
 | Key | Action |
 | --- | --- |
 | `↑` `↓` | Move through the list |
@@ -184,6 +188,7 @@ existing file.
 | `d` | Cycle the difficulty filter |
 | `t` | Cycle the status filter |
 | `o` | Open the problem on leetcode.com |
+| `D` | Jump to today's daily challenge |
 | `R` | Re-sync the problem index |
 | `q` | Quit |
 
