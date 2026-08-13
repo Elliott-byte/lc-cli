@@ -6,6 +6,7 @@ local solution file.
 
 from __future__ import annotations
 
+from collections.abc import Collection, Iterable
 from dataclasses import dataclass
 
 
@@ -52,7 +53,6 @@ BY_SLUG = {lang.slug: lang for lang in LANGUAGES}
 # LeetCode's `codeSnippets[].lang` display names, plus common shorthands users type.
 _ALIASES = {
     "py": "python3",
-    "python3": "python3",
     "js": "javascript",
     "node": "javascript",
     "ts": "typescript",
@@ -87,5 +87,25 @@ def resolve(name: str) -> Language | None:
 def by_extension(ext: str) -> Language | None:
     for lang in LANGUAGES:
         if lang.ext == ext:
+            return lang
+    return None
+
+
+def choose(
+    default: str, favorites: Iterable[str], available: Collection[str]
+) -> Language | None:
+    """Pick a language for a problem: the default, then the favourites, then
+    anything the problem offers that lc understands.
+
+    ``available`` holds the problem's snippet slugs; entries in ``default`` and
+    ``favorites`` go through :func:`resolve` first, so aliases like "go" count.
+    """
+    for name in (default, *favorites):
+        lang = resolve(name)
+        if lang and lang.slug in available:
+            return lang
+    for slug in available:
+        lang = resolve(slug)
+        if lang:
             return lang
     return None

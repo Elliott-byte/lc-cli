@@ -47,8 +47,6 @@ class Config:
     workspace: str = str(DEFAULT_WORKSPACE)
     lang: str = "python3"
     editor: str = ""
-    #: Fold the problem statement to this width when rendering. 0 = terminal width.
-    width: int = 0
     #: Extra languages to offer in the `pick --lang` prompt, beyond the favourites.
     favorite_langs: list[str] = field(
         default_factory=lambda: ["python3", "javascript", "golang", "cpp", "java"]

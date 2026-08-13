@@ -29,6 +29,7 @@ from .config import (
     save_credentials,
 )
 from .langs import BY_SLUG, LANGUAGES, Language, resolve
+from .langs import choose as langs_choose
 from .render import difficulty_text, problem_header, render_statement, status_mark
 from . import workspace
 
@@ -43,10 +44,14 @@ err = Console(stderr=True)
 
 # --------------------------------------------------------------------------- helpers
 
-def die(message: str, hint: str = "") -> None:
+def _error(message: str, hint: str = "") -> None:
     err.print(Text("✗ ", style="bold red") + Text(message))
     if hint:
         err.print(Text(f"  {hint}", style="dim"))
+
+
+def die(message: str, hint: str = "") -> None:
+    _error(message, hint)
     raise typer.Exit(1)
 
 
@@ -145,19 +150,11 @@ def pick_language(config, problem: Problem, requested: str | None) -> Language:
                 f"available: {available}")
         return lang
 
-    default = resolve(config.lang)
-    if default and default.slug in problem.snippets:
-        return default
-    for slug in config.favorite_langs:
-        lang = resolve(slug)
-        if lang and lang.slug in problem.snippets:
-            return lang
-    for slug in problem.snippets:
-        lang = resolve(slug)
-        if lang:
-            return lang
-    die("this problem has no starter code lc understands")
-    raise typer.Exit(1)
+    lang = langs_choose(config.lang, config.favorite_langs, problem.snippets)
+    if lang is None:
+        die("this problem has no starter code lc understands")
+        raise typer.Exit(1)
+    return lang
 
 
 # --------------------------------------------------------------------------- output
@@ -320,12 +317,18 @@ def login(
     )
 
 
-def _signed_in_status(session: str, csrf: str) -> dict | None:
-    """user_status for these cookies, or None when they are not signed in."""
+def _signed_in_status(session: str, csrf: str, probe: bool = False) -> dict | None:
+    """user_status for these cookies, or None when they are not signed in.
+
+    ``probe`` marks a best-effort candidate check during browser login: there
+    a network hiccup means "try the next cookie jar", not a fatal error.
+    """
     with LeetCode(Credentials(session=session, csrf=csrf)) as lc:
         try:
             status = lc.user_status()
         except LeetCodeError as exc:
+            if probe:
+                return None
             die(f"could not verify the session: {exc}")
             raise
     return status if status.get("isSignedIn") else None
@@ -407,7 +410,7 @@ def _login_via_browser(attempts: int = 5) -> tuple[str, str, dict] | None:
         for cookies in candidates:
             session = cookies["LEETCODE_SESSION"]
             csrf = cookies["csrftoken"]
-            status = _signed_in_status(session, csrf)
+            status = _signed_in_status(session, csrf, probe=True)
             if status is not None:
                 return session, csrf, status
         if not opened:
@@ -551,13 +554,14 @@ def random(
     difficulty: str = typer.Option("", "--difficulty", "-d"),
     tag: str = typer.Option("", "--tag", "-t"),
     status: str = typer.Option("todo", "--status", "-s", help="solved | attempted | todo"),
+    paid: bool = typer.Option(False, "--paid", help="include premium-only problems"),
     pick_it: bool = typer.Option(False, "--pick", "-p", help="also set up a solution file"),
 ) -> None:
     """Pick a random problem you have not solved."""
     with client() as lc:
         _ensure_index(lc)
         summary = store.random_problem(
-            difficulty=difficulty, tag=tag, status=status, include_paid=False
+            difficulty=difficulty, tag=tag, status=status, include_paid=paid
         )
         if summary is None:
             die("nothing matched those filters")
@@ -736,7 +740,11 @@ def test(
     input_file: Optional[Path] = typer.Option(
         None, "--input", "-i", help="file with custom test input (one arg per line)"
     ),
-    case: str = typer.Option("", "--case", "-c", help="inline test input"),
+    case: str = typer.Option(
+        "", "--case", "-c",
+        help="inline test input; a literal \\n becomes a newline (input arguments "
+             "are newline-separated)",
+    ),
 ) -> None:
     """Run your code against the sample tests on LeetCode's judge."""
     with client(require_auth=True) as lc:
@@ -887,7 +895,9 @@ def config_lang(name: str = typer.Argument(..., help="default language for `lc p
 def config_workspace(path: Path = typer.Argument(..., help="where solution files live")) -> None:
     """Set the workspace directory."""
     cfg = load_config()
-    cfg.workspace = str(path.expanduser())
+    # Anchor it now: a relative path would re-resolve against the cwd of every
+    # future invocation and scatter solution files around.
+    cfg.workspace = str(path.expanduser().resolve())
     save_config(cfg)
     cfg.workspace_path.mkdir(parents=True, exist_ok=True)
     console.print(Text(f"✔ workspace: {cfg.workspace_path}", style="green"))
@@ -981,9 +991,13 @@ def main() -> None:
     try:
         app()
     except AuthError as exc:
-        die(str(exc), "run `lc login`")
+        # die() raises typer.Exit, but out here nothing catches it — the
+        # message would come with a full traceback attached. Exit directly.
+        _error(str(exc), "run `lc login`")
+        sys.exit(1)
     except LeetCodeError as exc:
-        die(str(exc))
+        _error(str(exc))
+        sys.exit(1)
     except KeyboardInterrupt:
         err.print(Text("\ninterrupted", style="dim"))
         sys.exit(130)

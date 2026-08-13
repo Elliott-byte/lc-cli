@@ -56,10 +56,18 @@ def windows_firefox_cookies(domain: str = "leetcode.com") -> list[dict[str, str]
     None means no profile database was found at all — the same "no cookie
     store readable" contract as cli._read_browser_cookies.
     """
+    patterns = (
+        "AppData/Roaming/Mozilla/Firefox/Profiles/*/cookies.sqlite",
+        # Microsoft Store installs keep their Roaming tree inside the package
+        # sandbox instead.
+        "AppData/Local/Packages/Mozilla.Firefox_*/LocalCache/Roaming/"
+        "Mozilla/Firefox/Profiles/*/cookies.sqlite",
+    )
     databases = [
         db
         for root in _windows_profile_roots()
-        for db in sorted(root.glob("AppData/Roaming/Mozilla/Firefox/Profiles/*/cookies.sqlite"))
+        for pattern in patterns
+        for db in sorted(root.glob(pattern))
     ]
     jars: list[dict[str, str]] = []
     readable = False

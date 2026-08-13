@@ -88,14 +88,24 @@ def index_size() -> int:
         return conn.execute("SELECT COUNT(*) FROM problems").fetchone()[0]
 
 
-def synced_at() -> float | None:
+def get_meta(key: str) -> str | None:
     with closing(connect()) as conn:
-        row = conn.execute("SELECT value FROM meta WHERE key = 'synced_at'").fetchone()
-    if not row:
+        row = conn.execute("SELECT value FROM meta WHERE key = ?", (key,)).fetchone()
+    return row[0] if row else None
+
+
+def set_meta(key: str, value: str) -> None:
+    with closing(connect()) as conn, conn:
+        conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES (?, ?)", (key, value))
+
+
+def synced_at() -> float | None:
+    value = get_meta("synced_at")
+    if value is None:
         return None
     try:
-        return float(row[0])
-    except (TypeError, ValueError):
+        return float(value)
+    except ValueError:
         return None
 
 
@@ -133,15 +143,10 @@ def _escape_like(text: str) -> str:
     )
 
 
-def search(
-    keyword: str = "",
-    difficulty: str = "",
-    status: str = "",
-    tag: str = "",
-    include_paid: bool = True,
-    limit: int = 50,
-    offset: int = 0,
-) -> list[ProblemSummary]:
+def _filters(
+    keyword: str, difficulty: str, status: str, tag: str, include_paid: bool
+) -> tuple[str, list[Any]]:
+    """The WHERE clause `search` and `count` share."""
     clauses: list[str] = []
     params: list[Any] = []
     if keyword:
@@ -164,8 +169,19 @@ def search(
         params.append(f'%"{_escape_like(tag)}"%')
     if not include_paid:
         clauses.append("paid_only = 0")
+    return (f"WHERE {' AND '.join(clauses)}" if clauses else ""), params
 
-    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+
+def search(
+    keyword: str = "",
+    difficulty: str = "",
+    status: str = "",
+    tag: str = "",
+    include_paid: bool = True,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[ProblemSummary]:
+    where, params = _filters(keyword, difficulty, status, tag, include_paid)
     sql = (
         f"SELECT * FROM problems {where} "
         "ORDER BY CAST(frontend_id AS INTEGER) LIMIT ? OFFSET ?"
@@ -175,11 +191,19 @@ def search(
     return [_row_to_summary(r) for r in rows]
 
 
-def count(**kwargs: Any) -> int:
+def count(
+    keyword: str = "",
+    difficulty: str = "",
+    status: str = "",
+    tag: str = "",
+    include_paid: bool = True,
+) -> int:
     """Same filters as :func:`search`, but returns the total match count."""
-    kwargs.pop("limit", None)
-    kwargs.pop("offset", None)
-    return len(search(limit=1_000_000, **kwargs))
+    where, params = _filters(keyword, difficulty, status, tag, include_paid)
+    with closing(connect()) as conn:
+        return conn.execute(
+            f"SELECT COUNT(*) FROM problems {where}", params
+        ).fetchone()[0]
 
 
 def random_problem(

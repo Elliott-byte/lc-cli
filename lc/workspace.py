@@ -191,12 +191,16 @@ def find_by_path(config: Config, path: Path) -> tuple[str, Language, Path] | Non
     Used so `lc test` with no arguments works from inside a problem directory.
     """
     path = path.expanduser().resolve()
-    directory = path if path.is_dir() else path.parent
-    meta_path = directory / ".lc.json"
-    if not meta_path.exists():
+    start = path if path.is_dir() else path.parent
+    # Walk up like git does, so `lc test` also works from a scratch/ subdir
+    # the user made inside the problem directory.
+    directory = next(
+        (d for d in (start, *start.parents) if (d / ".lc.json").exists()), None
+    )
+    if directory is None:
         return None
     try:
-        meta = json.loads(meta_path.read_text())
+        meta = json.loads((directory / ".lc.json").read_text())
     except json.JSONDecodeError:
         return None
 

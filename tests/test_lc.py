@@ -392,29 +392,48 @@ def test_open_url_is_plain_webbrowser_off_wsl(monkeypatch):
     assert opened == ["https://example.com"]
 
 
-def _firefox_profile(root, cookies):
-    """A Windows-shaped Firefox profile under *root* with the given cookies."""
+def _firefox_db(profile_dir, cookies):
+    """A Firefox cookie database inside *profile_dir* with the given cookies."""
     import sqlite3
 
-    profile = root / "AppData/Roaming/Mozilla/Firefox/Profiles/ab12cd34.default-release"
-    profile.mkdir(parents=True)
-    conn = sqlite3.connect(profile / "cookies.sqlite")
+    profile_dir.mkdir(parents=True)
+    conn = sqlite3.connect(profile_dir / "cookies.sqlite")
     conn.execute("CREATE TABLE moz_cookies (host TEXT, name TEXT, value TEXT)")
     conn.executemany("INSERT INTO moz_cookies VALUES (?, ?, ?)", cookies)
     conn.commit()
     conn.close()
-    return root
+
+
+LEETCODE_JAR = [
+    (".leetcode.com", "LEETCODE_SESSION", "sess"),
+    ("leetcode.com", "csrftoken", "tok"),
+    (".example.com", "LEETCODE_SESSION", "someone-elses"),
+]
 
 
 def test_windows_firefox_cookies_reads_the_profile(tmp_path, monkeypatch):
     from lc import browser
 
-    root = _firefox_profile(tmp_path, [
-        (".leetcode.com", "LEETCODE_SESSION", "sess"),
-        ("leetcode.com", "csrftoken", "tok"),
-        (".example.com", "LEETCODE_SESSION", "someone-elses"),
-    ])
-    monkeypatch.setattr(browser, "_windows_profile_roots", lambda: [root])
+    _firefox_db(
+        tmp_path / "AppData/Roaming/Mozilla/Firefox/Profiles/ab12cd.default-release",
+        LEETCODE_JAR,
+    )
+    monkeypatch.setattr(browser, "_windows_profile_roots", lambda: [tmp_path])
+
+    assert browser.windows_firefox_cookies() == [
+        {"LEETCODE_SESSION": "sess", "csrftoken": "tok"}
+    ]
+
+
+def test_windows_firefox_cookies_reads_microsoft_store_installs(tmp_path, monkeypatch):
+    from lc import browser
+
+    _firefox_db(
+        tmp_path / "AppData/Local/Packages/Mozilla.Firefox_8wekyb3d8bbwe"
+                   "/LocalCache/Roaming/Mozilla/Firefox/Profiles/xy99.default",
+        LEETCODE_JAR,
+    )
+    monkeypatch.setattr(browser, "_windows_profile_roots", lambda: [tmp_path])
 
     assert browser.windows_firefox_cookies() == [
         {"LEETCODE_SESSION": "sess", "csrftoken": "tok"}
@@ -450,6 +469,21 @@ def test_read_browser_cookies_includes_windows_firefox_under_wsl(monkeypatch):
 
 
 # ------------------------------------------------------ workspace file choice
+
+def test_find_by_path_walks_up_from_a_subdirectory(tmp_path):
+    from lc import workspace
+    from lc.config import Config
+
+    config = Config(workspace=str(tmp_path))
+    created = workspace.create(config, PROBLEM, resolve("python3"))
+    scratch = created.directory / "scratch"
+    scratch.mkdir()
+
+    found = workspace.find_by_path(config, scratch)
+    assert found is not None
+    assert found[0] == "coin-change"
+    assert found[2] == created.file
+
 
 def test_load_prefers_the_recorded_solution_file(tmp_path):
     from lc import workspace
@@ -543,6 +577,33 @@ def test_find_accepts_zero_padded_ids(tmp_path, monkeypatch):
     assert found is not None and found.slug == "coin-change"
 
 
+def test_count_applies_the_same_filters_as_search(tmp_path, monkeypatch):
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    from lc import store
+    from lc.api import ProblemSummary
+
+    store.replace_index([
+        ProblemSummary("1", "Two Sum", "two-sum", "Easy", 50.0, False, "ac"),
+        ProblemSummary("2", "Add Two Numbers", "add-two-numbers", "Medium", 40.0, False, None),
+        ProblemSummary("3", "Secret", "secret", "Easy", 30.0, True, None),
+    ])
+    assert store.count() == 3
+    assert store.count(difficulty="easy") == 2
+    assert store.count(difficulty="easy", include_paid=False) == 1
+    assert store.count(status="solved") == 1
+    assert store.count(keyword="two") == 2
+
+
+def test_store_meta_roundtrip(tmp_path, monkeypatch):
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    from lc import store
+
+    assert store.get_meta("daily_slug") is None
+    store.set_meta("daily_slug", "coin-change")
+    store.set_meta("daily_slug", "two-sum")  # overwrite, not accumulate
+    assert store.get_meta("daily_slug") == "two-sum"
+
+
 # ------------------------------------------------------------------ bare `lc`
 
 def test_bare_lc_prints_help_when_not_a_terminal():
@@ -553,3 +614,52 @@ def test_bare_lc_prints_help_when_not_a_terminal():
     result = CliRunner().invoke(app, [])
     assert result.exit_code == 0, result.output
     assert "Usage" in result.output
+
+
+# ------------------------------------------------------------- error handling
+
+def test_main_prints_clean_errors_without_a_traceback(monkeypatch, capsys):
+    """A network failure escaping a command must not dump a traceback."""
+    import lc.cli as cli
+
+    def raising_app():
+        raise cli.LeetCodeError("network error talking to LeetCode: boom")
+
+    monkeypatch.setattr(cli, "app", raising_app)
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
+
+    assert exc.value.code == 1
+    stderr = capsys.readouterr().err
+    assert "boom" in stderr
+    assert "Traceback" not in stderr
+
+
+def test_main_expired_session_suggests_logging_in(monkeypatch, capsys):
+    import lc.cli as cli
+
+    def raising_app():
+        raise cli.AuthError("LeetCode rejected the session")
+
+    monkeypatch.setattr(cli, "app", raising_app)
+    with pytest.raises(SystemExit) as exc:
+        cli.main()
+
+    assert exc.value.code == 1
+    stderr = capsys.readouterr().err
+    assert "lc login" in stderr
+    assert "Traceback" not in stderr
+
+
+# ----------------------------------------------------------------- languages
+
+def test_choose_resolves_aliases_and_falls_back():
+    from lc.langs import choose
+
+    # An alias in the favourites must match the real snippet slug.
+    assert choose("python3", ["go"], {"golang": "..."}).slug == "golang"
+    # The default wins when the problem offers it.
+    assert choose("python3", ["go"], {"python3": "...", "golang": "..."}).slug == "python3"
+    # Nothing configured matches — fall back to anything lc understands.
+    assert choose("python3", ["javascript"], {"mysql": "..."}).slug == "mysql"
+    assert choose("python3", [], {}) is None
