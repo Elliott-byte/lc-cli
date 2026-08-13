@@ -129,6 +129,7 @@ In a solution buffer (any file next to a `.lc.json`), normal mode:
 | `\t` | save, then `lc test` |
 | `\s` | save, then `lc submit` |
 | `\p` | show/hide the problem statement in a left split |
+| `\o` | open the problem page in your browser (figures render there) |
 
 Opening a solution file also opens the statement (the directory's `README.md`,
 read-only) beside it automatically — hide it with `\p` (or `q` inside the

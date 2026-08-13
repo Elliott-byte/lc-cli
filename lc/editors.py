@@ -17,6 +17,7 @@ VIM_PLUGIN = r'''" lc.vim — Vim integration for the lc LeetCode CLI.
 "   <leader>t   write the file, then run `lc test`
 "   <leader>s   write the file, then run `lc submit`
 "   <leader>p   show/hide the problem statement (README.md) in a left split
+"   <leader>o   open the problem page in your browser (for figures/animations)
 " The statement pane opens automatically when the solution file is the only
 " window; `let g:lc_auto_statement = 0` in your vimrc turns that off. Inside
 " the pane, q also closes it. The leader key is backslash unless changed.
@@ -43,6 +44,18 @@ function! s:LcOpenStatement() abort
   wincmd p
 endfunction
 
+function! s:LcOpenWeb() abort
+  let l:meta_path = expand('%:p:h') . '/.lc.json'
+  if !filereadable(l:meta_path)
+    return
+  endif
+  let l:slug = get(json_decode(join(readfile(l:meta_path), '')), 'slug', '')
+  if l:slug !=# ''
+    let l:opener = has('mac') ? 'open' : 'xdg-open'
+    call system(l:opener . ' ' . shellescape('https://leetcode.com/problems/' . l:slug . '/'))
+  endif
+endfunction
+
 function! s:LcToggleStatement() abort
   let l:win = bufwinnr(bufnr(s:LcReadme()))
   if l:win != -1 && winnr('$') > 1
@@ -60,6 +73,7 @@ function! s:LcSetup() abort
   nnoremap <buffer> <leader>t :w<CR>:execute '!cd ' . shellescape(expand('%:p:h')) . ' && lc test'<CR>
   nnoremap <buffer> <leader>s :w<CR>:execute '!cd ' . shellescape(expand('%:p:h')) . ' && lc submit'<CR>
   nnoremap <buffer> <leader>p :call <SID>LcToggleStatement()<CR>
+  nnoremap <buffer> <leader>o :call <SID>LcOpenWeb()<CR>
   " Fresh `lc pick` / `lc edit`: put the statement alongside the solution.
   if get(g:, 'lc_auto_statement', 1) && winnr('$') == 1
         \ && expand('%:t') !=# 'README.md'
