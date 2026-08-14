@@ -155,10 +155,15 @@ In a solution buffer (any file next to a `.lc.json`), normal mode:
 | `\p` | show/hide the problem statement in a left split |
 | `\o` | open the problem page in your browser (figures render there) |
 
-Opening a solution file also opens the statement (the directory's `README.md`,
-read-only) beside it automatically — hide it with `\p` (or `q` inside the
-pane), bring it back with `\p`. Put `let g:lc_auto_statement = 0` in your
-vimrc if you'd rather open it manually.
+Opening a solution file also opens the statement beside it automatically —
+hide it with `\p` (or `q` inside the pane), bring it back with `\p`. Put
+`let g:lc_auto_statement = 0` in your vimrc if you'd rather open it manually.
+
+The pane shows the statement fully rendered — `lc show` running in a small
+terminal split, with the same colors, example boxes and superscripts as the
+CLI — whenever your Vim has `+terminal` (or on Neovim). Editors without it
+fall back to the directory's raw `README.md`; `let g:lc_statement_render = 0`
+forces the plain file everywhere.
 
 Python solution buffers are kept space-indented: the Tab key inserts spaces,
 and real tabs that arrive via paste are converted when the file is saved.

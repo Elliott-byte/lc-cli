@@ -16,11 +16,14 @@ VIM_PLUGIN = r'''" lc.vim — Vim integration for the lc LeetCode CLI.
 " In a buffer whose directory contains .lc.json (an `lc pick` workspace):
 "   <leader>t   write the file, then run `lc test`
 "   <leader>s   write the file, then run `lc submit`
-"   <leader>p   show/hide the problem statement (README.md) in a left split
+"   <leader>p   show/hide the problem statement in a left split
 "   <leader>o   open the problem page in your browser (for figures/animations)
-" The statement pane opens automatically when the solution file is the only
-" window; `let g:lc_auto_statement = 0` in your vimrc turns that off. Inside
-" the pane, q also closes it. The leader key is backslash unless changed.
+" The statement pane shows `lc show` fully rendered in a terminal split when
+" the editor supports it, the raw README.md otherwise; `let
+" g:lc_statement_render = 0` forces the plain file. The pane opens
+" automatically when the solution file is the only window; `let
+" g:lc_auto_statement = 0` turns that off. Inside the pane, q closes it.
+" The leader key is backslash unless changed.
 
 if exists('g:loaded_lc_cli')
   finish
@@ -31,25 +34,58 @@ function! s:LcReadme() abort
   return expand('%:p:h') . '/README.md'
 endfunction
 
-function! s:LcOpenStatement() abort
-  let l:readme = s:LcReadme()
-  if !filereadable(l:readme)
-    return
+function! s:LcSlug() abort
+  let l:meta_path = expand('%:p:h') . '/.lc.json'
+  if !filereadable(l:meta_path)
+    return ''
   endif
-  execute 'topleft vertical split ' . fnameescape(l:readme)
-  setlocal readonly nomodifiable wrap linebreak nonumber norelativenumber
-  setlocal winfixwidth
+  return get(json_decode(join(readfile(l:meta_path), '')), 'slug', '')
+endfunction
+
+function! s:LcStatementWin() abort
+  " The window showing this problem's statement pane, or -1.
+  let l:dir = expand('%:p:h')
+  for l:w in range(1, winnr('$'))
+    if getbufvar(winbufnr(l:w), 'lc_statement_for', '') ==# l:dir
+      return l:w
+    endif
+  endfor
+  return -1
+endfunction
+
+function! s:LcOpenStatement() abort
+  let l:dir = expand('%:p:h')
+  let l:slug = s:LcSlug()
+  let l:width = min([60, &columns / 2])
+  " `lc show` in a terminal split renders the statement properly — colors,
+  " example boxes, real superscripts. The raw README.md is the fallback for
+  " editors without terminal support (or g:lc_statement_render = 0).
+  if get(g:, 'lc_statement_render', 1) && l:slug !=# '' && executable('lc')
+        \ && (has('terminal') || has('nvim'))
+    " Size the window first so `lc show` renders at its final width.
+    topleft vertical new
+    execute 'vertical resize ' . l:width
+    if has('nvim')
+      call termopen('lc show ' . shellescape(l:slug))
+    else
+      execute 'terminal ++curwin ++norestore lc show ' . l:slug
+    endif
+  else
+    if !filereadable(s:LcReadme())
+      return
+    endif
+    execute 'topleft vertical split ' . fnameescape(s:LcReadme())
+    setlocal readonly nomodifiable wrap linebreak
+    execute 'vertical resize ' . l:width
+  endif
+  let b:lc_statement_for = l:dir
+  setlocal winfixwidth nonumber norelativenumber
   nnoremap <buffer> q :close<CR>
-  execute 'vertical resize ' . min([60, &columns / 2])
   wincmd p
 endfunction
 
 function! s:LcOpenWeb() abort
-  let l:meta_path = expand('%:p:h') . '/.lc.json'
-  if !filereadable(l:meta_path)
-    return
-  endif
-  let l:slug = get(json_decode(join(readfile(l:meta_path), '')), 'slug', '')
+  let l:slug = s:LcSlug()
   if l:slug !=# ''
     " Inside WSL the browser is on the Windows side; wslview/explorer.exe
     " reach it where xdg-open does not exist.
@@ -61,7 +97,7 @@ function! s:LcOpenWeb() abort
 endfunction
 
 function! s:LcToggleStatement() abort
-  let l:win = bufwinnr(bufnr(s:LcReadme()))
+  let l:win = s:LcStatementWin()
   if l:win != -1 && winnr('$') > 1
     execute l:win . 'close'
   else
