@@ -222,11 +222,17 @@ def test_firework_frames_shape_and_sparks():
 def test_defeat_frames_end_in_orz():
     from lc import fx
 
-    frames = fx.defeat_frames()
-    assert len(frames) == 10
-    assert all(len(f.plain.splitlines()) == 4 for f in frames)
-    assert "orz" in frames[-1].plain
-    assert "o" in frames[0].plain and "orz" not in frames[0].plain
+    small = fx.defeat_frames()
+    assert len(small) == 10
+    assert all(len(f.plain.splitlines()) == 5 for f in small)
+    assert "orz" in small[-1].plain
+    assert "orz" not in small[0].plain
+
+    big = fx.defeat_frames(big=True)
+    assert len(big) == 13
+    assert all(len(f.plain.splitlines()) == 7 for f in big)
+    assert "O r z" in big[-1].plain
+    assert "~" in big[-1].plain and "'" in big[-1].plain  # the rain rolled in
 
 
 def test_animations_stay_out_of_pipes():
@@ -238,7 +244,7 @@ def test_animations_stay_out_of_pipes():
 
     out = StringIO()
     fx.play(Console(file=out), big=True)  # not a terminal — must be a no-op
-    fx.defeat(Console(file=out))
+    fx.defeat(Console(file=out), big=True)
     assert out.getvalue() == ""
 
 

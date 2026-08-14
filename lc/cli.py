@@ -789,7 +789,7 @@ def test(
     if result.accepted:
         fx.play(console, big=False)
     else:
-        fx.defeat(console)
+        fx.defeat(console, big=False)
     print_result(result, problem, data_input)
     raise typer.Exit(0 if result.accepted else 1)
 
@@ -830,7 +830,7 @@ def submit(
     if result.accepted:
         fx.play(console, big=True)
     else:
-        fx.defeat(console)
+        fx.defeat(console, big=True)
     print_result(result, problem)
     raise typer.Exit(0 if result.accepted else 1)
 

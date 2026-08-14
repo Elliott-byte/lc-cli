@@ -212,10 +212,11 @@ the index). Refreshes keep your cursor on the problem it was on.
 
 ## Notes
 
-- Accepted verdicts end in fireworks — a small burst for `lc test`, a big
+- Accepted verdicts end in fireworks — a burst for `lc test`, a four-shot
   volley for `lc submit` — and a failed one in a little figure sinking to
-  its knees (orz). Both skip pipes and scripts automatically, and
-  `LC_NO_FX=1` turns them off everywhere.
+  its knees (orz); when it was a submit, a rain cloud rolls in over it.
+  Both skip pipes and scripts automatically, and `LC_NO_FX=1` turns them
+  off everywhere.
 - Premium problems need a premium account; `lc` reports that clearly rather
   than failing oddly.
 - `lc test` and `lc submit` run on LeetCode's judge, not locally, so the verdict

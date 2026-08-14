@@ -491,19 +491,19 @@ class LeetCodeTUI(App):
         if result.accepted:
             self._celebrate(big=not result.is_run)
         else:
-            self._mourn()
+            self._mourn(big=not result.is_run)
 
     def _celebrate(self, big: bool) -> None:
         """Fireworks in a transparent overlay — small for runs, big for submits."""
         width = self.size.width
         if big:
-            frames = fx.firework_frames(min(width - 4, 64), 13, 3, 34)
+            frames = fx.firework_frames(min(width - 4, 74), 15, 4, 40)
         else:
-            frames = fx.firework_frames(min(width - 4, 36), 8, 1, 16)
+            frames = fx.firework_frames(min(width - 4, 46), 10, 2, 20)
         self._play_overlay(frames, interval=0.05)
 
-    def _mourn(self) -> None:
-        self._play_overlay(fx.defeat_frames(), interval=0.09)
+    def _mourn(self, big: bool) -> None:
+        self._play_overlay(fx.defeat_frames(big), interval=0.09)
 
     def _play_overlay(self, frames: list, interval: float) -> None:
         if os.environ.get("LC_NO_FX"):

@@ -70,6 +70,13 @@ def firework_frames(
                         spark = _SPARKS[min(len(_SPARKS) - 1, (t + shell) // 2)]
                         grid[yi][xi] = (spark, color)
 
+        if frames - f <= 6:
+            # A shimmer of dust while the last sparks die out.
+            for _ in range(width * height // 40):
+                x, y = rng.randrange(width), rng.randrange(height)
+                if grid[y][x] is None and rng.random() < 0.5:
+                    grid[y][x] = ("·", rng.choice(_COLORS))
+
         text = Text()
         for row in grid:
             for cell in row:
@@ -82,31 +89,61 @@ def firework_frames(
     return out
 
 
-_GROUND = "─────────"
-#: A little figure sinking to its knees, hand-keyed. Ends on orz.
-_DEFEAT = (
-    ("    o    ", "   /|\\   ", "   / \\   "),
-    ("    o    ", "   /|\\   ", "   / |   "),
-    ("    o    ", "   /|_   ", "   //    "),
-    ("   _o    ", "   /|    ", "   //    "),
-    ("         ", "   o_    ", "   |\\    "),
-    ("         ", "   o__   ", "   ||    "),
-    ("         ", "         ", "   orz   "),
+#: Hand-keyed collapse, every frame facing the way orz faces: head to the
+#: left, propping arm to its right, folded legs rightmost.
+#: stand → legs fold under → arms drop → bow left → hands down → orz.
+_DEFEAT_SMALL = (
+    ("     o     ", "    /|\\    ", "     |     ", "    / \\    "),
+    ("     o     ", "    /|\\    ", "     |     ", "    |\\     "),
+    ("     o     ", "    /|\\    ", "     |     ", "    ||     "),
+    ("     o     ", "     |     ", "     |     ", "    ||     "),
+    ("    o      ", "     \\     ", "     \\     ", "    ||     "),
+    ("           ", "   o_      ", "     \\     ", "    ||     "),
+    ("           ", "           ", "           ", "   orz     "),
 )
 
+_DEFEAT_BIG = (
+    ("      O      ", "     /|\\     ", "      |      ", "      |      ", "     / \\     "),
+    ("      O      ", "     /|\\     ", "      |      ", "      |      ", "     |\\      "),
+    ("      O      ", "     /|\\     ", "      |      ", "      |      ", "     ||      "),
+    ("      O      ", "      |      ", "      |      ", "      |      ", "     ||      "),
+    ("     O       ", "      \\      ", "      \\      ", "      \\      ", "     ||      "),
+    ("             ", "    O        ", "     \\_      ", "      \\      ", "     ||      "),
+    ("             ", "             ", "    O_       ", "      \\      ", "     ||      "),
+    ("             ", "             ", "             ", "             ", "   O r z     "),
+)
 
-def defeat_frames() -> list[Text]:
-    """The collapse, then the last pose held while dots of despair appear."""
-    frames = [_defeat_text(art, dots=0) for art in _DEFEAT]
-    frames += [_defeat_text(_DEFEAT[-1], dots) for dots in (1, 2, 3)]
+_RAIN_COLS = ((2, 6, 10), (4, 8, 12), (3, 7, 11))
+
+
+def defeat_frames(big: bool = False) -> list[Text]:
+    """The collapse, then the pose held while despair accumulates.
+
+    The big version kneels under a rain cloud that rolls in for the hold.
+    """
+    art = _DEFEAT_BIG if big else _DEFEAT_SMALL
+    frames = [_defeat_text(art[i], big, rain=-1, dots=0) for i in range(len(art))]
+    holds = (0, 0, 1, 2, 3) if big else (1, 2, 3)
+    for i, dots in enumerate(holds):
+        frames.append(_defeat_text(art[-1], big, rain=i if big else -1, dots=dots))
     return frames
 
 
-def _defeat_text(art: tuple[str, ...], dots: int) -> Text:
+def _defeat_text(art: tuple[str, ...], big: bool, rain: int, dots: int) -> Text:
+    width = len(art[0])
     text = Text()
-    for row in art:
-        text.append(row + "\n", style="bold red" if "orz" in row else "dim")
-    text.append(_GROUND, style="dim")
+    if big:
+        cloud = " ~ ~ ~ ~ ~ ~ " if rain >= 0 else " " * width
+        text.append(cloud[:width] + "\n", style="dim")
+    for n, row in enumerate(art):
+        if rain >= 1:
+            drops = _RAIN_COLS[(rain + n) % len(_RAIN_COLS)]
+            row = "".join(
+                "'" if i in drops and c == " " else c for i, c in enumerate(row)
+            )
+        style = "bold red" if "r z" in row or "orz" in row else "dim"
+        text.append(row + "\n", style=style)
+    text.append("─" * width, style="dim")
     if dots:
         text.append(" " + "." * dots, style="dim red")
     text.append("\n")
@@ -129,14 +166,14 @@ def play(console: Console, big: bool) -> None:
     if _quiet(console):
         return
     if big:
-        width, height, bursts, frames = min(console.width - 2, 64), 13, 3, 34
+        width, height, bursts, frames = min(console.width - 2, 74), 15, 4, 40
     else:
-        width, height, bursts, frames = min(console.width - 2, 36), 8, 1, 16
+        width, height, bursts, frames = min(console.width - 2, 46), 10, 2, 20
     _animate(console, firework_frames(width, height, bursts, frames), 0.045)
 
 
-def defeat(console: Console) -> None:
+def defeat(console: Console, big: bool = False) -> None:
     """Take the loss with a little dignity; same quiet rules as play()."""
     if _quiet(console):
         return
-    _animate(console, defeat_frames(), 0.09)
+    _animate(console, defeat_frames(big), 0.09)
