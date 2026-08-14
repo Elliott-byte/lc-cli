@@ -203,6 +203,34 @@ def test_run_status_says_samples_not_accepted():
                        is_run=True).display_status == "Runtime Error"
 
 
+def test_firework_frames_shape_and_sparks():
+    import random
+
+    from lc import fx
+
+    frames = fx.firework_frames(30, 8, 1, 16, rng=random.Random(7))
+    assert len(frames) == 16
+    for frame in frames:
+        lines = frame.plain.splitlines()
+        assert len(lines) == 8
+        assert all(len(line) == 30 for line in lines)
+    assert "✦" in "".join(f.plain for f in frames)  # it does actually explode
+    # mid-animation is busier than the launch
+    assert frames[8].plain.count(" ") < frames[0].plain.count(" ")
+
+
+def test_fireworks_stay_out_of_pipes():
+    from io import StringIO
+
+    from rich.console import Console
+
+    from lc import fx
+
+    out = StringIO()
+    fx.play(Console(file=out), big=True)  # not a terminal — must be a no-op
+    assert out.getvalue() == ""
+
+
 def test_judge_requires_login():
     lc = LeetCode(None)
     with pytest.raises(LeetCodeError):

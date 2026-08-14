@@ -210,6 +210,9 @@ the index). Refreshes keep your cursor on the problem it was on.
 
 ## Notes
 
+- Accepted verdicts end in fireworks — a small burst for `lc test`, a big
+  volley for `lc submit`. They skip pipes and scripts automatically, and
+  `LC_NO_FX=1` turns them off everywhere.
 - Premium problems need a premium account; `lc` reports that clearly rather
   than failing oddly.
 - `lc test` and `lc submit` run on LeetCode's judge, not locally, so the verdict

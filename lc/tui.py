@@ -20,7 +20,7 @@ from rich.console import Group, RenderableType
 from rich.markup import escape
 from rich.text import Text
 
-from . import store, workspace
+from . import fx, store, workspace
 from .api import (
     JudgeResult,
     LeetCode,
@@ -113,7 +113,9 @@ class ProblemList(DataTable):
 
 class LeetCodeTUI(App):
     CSS = """
-    Screen { layers: base; }
+    Screen { layers: base fx; }
+    #fx { layer: fx; width: 100%; height: 100%; align: center middle; }
+    #fx-frame { width: auto; height: auto; }
     #body { height: 1fr; }
     #left { width: 40%; min-width: 40; max-width: 64; border-right: solid $panel; }
     #filter { border: none; height: 3; background: $boost; }
@@ -462,7 +464,10 @@ class LeetCodeTUI(App):
                     one = cases[i].replace("\n", " · ")
                     lines.append(Text(f"   input: {one[:100]}", style="dim"))
         if not result.is_run and not result.accepted and result.last_testcase:
-            lines.append(Text(f"failing input: {result.last_testcase[:200]}", style="dim"))
+            label = "failing input"
+            if result.total_testcases:
+                label = f"failing case {(result.total_correct or 0) + 1}/{result.total_testcases}"
+            lines.append(Text(f"{label}: {result.last_testcase[:200]}", style="dim"))
         if result.runtime:
             lines.append(Text(f"{result.runtime}   {result.memory}", style="dim"))
 
@@ -482,6 +487,32 @@ class LeetCodeTUI(App):
             severity="information" if result.accepted else "error",
             timeout=12,
         )
+        if result.accepted:
+            self._celebrate(big=not result.is_run)
+
+    def _celebrate(self, big: bool) -> None:
+        """Fireworks in a transparent overlay — small for runs, big for submits."""
+        for old in self.query("#fx"):
+            old.remove()
+        size = self.size
+        if big:
+            frames = fx.firework_frames(min(size.width - 4, 64), 13, 3, 34)
+        else:
+            frames = fx.firework_frames(min(size.width - 4, 36), 8, 1, 16)
+        inner = Static(frames[0], id="fx-frame")
+        overlay = Vertical(inner, id="fx")
+        self.mount(overlay)
+        state = {"i": 0}
+
+        def tick() -> None:
+            state["i"] += 1
+            if state["i"] >= len(frames):
+                timer.stop()
+                overlay.remove()
+                return
+            inner.update(frames[state["i"]])
+
+        timer = self.set_interval(0.05, tick)
 
     @work(thread=True, exclusive=True, group="sync")
     def _sync_worker(self) -> None:

@@ -17,7 +17,7 @@ from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
 
-from . import __version__, browser, editors, store
+from . import __version__, browser, editors, fx, store
 from .api import (
     AuthError,
     JudgeResult,
@@ -240,9 +240,12 @@ def print_result(result: JudgeResult, problem: Problem, data_input: str = "") ->
         parts += [Text(""), table]
 
     if not result.is_run and not result.accepted and result.last_testcase:
+        label = "failing input"
+        if result.total_testcases:
+            label += f" — case {(result.total_correct or 0) + 1} of {result.total_testcases}"
         parts += [
             Text(""),
-            Text("failing input", style="dim"),
+            Text(label, style="dim"),
             Panel(Text(result.last_testcase), border_style="dim", expand=False),
         ]
         if result.code_output:
@@ -783,6 +786,8 @@ def test(
             except LeetCodeError as exc:
                 die(str(exc))
                 raise
+    if result.accepted:
+        fx.play(console, big=False)
     print_result(result, problem, data_input)
     raise typer.Exit(0 if result.accepted else 1)
 
@@ -820,6 +825,8 @@ def submit(
     elif known is not None and not known.solved:
         store.update_status(problem.slug, "notac")
 
+    if result.accepted:
+        fx.play(console, big=True)
     print_result(result, problem)
     raise typer.Exit(0 if result.accepted else 1)
 
