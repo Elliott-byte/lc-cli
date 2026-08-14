@@ -175,6 +175,34 @@ def test_submit_compile_error():
     assert "indented block" in result.error
 
 
+def test_split_testcases_by_parameter_count():
+    from dataclasses import replace
+
+    from lc.api import split_testcases
+
+    two_arg = replace(PROBLEM, meta={"params": [{"name": "coins"}, {"name": "amount"}]})
+    assert split_testcases(two_arg, "[1,2,5]\n11\n[2]\n3") == ["[1,2,5]\n11", "[2]\n3"]
+    # Class-design problems have no "params": two lines per case.
+    design = replace(PROBLEM, meta={"classname": "LRUCache"})
+    assert split_testcases(design, "ops1\nargs1\nops2\nargs2\n") == [
+        "ops1\nargs1", "ops2\nargs2",
+    ]
+
+
+def test_run_status_says_samples_not_accepted():
+    from lc.api import JudgeResult
+
+    assert JudgeResult(raw={}, accepted=False, status="Accepted",
+                       is_run=True).display_status == "Samples failed"
+    assert JudgeResult(raw={}, accepted=True, status="Accepted",
+                       is_run=True).display_status == "Samples passed"
+    # Real submits and real errors keep LeetCode's own words.
+    assert JudgeResult(raw={}, accepted=True, status="Accepted",
+                       is_run=False).display_status == "Accepted"
+    assert JudgeResult(raw={}, accepted=False, status="Runtime Error",
+                       is_run=True).display_status == "Runtime Error"
+
+
 def test_judge_requires_login():
     lc = LeetCode(None)
     with pytest.raises(LeetCodeError):

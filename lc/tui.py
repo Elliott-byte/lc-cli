@@ -21,7 +21,14 @@ from rich.markup import escape
 from rich.text import Text
 
 from . import store, workspace
-from .api import JudgeResult, LeetCode, LeetCodeError, Problem, ProblemSummary
+from .api import (
+    JudgeResult,
+    LeetCode,
+    LeetCodeError,
+    Problem,
+    ProblemSummary,
+    split_testcases,
+)
 from .browser import open_url
 from .config import load_config, load_credentials
 from .langs import choose
@@ -398,11 +405,13 @@ class LeetCodeTUI(App):
         self, problem: Problem, solution: workspace.Solution, submit: bool
     ) -> None:
         code = workspace.strip_header(solution.code, solution.language)
+        cases: list[str] = []
         try:
             if submit:
                 result = self.client.submit(problem, solution.language.slug, code)
             else:
                 data_input = problem.example_testcases or problem.sample_testcase
+                cases = split_testcases(problem, data_input)
                 result = self.client.run(
                     problem, solution.language.slug, code, data_input
                 )
@@ -421,11 +430,12 @@ class LeetCodeTUI(App):
                     store.update_status(problem.slug, "notac")
             self.call_from_thread(self.refresh_list)
 
-        self.call_from_thread(self._show_result, result)
+        self.call_from_thread(self._show_result, result, cases)
 
-    def _show_result(self, result: JudgeResult) -> None:
+    def _show_result(self, result: JudgeResult, cases: list[str] | None = None) -> None:
         lines: list[RenderableType] = [
-            Text(result.status, style="bold green" if result.accepted else "bold red")
+            Text(result.display_status,
+                 style="bold green" if result.accepted else "bold red")
         ]
         if result.error:
             lines.append(Text(result.error.strip()[:2000], style="red"))
@@ -448,13 +458,16 @@ class LeetCodeTUI(App):
                 if not ok:
                     line.append(f"   expected {want}", style="dim")
                 lines.append(line)
+                if not ok and cases and i < len(cases):
+                    one = cases[i].replace("\n", " · ")
+                    lines.append(Text(f"   input: {one[:100]}", style="dim"))
         if not result.is_run and not result.accepted and result.last_testcase:
             lines.append(Text(f"failing input: {result.last_testcase[:200]}", style="dim"))
         if result.runtime:
             lines.append(Text(f"{result.runtime}   {result.memory}", style="dim"))
 
         self.set_status(
-            result.status, "green" if result.accepted else "red"
+            result.display_status, "green" if result.accepted else "red"
         )
         # notify() treats its message as markup — judge output like `[true,false]`
         # would otherwise be eaten as a style tag.
@@ -465,7 +478,7 @@ class LeetCodeTUI(App):
                     for line in lines
                 )
             ),
-            title="Accepted" if result.accepted else result.status,
+            title=result.display_status,
             severity="information" if result.accepted else "error",
             timeout=12,
         )

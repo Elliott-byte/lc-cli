@@ -106,6 +106,14 @@ class JudgeResult:
     expected_output: list[str] = field(default_factory=list)
     std_output: str = ""
 
+    @property
+    def display_status(self) -> str:
+        """status_msg, except runs say what actually happened — LeetCode
+        reports any run that merely executed as "Accepted", outputs aside."""
+        if self.is_run and self.status == "Accepted":
+            return "Samples passed" if self.accepted else "Samples failed"
+        return self.status
+
 
 # --------------------------------------------------------------------------- queries
 
@@ -468,6 +476,21 @@ class LeetCode:
         if last_error is not None:
             raise LeetCodeError(f"lost the judge while waiting for the verdict: {last_error}")
         raise LeetCodeError("timed out waiting for the judge")
+
+
+def split_testcases(problem: Problem, data_input: str) -> list[str]:
+    """Split a judge input blob back into one string per test case.
+
+    LeetCode concatenates the cases: each spans one line per function
+    parameter — or two lines (operations, then arguments) for class-design
+    problems, whose metadata has no "params".
+    """
+    lines = data_input.split("\n")
+    while lines and not lines[-1]:
+        lines.pop()
+    params = problem.meta.get("params")
+    per = len(params) if params else 2
+    return ["\n".join(lines[i:i + per]) for i in range(0, len(lines), per)]
 
 
 # --------------------------------------------------------------------------- mapping

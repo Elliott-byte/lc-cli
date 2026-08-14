@@ -18,7 +18,15 @@ from rich.table import Table
 from rich.text import Text
 
 from . import __version__, browser, editors, store
-from .api import AuthError, JudgeResult, LeetCode, LeetCodeError, Problem, ProblemSummary
+from .api import (
+    AuthError,
+    JudgeResult,
+    LeetCode,
+    LeetCodeError,
+    Problem,
+    ProblemSummary,
+    split_testcases,
+)
 from .config import (
     Credentials,
     clear_credentials,
@@ -186,8 +194,9 @@ def problems_table(rows: list[ProblemSummary], show_tags: bool = False) -> Table
     return table
 
 
-def print_result(result: JudgeResult, problem: Problem) -> None:
-    verdict = Text(result.status, style="bold green" if result.accepted else "bold red")
+def print_result(result: JudgeResult, problem: Problem, data_input: str = "") -> None:
+    verdict = Text(result.display_status,
+                   style="bold green" if result.accepted else "bold red")
     if result.accepted:
         verdict = Text("✔ ", style="bold green") + verdict
     else:
@@ -206,8 +215,11 @@ def print_result(result: JudgeResult, problem: Problem) -> None:
         )
 
     if result.is_run and (result.code_output or result.expected_output):
+        cases = split_testcases(problem, data_input) if data_input else []
         table = Table(box=None, pad_edge=False, header_style="dim")
         table.add_column("case", style="dim", width=5)
+        if cases:
+            table.add_column("input", overflow="fold", max_width=44)
         table.add_column("output")
         table.add_column("expected")
         pairs = max(len(result.code_output), len(result.expected_output))
@@ -217,11 +229,14 @@ def print_result(result: JudgeResult, problem: Problem) -> None:
             if not got and not want:
                 continue  # the judge pads its answer arrays with a trailing ""
             ok = got == want
-            table.add_row(
-                Text(str(i + 1), style="green" if ok else "red"),
+            row = [Text(str(i + 1), style="green" if ok else "red")]
+            if cases:
+                row.append(Text(cases[i] if i < len(cases) else "", style="dim"))
+            row += [
                 Text(got, style="" if ok else "red"),
                 Text(want, style="dim"),
-            )
+            ]
+            table.add_row(*row)
         parts += [Text(""), table]
 
     if not result.is_run and not result.accepted and result.last_testcase:
@@ -768,7 +783,7 @@ def test(
             except LeetCodeError as exc:
                 die(str(exc))
                 raise
-    print_result(result, problem)
+    print_result(result, problem, data_input)
     raise typer.Exit(0 if result.accepted else 1)
 
 
