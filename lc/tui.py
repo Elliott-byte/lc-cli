@@ -6,6 +6,7 @@ that touches the network runs on a thread worker so the UI never blocks.
 
 from __future__ import annotations
 
+import os
 import time
 from typing import Iterable
 
@@ -489,16 +490,26 @@ class LeetCodeTUI(App):
         )
         if result.accepted:
             self._celebrate(big=not result.is_run)
+        else:
+            self._mourn()
 
     def _celebrate(self, big: bool) -> None:
         """Fireworks in a transparent overlay — small for runs, big for submits."""
+        width = self.size.width
+        if big:
+            frames = fx.firework_frames(min(width - 4, 64), 13, 3, 34)
+        else:
+            frames = fx.firework_frames(min(width - 4, 36), 8, 1, 16)
+        self._play_overlay(frames, interval=0.05)
+
+    def _mourn(self) -> None:
+        self._play_overlay(fx.defeat_frames(), interval=0.09)
+
+    def _play_overlay(self, frames: list, interval: float) -> None:
+        if os.environ.get("LC_NO_FX"):
+            return
         for old in self.query("#fx"):
             old.remove()
-        size = self.size
-        if big:
-            frames = fx.firework_frames(min(size.width - 4, 64), 13, 3, 34)
-        else:
-            frames = fx.firework_frames(min(size.width - 4, 36), 8, 1, 16)
         inner = Static(frames[0], id="fx-frame")
         overlay = Vertical(inner, id="fx")
         self.mount(overlay)
@@ -512,7 +523,7 @@ class LeetCodeTUI(App):
                 return
             inner.update(frames[state["i"]])
 
-        timer = self.set_interval(0.05, tick)
+        timer = self.set_interval(interval, tick)
 
     @work(thread=True, exclusive=True, group="sync")
     def _sync_worker(self) -> None:

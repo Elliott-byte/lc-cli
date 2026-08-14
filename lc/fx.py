@@ -82,15 +82,61 @@ def firework_frames(
     return out
 
 
+_GROUND = "─────────"
+#: A little figure sinking to its knees, hand-keyed. Ends on orz.
+_DEFEAT = (
+    ("    o    ", "   /|\\   ", "   / \\   "),
+    ("    o    ", "   /|\\   ", "   / |   "),
+    ("    o    ", "   /|_   ", "   //    "),
+    ("   _o    ", "   /|    ", "   //    "),
+    ("         ", "   o_    ", "   |\\    "),
+    ("         ", "   o__   ", "   ||    "),
+    ("         ", "         ", "   orz   "),
+)
+
+
+def defeat_frames() -> list[Text]:
+    """The collapse, then the last pose held while dots of despair appear."""
+    frames = [_defeat_text(art, dots=0) for art in _DEFEAT]
+    frames += [_defeat_text(_DEFEAT[-1], dots) for dots in (1, 2, 3)]
+    return frames
+
+
+def _defeat_text(art: tuple[str, ...], dots: int) -> Text:
+    text = Text()
+    for row in art:
+        text.append(row + "\n", style="bold red" if "orz" in row else "dim")
+    text.append(_GROUND, style="dim")
+    if dots:
+        text.append(" " + "." * dots, style="dim red")
+    text.append("\n")
+    return text
+
+
+def _quiet(console: Console) -> bool:
+    return bool(os.environ.get("LC_NO_FX")) or not console.is_terminal
+
+
+def _animate(console: Console, frames: list[Text], interval: float) -> None:
+    with Live(console=console, transient=True, auto_refresh=False) as live:
+        for frame in frames:
+            live.update(frame, refresh=True)
+            time.sleep(interval)
+
+
 def play(console: Console, big: bool) -> None:
     """Celebrate in the terminal; silent when piped or LC_NO_FX is set."""
-    if os.environ.get("LC_NO_FX") or not console.is_terminal:
+    if _quiet(console):
         return
     if big:
         width, height, bursts, frames = min(console.width - 2, 64), 13, 3, 34
     else:
         width, height, bursts, frames = min(console.width - 2, 36), 8, 1, 16
-    with Live(console=console, transient=True, auto_refresh=False) as live:
-        for frame in firework_frames(width, height, bursts, frames):
-            live.update(frame, refresh=True)
-            time.sleep(0.045)
+    _animate(console, firework_frames(width, height, bursts, frames), 0.045)
+
+
+def defeat(console: Console) -> None:
+    """Take the loss with a little dignity; same quiet rules as play()."""
+    if _quiet(console):
+        return
+    _animate(console, defeat_frames(), 0.09)

@@ -219,7 +219,17 @@ def test_firework_frames_shape_and_sparks():
     assert frames[8].plain.count(" ") < frames[0].plain.count(" ")
 
 
-def test_fireworks_stay_out_of_pipes():
+def test_defeat_frames_end_in_orz():
+    from lc import fx
+
+    frames = fx.defeat_frames()
+    assert len(frames) == 10
+    assert all(len(f.plain.splitlines()) == 4 for f in frames)
+    assert "orz" in frames[-1].plain
+    assert "o" in frames[0].plain and "orz" not in frames[0].plain
+
+
+def test_animations_stay_out_of_pipes():
     from io import StringIO
 
     from rich.console import Console
@@ -228,6 +238,7 @@ def test_fireworks_stay_out_of_pipes():
 
     out = StringIO()
     fx.play(Console(file=out), big=True)  # not a terminal — must be a no-op
+    fx.defeat(Console(file=out))
     assert out.getvalue() == ""
 
 
