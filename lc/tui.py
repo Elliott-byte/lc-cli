@@ -127,6 +127,7 @@ class LeetCodeTUI(App):
         Binding("t", "cycle_status", "Status"),
         Binding("o", "open_web", "Web"),
         Binding("D", "daily", "Daily"),
+        Binding("ctrl+r", "refresh", "Refresh"),
         Binding("R", "sync", "Sync"),
         Binding("escape", "focus_list", "", show=False),
     ]
@@ -192,6 +193,7 @@ class LeetCodeTUI(App):
         bar.update(Text(prefix + message, style=style or "dim"))
 
     def refresh_list(self) -> None:
+        selected = self.current_slug
         rows = store.search(
             keyword=self.keyword,
             difficulty=self.difficulty,
@@ -202,6 +204,10 @@ class LeetCodeTUI(App):
         self.query_one("#list", ProblemList).load(
             rows, daily=self.daily_slug if pinned else None
         )
+        # Rebuilding rows resets the cursor to the top — put it back on the
+        # problem the user was on whenever it is still in the list.
+        if selected:
+            self.select_slug(selected)
         if not rows and store.index_size() == 0:
             self.set_status("no local index yet — press R to sync", "yellow")
         else:
@@ -280,6 +286,9 @@ class LeetCodeTUI(App):
         if editor:
             with self.suspend():
                 workspace.open_in_editor(self.config, solution.file)
+            # A `\t`/`\s` inside the editor may have judged this problem — the
+            # store already knows, so the ✔/✗ marks must not wait for a sync.
+            self.refresh_list()
             self.refresh()
         else:
             self.notify(f"created {solution.file} (set $EDITOR to auto-open)")
@@ -293,6 +302,12 @@ class LeetCodeTUI(App):
     def action_sync(self) -> None:
         self.set_status("syncing problem index…", "yellow")
         self._sync_worker()
+
+    def action_refresh(self) -> None:
+        """Instant, local: re-read the index (a Vim `\\s` may have landed) and
+        re-check the daily in case the UTC day rolled over."""
+        self._daily_worker()
+        self.refresh_list()
 
     def action_daily(self) -> None:
         if not self.daily_slug:

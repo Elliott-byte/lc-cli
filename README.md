@@ -160,6 +160,11 @@ read-only) beside it automatically — hide it with `\p` (or `q` inside the
 pane), bring it back with `\p`. Put `let g:lc_auto_statement = 0` in your
 vimrc if you'd rather open it manually.
 
+Python solution buffers are kept space-indented: the Tab key inserts spaces,
+and real tabs that arrive via paste are converted when the file is saved.
+LeetCode's starters use spaces, and the judge answers a single stray tab with
+a `TabError` — `let g:lc_python_indent = 0` disables this if you must.
+
 The keys run from the file's own directory, so it doesn't matter where you
 launched Vim. They use `<leader>`, which is backslash unless you've remapped
 it. After upgrading `lc`, re-run `lc setup vim --force` to refresh the plugin;
@@ -178,6 +183,11 @@ Today's daily challenge is pinned to the top of the list with a yellow `★`
 (and selected when the app opens), so the day's problem is always one
 keypress away; `D` jumps back to it from anywhere.
 
+The ✔/✗ marks keep themselves fresh: coming back from the editor re-reads
+the local index, so a `\s` submit made inside Vim shows up immediately, and
+`ctrl+r` refreshes on demand (instant and local, unlike `R` which re-downloads
+the index). Refreshes keep your cursor on the problem it was on.
+
 | Key | Action |
 | --- | --- |
 | `↑` `↓` | Move through the list |
@@ -189,6 +199,7 @@ keypress away; `D` jumps back to it from anywhere.
 | `t` | Cycle the status filter |
 | `o` | Open the problem on leetcode.com |
 | `D` | Jump to today's daily challenge |
+| `ctrl+r` | Refresh the list from the local index |
 | `R` | Re-sync the problem index |
 | `q` | Quit |
 
