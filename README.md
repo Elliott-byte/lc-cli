@@ -1,5 +1,7 @@
 # lc — LeetCode in your terminal
 
+**English** · [简体中文](README.zh-CN.md)
+
 Browse problems, read statements, write solutions in your own editor, and run
 them against LeetCode's real judge — without leaving the shell.
 
@@ -211,7 +213,8 @@ the index). Refreshes keep your cursor on the problem it was on.
 ## Notes
 
 - Accepted verdicts end in fireworks — a small burst for `lc test`, a big
-  volley for `lc submit`. They skip pipes and scripts automatically, and
+  volley for `lc submit` — and a failed one in a little figure sinking to
+  its knees (orz). Both skip pipes and scripts automatically, and
   `LC_NO_FX=1` turns them off everywhere.
 - Premium problems need a premium account; `lc` reports that clearly rather
   than failing oddly.

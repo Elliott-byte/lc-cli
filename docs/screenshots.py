@@ -1,0 +1,177 @@
+"""Regenerate the README screenshots in docs/*.svg.
+
+    .venv/bin/python docs/screenshots.py
+
+Everything renders through lc's real code paths — the data is canned so the
+output is reproducible and needs no network or account.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import os
+import sys
+import tempfile
+import time
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+os.environ["LC_HOME"] = tempfile.mkdtemp(prefix="lc-shots-")
+os.environ["LC_NO_FX"] = "1"
+
+from rich.console import Console  # noqa: E402
+from rich.text import Text  # noqa: E402
+
+from lc import store  # noqa: E402
+from lc.api import JudgeResult, Problem, ProblemSummary  # noqa: E402
+from lc.cli import print_result, problems_table  # noqa: E402
+
+DOCS = Path(__file__).resolve().parent
+
+DAILY_SLUG = "longest-substring-of-one-repeating-character"
+
+STATEMENT_HTML = """
+<p>You are given a <strong>0-indexed</strong> string <code>s</code>. You are
+also given a 0-indexed string <code>queryCharacters</code> of length
+<code>k</code> and a 0-indexed array of integer indices
+<code>queryIndices</code> of length <code>k</code>, both of which are used to
+describe <code>k</code> queries.</p>
+<p>The <code>i<sup>th</sup></code> query updates the character in
+<code>s</code> at index <code>queryIndices[i]</code> to the character
+<code>queryCharacters[i]</code>.</p>
+<p>Return an array <code>lengths</code> of length <code>k</code>, where
+<code>lengths[i]</code> is the length of the <strong>longest substring</strong>
+of <code>s</code> consisting of <strong>only one repeating character</strong>
+after the <code>i<sup>th</sup></code> query is performed.</p>
+<pre><strong>Input:</strong> s = "babacc", queryCharacters = "bcb", queryIndices = [1,3,3]
+<strong>Output:</strong> [3,3,4]
+<strong>Explanation:</strong> after the third query s = "bccbb": the longest run is "bb", &hellip;
+</pre>
+<p><strong>Constraints:</strong></p>
+<ul>
+<li><code>1 &lt;= s.length &lt;= 10<sup>5</sup></code></li>
+<li><code>k == queryCharacters.length == queryIndices.length</code></li>
+</ul>
+"""
+
+DAILY_PROBLEM = Problem(
+    question_id="2213",
+    frontend_id="2213",
+    title="Longest Substring of One Repeating Character",
+    slug=DAILY_SLUG,
+    difficulty="Hard",
+    content=STATEMENT_HTML,
+    paid_only=False,
+    likes=455,
+    dislikes=87,
+    ac_rate=56.5,
+    total_accepted="31K",
+    total_submission="54.9K",
+    sample_testcase="",
+    example_testcases="",
+    hints=[],
+    tags=["Array", "String", "Segment Tree", "Ordered Set"],
+    snippets={"python3": "class Solution: ..."},
+    meta={"params": [{"name": "s"}, {"name": "queryCharacters"},
+                     {"name": "queryIndices"}]},
+)
+
+
+def _s(fid, title, slug, diff, rate, status, paid=False):
+    return ProblemSummary(fid, title, slug, diff, rate, paid, status)
+
+
+INDEX = [
+    _s("1", "Two Sum", "two-sum", "Easy", 56.4, "ac"),
+    _s("2", "Add Two Numbers", "add-two-numbers", "Medium", 46.5, "ac"),
+    _s("3", "Longest Substring Without Repeating Characters",
+       "longest-substring-without-repeating-characters", "Medium", 37.2, "notac"),
+    _s("4", "Median of Two Sorted Arrays", "median-of-two-sorted-arrays",
+       "Hard", 44.3, None),
+    _s("11", "Container With Most Water", "container-with-most-water",
+       "Medium", 58.1, "ac"),
+    _s("15", "3Sum", "3sum", "Medium", 37.6, "notac"),
+    _s("23", "Merge k Sorted Lists", "merge-k-sorted-lists", "Hard", 56.9, None),
+    _s("42", "Trapping Rain Water", "trapping-rain-water", "Hard", 65.3, "ac"),
+    _s("146", "LRU Cache", "lru-cache", "Medium", 45.4, None),
+    _s("200", "Number of Islands", "number-of-islands", "Medium", 62.4, "ac"),
+    _s("322", "Coin Change", "coin-change", "Medium", 48.9, "ac"),
+    _s("2213", "Longest Substring of One Repeating Character", DAILY_SLUG,
+       "Hard", 56.5, None),
+]
+
+
+def shot_list() -> None:
+    mediums = [p for p in INDEX if p.difficulty == "Medium"][:8]
+    console = Console(record=True, width=88)
+    console.print(problems_table(mediums))
+    console.print()
+    console.print(Text("8 of 641 — more with --offset 8", style="dim"))
+    console.save_svg(str(DOCS / "list.svg"), title="lc list -d medium -n 8")
+
+
+def shot_test() -> None:
+    result = JudgeResult(
+        raw={},
+        accepted=False,
+        status="Accepted",  # LeetCode's word for "it ran"; lc says Samples failed
+        is_run=True,
+        total_correct=1,
+        total_testcases=2,
+        runtime="0 ms",
+        memory="19.4 MB",
+        code_output=["[3,3,4]", "[2,2]"],
+        expected_output=["[3,3,4]", "[2,3]"],
+    )
+    data_input = 'babacc\nbcb\n[1,3,3]\nabyzz\naa\n[2,1]'
+    console = Console(record=True, width=88)
+    # print_result writes to lc's module-level console; point it at the recorder.
+    from lc import cli
+    cli.console = console
+    print_result(result, DAILY_PROBLEM, data_input)
+    console.save_svg(str(DOCS / "test.svg"),
+                     title="lc test  ·  in ~/leetcode/2213-longest-substring…")
+
+
+async def shot_tui() -> None:
+    from lc import tui as tuimod
+
+    store.replace_index(INDEX)
+    store.put_statement(DAILY_PROBLEM)
+    store.set_meta("daily_date", time.strftime("%Y-%m-%d", time.gmtime()))
+    store.set_meta("daily_slug", DAILY_SLUG)
+
+    class FakeClient:
+        authenticated = True
+
+        def daily(self):
+            return "", INDEX[-1]
+
+        def problem(self, slug):
+            return DAILY_PROBLEM
+
+        def iter_all_problems(self, progress=None):
+            return iter(())
+
+        def close(self):
+            pass
+
+    app = tuimod.LeetCodeTUI()
+    app.client = FakeClient()
+    async with app.run_test(size=(96, 32)) as pilot:
+        for _ in range(40):
+            await pilot.pause(0.1)
+            if app.daily_slug:
+                break
+        await pilot.pause(0.5)
+        svg = app.export_screenshot(title="lc")
+    (DOCS / "tui.svg").write_text(svg)
+
+
+if __name__ == "__main__":
+    shot_list()
+    shot_test()
+    asyncio.run(shot_tui())
+    print("wrote", ", ".join(str(DOCS / f) for f in
+                             ("list.svg", "test.svg", "tui.svg")))
