@@ -73,6 +73,19 @@ function! s:LcSetup() abort
   if !filereadable(expand('%:p:h') . '/.lc.json')
     return
   endif
+  " LeetCode's Python starters indent with spaces, and one stray real Tab is
+  " a TabError from the judge. Keep Python solution buffers space-only, and
+  " retab on save so pasted tabs (which bypass expandtab) get converted too.
+  " `let g:lc_python_indent = 0` turns both off.
+  if get(g:, 'lc_python_indent', 1)
+        \ && (&filetype ==# 'python' || expand('%:e') ==# 'py')
+    setlocal expandtab shiftwidth=4 softtabstop=4
+    augroup lc_cli_py
+      autocmd! * <buffer>
+      autocmd BufWritePre <buffer>
+            \ if search('\t', 'nw') | silent keepjumps retab | endif
+    augroup END
+  endif
   " shellescape() so a workspace path with spaces survives the shell.
   nnoremap <buffer> <leader>t :w<CR>:execute '!cd ' . shellescape(expand('%:p:h')) . ' && lc test'<CR>
   nnoremap <buffer> <leader>s :w<CR>:execute '!cd ' . shellescape(expand('%:p:h')) . ' && lc submit'<CR>
