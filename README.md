@@ -156,10 +156,14 @@ In a solution buffer (any file next to a `.lc.json`), normal mode:
 | `\s` | save, then `lc submit` |
 | `\p` | show/hide the problem statement in a left split |
 | `\o` | open the problem page in your browser (figures render there) |
+| `\q` | save everything, then quit Vim — back to the TUI/shell |
 
 Opening a solution file also opens the statement beside it automatically —
 hide it with `\p` (or `q` inside the pane), bring it back with `\p`. Put
 `let g:lc_auto_statement = 0` in your vimrc if you'd rather open it manually.
+Quitting the solution with plain `:q` doesn't strand you in the pane either:
+left as the last window, it takes Vim down with it, and you're back where you
+launched — the problem list, if that was the TUI.
 
 The pane shows the statement fully rendered — `lc show` running in a small
 terminal split, with the same colors, example boxes and superscripts as the

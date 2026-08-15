@@ -18,11 +18,14 @@ VIM_PLUGIN = r'''" lc.vim — Vim integration for the lc LeetCode CLI.
 "   <leader>s   write the file, then run `lc submit`
 "   <leader>p   show/hide the problem statement in a left split
 "   <leader>o   open the problem page in your browser (for figures/animations)
+"   <leader>q   write everything, then quit Vim (back to the lc TUI/shell)
 " The statement pane shows `lc show` fully rendered in a terminal split when
 " the editor supports it, the raw README.md otherwise; `let
 " g:lc_statement_render = 0` forces the plain file. The pane opens
 " automatically when the solution file is the only window; `let
 " g:lc_auto_statement = 0` turns that off. Inside the pane, q closes it.
+" Quitting the solution (:q, ZZ, …) never strands you in the pane: a
+" statement pane left as the last window takes Vim down with it.
 " The leader key is backslash unless changed.
 
 if exists('g:loaded_lc_cli')
@@ -80,8 +83,18 @@ function! s:LcOpenStatement() abort
   endif
   let b:lc_statement_for = l:dir
   setlocal winfixwidth nonumber norelativenumber
-  nnoremap <buffer> q :close<CR>
+  nnoremap <buffer> q :call <SID>LcCloseStatement()<CR>
   wincmd p
+endfunction
+
+function! s:LcCloseStatement() abort
+  " On the last window :close is an error (E444) — leaving Vim is what
+  " closing the last thing on screen means.
+  if winnr('$') == 1 && tabpagenr('$') == 1
+    quit
+  else
+    close
+  endif
 endfunction
 
 function! s:LcOpenWeb() abort
@@ -127,6 +140,8 @@ function! s:LcSetup() abort
   nnoremap <buffer> <leader>s :w<CR>:execute '!cd ' . shellescape(expand('%:p:h')) . ' && lc submit'<CR>
   nnoremap <buffer> <leader>p :call <SID>LcToggleStatement()<CR>
   nnoremap <buffer> <leader>o :call <SID>LcOpenWeb()<CR>
+  " One stroke back to whatever launched Vim (the lc TUI resumes on exit).
+  nnoremap <buffer> <leader>q :xall<CR>
   " Fresh `lc pick` / `lc edit`: put the statement alongside the solution.
   if get(g:, 'lc_auto_statement', 1) && winnr('$') == 1
         \ && expand('%:t') !=# 'README.md'
@@ -137,6 +152,12 @@ endfunction
 augroup lc_cli
   autocmd!
   autocmd BufReadPost,BufNewFile * call s:LcSetup()
+  " :q in the solution closes only that window, dropping the user into the
+  " statement pane with no obvious way on. A pane left as the last window
+  " means everything else was quit — follow along. (Plain :quit, so a hidden
+  " modified buffer still stops Vim rather than being discarded.)
+  autocmd BufEnter * if winnr('$') == 1 && tabpagenr('$') == 1
+        \ && exists('b:lc_statement_for') | quit | endif
 augroup END
 '''
 

@@ -967,7 +967,8 @@ def setup_vim(
         console.print(Text("✔ editor: vim", style="green"))
     console.print(
         Text("  in a solution buffer: \\t = save + test, \\s = save + submit, "
-             "\\p = toggle statement, \\o = open in browser", style="dim")
+             "\\p = toggle statement, \\o = open in browser, \\q = save + quit",
+             style="dim")
     )
 
 
