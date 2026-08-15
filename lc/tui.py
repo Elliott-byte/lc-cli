@@ -346,6 +346,10 @@ class LeetCodeTUI(App):
     #status-bar { height: 1; background: $boost; color: $text-muted; padding: 0 1; }
     ProblemList { height: 1fr; }
     ReviewList { height: 1fr; }
+    /* Hidden until a review repo is configured — an empty strip would just
+       cost the deck a row. */
+    #sync-bar { height: 1; padding: 0 1; background: $boost; }
+    #sync-bar.-off { display: none; }
     """
 
     BINDINGS = [
@@ -394,6 +398,7 @@ class LeetCodeTUI(App):
                         yield ProblemList(id="list")
                     with TabPane("Review", id="pane-review"):
                         yield ReviewList(id="review")
+                        yield Static("", id="sync-bar")
             with VerticalScroll(id="right"):
                 yield Static("", id="statement")
         yield Static("", id="status-bar")
@@ -476,6 +481,29 @@ class LeetCodeTUI(App):
         due = review.due_count(items, today)
         self.query_one(TabbedContent).get_tab("pane-review").label = (
             f"Review ({due})" if due else "Review"
+        )
+        self.refresh_sync_bar()
+
+    #: Style per sync state, so the strip reads at a glance.
+    SYNC_STYLES = {
+        "clean": "green", "pending": "yellow", "failed": "red",
+        "never": "dim", "syncing": "yellow",
+    }
+
+    def refresh_sync_bar(self, message: str = "", state: str = "") -> None:
+        """The git line under the deck. `message` overrides it while syncing."""
+        bar = self.query_one("#sync-bar", Static)
+        if message:
+            bar.set_class(False, "-off")
+            bar.update(Text(message, style=self.SYNC_STYLES.get(state, "dim")))
+            return
+        status = gitsync.status(self.config)
+        bar.set_class(status.state == "off", "-off")
+        if status.state == "off":
+            bar.update("")
+            return
+        bar.update(
+            Text(gitsync.summary(self.config), style=self.SYNC_STYLES[status.state])
         )
 
     def _active_table(self) -> DataTable:
@@ -624,6 +652,7 @@ class LeetCodeTUI(App):
             )
             return
         self.set_status("syncing the review deck…", "yellow")
+        self.refresh_sync_bar("⟳ syncing…", "syncing")
         self._review_sync_worker(url)
 
     @work(thread=True, exclusive=True, group="review-sync")
@@ -633,6 +662,7 @@ class LeetCodeTUI(App):
         except gitsync.SyncError as exc:
             self.call_from_thread(self.notify, escape(str(exc)), severity="error")
             self.call_from_thread(self.set_status, "review sync failed", "red")
+            self.call_from_thread(self.refresh_sync_bar)
             return
         parts = []
         if added or updated:

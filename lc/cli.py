@@ -961,6 +961,15 @@ def review_list(ctx: typer.Context) -> None:
             Text(f"\n{due} due — `lc review postpone` pushes them to tomorrow",
                  style="dim")
         )
+    config = load_config()
+    line = gitsync.summary(config)
+    if line:
+        state = gitsync.status(config).state
+        console.print(
+            Text(("" if due else "\n") + line,
+                 style={"clean": "green", "pending": "yellow",
+                        "failed": "red"}.get(state, "dim"))
+        )
 
 
 @review_app.command("add")

@@ -255,6 +255,18 @@ lc review pull             # 只把仓库里的刷题本拉下来
 lc review push             # 只把本机的刷题本推上去
 ```
 
+配好仓库后，Review 页底部会有一条状态栏，不用敲命令就知道自己的同步状态：
+
+| 显示 | 含义 |
+| --- | --- |
+| `✔ synced 2h ago` | 刷题本和仓库一致（截至上次同步） |
+| `↑ 3 changes to push · synced 2h ago` | 之后又改过，有 3 处待推送 |
+| `○ not synced yet — press g` | 配好了但还没同步过 |
+| `✗ last sync failed: …` | 上次同步失败，并说明原因 |
+
+它只读本地文件算出来——刷新列表永远不会去连网络——所以"synced"的意思是
+"上次通信时和仓库一致"，而不是"刚查过 GitHub"。没配仓库时这条整个不显示。
+
 lc 在 `~/.lc/review-repo` 保留一个私有克隆，往仓库里写两个文件：
 `review.json`（它读回来的刷题本）和 `REVIEW.md`（同一份数据的带链接表格，
 GitHub 上直接可读）。它**不会**写 `README.md`，所以指向一个已有 README 的

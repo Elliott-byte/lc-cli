@@ -281,6 +281,21 @@ lc review pull             # bring the repo's deck down only
 lc review push             # publish this machine's deck only
 ```
 
+The Review tab carries a status strip once a repo is configured, so you can
+see where you stand without running anything:
+
+| | Meaning |
+| --- | --- |
+| `✔ synced 2h ago` | the deck matches the repo as of the last sync |
+| `↑ 3 changes to push · synced 2h ago` | you have graded things since |
+| `○ not synced yet — press g` | configured, never synced |
+| `✗ last sync failed: …` | the last attempt errored; the reason is shown |
+
+It is worked out from local files only — redrawing the deck never reaches for
+the network — so "synced" means "agreed with the repo when we last talked to
+it", not "checked GitHub just now". With no repo configured the strip is
+hidden entirely.
+
 lc keeps a private clone in `~/.lc/review-repo` and writes two files:
 `review.json`, the deck it reads back, and `REVIEW.md`, the same deck as a
 linked table so the repo page is readable on GitHub. It never writes a

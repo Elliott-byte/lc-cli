@@ -1003,6 +1003,79 @@ def test_git_sync_writes_a_readable_table(tmp_path, monkeypatch):
     assert not (gitsync.repo_dir() / "README.md").exists()
 
 
+def test_sync_status_walks_its_states(tmp_path, monkeypatch):
+    monkeypatch.setenv("LC_HOME", str(tmp_path / "home"))
+    from lc import gitsync, review
+    from lc.config import load_config, save_config
+
+    # No repo configured: nothing to say, and the TUI strip stays hidden.
+    assert gitsync.status(load_config()).state == "off"
+    assert gitsync.summary(load_config()) == ""
+
+    remote = _bare_repo(tmp_path)
+    cfg = load_config()
+    cfg.review_repo = remote
+    save_config(cfg)
+    review.add("coin-change", title="Coin Change", frontend_id="322",
+               difficulty="Medium", curve=[2, 4])
+    assert gitsync.status(load_config()).state == "never"
+
+    gitsync.sync(remote)
+    state = gitsync.status(load_config())
+    assert state.state == "clean" and state.synced_at is not None
+    assert gitsync.summary(load_config()).startswith("✔ synced")
+
+    # A local edit is something to push.
+    review.postpone("coin-change")
+    state = gitsync.status(load_config())
+    assert (state.state, state.pending) == ("pending", 1)
+    assert "1 change to push" in gitsync.summary(load_config())
+
+    # A failure is remembered, then cleared by the next success.
+    cfg.review_repo = str(tmp_path / "gone.git")
+    save_config(cfg)
+    with pytest.raises(gitsync.SyncError):
+        gitsync.pull(cfg.review_repo)
+    assert gitsync.status(load_config()).state == "failed"
+    cfg.review_repo = remote
+    save_config(cfg)
+    gitsync.sync(remote)
+    assert gitsync.status(load_config()).state == "clean"
+
+
+def test_sync_status_never_touches_the_network(tmp_path, monkeypatch):
+    """It is recomputed on every deck refresh — it must stay local."""
+    monkeypatch.setenv("LC_HOME", str(tmp_path / "home"))
+    from lc import gitsync, review
+    from lc.config import load_config, save_config
+
+    remote = _bare_repo(tmp_path)
+    cfg = load_config()
+    cfg.review_repo = remote
+    save_config(cfg)
+    review.add("coin-change", curve=[2])
+    gitsync.sync(remote)
+
+    def no_git(*a, **kw):
+        raise AssertionError("status() ran a git command")
+
+    monkeypatch.setattr(gitsync.subprocess, "run", no_git)
+    assert gitsync.status(load_config()).state == "clean"
+
+
+def test_ago_reads_as_a_relative_clock():
+    from lc import gitsync
+
+    now = 1_000_000.0
+    assert gitsync.ago(None) == "never"
+    assert gitsync.ago(now - 5, now=now) == "just now"
+    assert gitsync.ago(now - 600, now=now) == "10m ago"
+    assert gitsync.ago(now - 7200, now=now) == "2h ago"
+    assert gitsync.ago(now - 3 * 86400, now=now) == "3d ago"
+    # A clock that jumped backwards must not print a negative age.
+    assert gitsync.ago(now + 60, now=now) == "just now"
+
+
 def test_git_sync_reports_a_bad_remote_cleanly(tmp_path, monkeypatch):
     monkeypatch.setenv("LC_HOME", str(tmp_path / "home"))
     from lc import gitsync
