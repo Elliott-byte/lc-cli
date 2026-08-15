@@ -562,7 +562,13 @@ def daily(
     """Show today's daily challenge."""
     with client() as lc:
         date, summary = lc.daily()
-        console.print(Text(f"Daily challenge · {date}", style="bold"))
+        from .tui import daily_note
+
+        console.print(
+            Text(f"Daily challenge · {date}", style="bold")
+            + Text(f"   ({daily_note(date).split(', ', 1)[-1]}, at UTC midnight)",
+                   style="dim")
+        )
         console.print(problems_table([summary]))
         if pick_it:
             console.print()

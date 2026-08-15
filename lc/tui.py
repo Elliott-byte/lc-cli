@@ -55,6 +55,24 @@ DIFFICULTIES = ("", "Easy", "Medium", "Hard")
 STATUSES = ("", "todo", "attempted", "solved")
 
 
+def daily_note(daily_date: str, now: time.struct_time | None = None) -> str:
+    """Label for the pinned daily: which day it is, and when it turns over.
+
+    LeetCode rotates at UTC midnight, so anywhere east of Greenwich the local
+    date is a day ahead of the daily on screen for part of the morning —
+    without the date it reads as "refresh isn't working".
+    """
+    now = now or time.gmtime()
+    left = 86400 - (now.tm_hour * 3600 + now.tm_min * 60 + now.tm_sec)
+    if left >= 3600:
+        hours, minutes = divmod(left // 60, 60)
+        when = f"{hours}h" if minutes == 0 else f"{hours}h{minutes:02d}m"
+    else:
+        when = f"{max(1, left // 60)}m"
+    day = daily_date[5:] if len(daily_date) == 10 else daily_date  # MM-DD
+    return f"★ daily {day}, next in {when}" if day else f"★ daily, next in {when}"
+
+
 def pin_daily(rows: list[ProblemSummary], slug: str | None) -> bool:
     """Move today's daily challenge to the front. True when it is in the list."""
     if not slug:
@@ -490,7 +508,9 @@ class LeetCodeTUI(App):
         else:
             message = f"{len(rows)} problems"
             if pinned:
-                message += "  ·  ★ today's daily"
+                # Recomputed on every refresh — which is exactly when someone
+                # is wondering why the daily has not changed.
+                message += "  ·  " + daily_note(store.get_meta("daily_date") or "")
             self.set_status(message)
 
     def refresh_review(self) -> None:

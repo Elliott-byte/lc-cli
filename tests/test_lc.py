@@ -1528,6 +1528,26 @@ def test_choose_resolves_aliases_and_falls_back():
 
 # ----------------------------------------------------------------------- tui
 
+def test_daily_note_says_which_day_and_when_it_turns_over():
+    """East of Greenwich the local date runs ahead of LeetCode's UTC daily."""
+    import time
+
+    from lc.tui import daily_note
+
+    def at(hour, minute):
+        return time.struct_time((2026, 8, 15, hour, minute, 0, 0, 227, 0))
+
+    # 23:17 UTC is already the 16th in Adelaide — the date is what explains it.
+    assert daily_note("2026-08-15", at(23, 17)) == "★ daily 08-15, next in 43m"
+    assert daily_note("2026-08-15", at(23, 59)) == "★ daily 08-15, next in 1m"
+    assert daily_note("2026-08-15", at(12, 0)) == "★ daily 08-15, next in 12h"
+    assert daily_note("2026-08-15", at(0, 5)) == "★ daily 08-15, next in 23h55m"
+    # Never "next in 0m": there is always some of the day left.
+    assert daily_note("2026-08-15", at(23, 59, )) .endswith("1m")
+    # An unknown date still gives the countdown rather than a stray separator.
+    assert daily_note("", at(23, 17)) == "★ daily, next in 43m"
+
+
 def test_pin_daily_moves_the_daily_to_the_front():
     from lc.api import ProblemSummary
     from lc.tui import pin_daily

@@ -75,6 +75,10 @@ the editor back to the list, `r` to run the samples, `s` to submit — repeat.
 
 Today's daily challenge is pinned to the top with a yellow `★` and selected
 when the app opens, so it is always one keypress away; `D` jumps back to it.
+The status bar names the day it belongs to and when the next one lands —
+`★ daily 08-15, next in 43m` — because LeetCode rotates at UTC midnight, so
+east of Greenwich your local date runs ahead of the daily on screen for part
+of the morning.
 
 The ✔/✗ marks stay fresh by themselves: coming back from the editor re-reads
 the local index, so a `\s` submit made inside Vim shows up immediately.
