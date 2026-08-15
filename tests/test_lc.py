@@ -901,7 +901,9 @@ def test_cli_review_add_list_and_remove(tmp_path, monkeypatch):
 
     result = runner.invoke(app, ["review", "rm", "coin change"])
     assert result.exit_code == 0, result.output
-    assert review.load() == {}
+    # Off the deck, but a tombstone stays behind so the removal can sync.
+    assert review.live(review.load()) == {}
+    assert review.load()["coin-change"].removed
 
     result = runner.invoke(app, ["review", "rm", "322"])
     assert result.exit_code == 1  # already gone
@@ -938,6 +940,111 @@ def _bare_repo(tmp_path):
     subprocess.run(["git", "init", "--quiet", "--bare", "-b", "main", str(remote)],
                    check=True)
     return str(remote)
+
+
+def test_two_machines_converge_over_repeated_syncs(tmp_path, monkeypatch):
+    """The mac + WSL workflow: removals, same-day conflicts and postpones."""
+    import sys
+
+    remote = _bare_repo(tmp_path)
+    curve = [1, 2, 4, 7]
+
+    def on(machine: str):
+        monkeypatch.setenv("LC_HOME", str(tmp_path / machine))
+        for mod in [m for m in sys.modules if m.startswith("lc.")]:
+            del sys.modules[mod]
+        from lc import gitsync, review
+        return gitsync, review
+
+    def deck(review_mod):
+        return sorted(review_mod.live(review_mod.load()))
+
+    g, r = on("mac")
+    for slug, fid in (("two-sum", "1"), ("coin-change", "322")):
+        r.add(slug, title=slug, frontend_id=fid, curve=curve)
+    g.push(remote)
+    g, r = on("wsl")
+    g.pull(remote)
+    assert deck(r) == ["coin-change", "two-sum"]
+
+    # A removal sticks locally and reaches the other machine.
+    g, r = on("mac")
+    r.remove("two-sum")
+    g.sync(remote)
+    assert deck(r) == ["coin-change"], "a sync must not undo your own removal"
+    g, r = on("wsl")
+    g.sync(remote)
+    assert deck(r) == ["coin-change"], "the removal must propagate"
+
+    # Re-adding revives it everywhere.
+    r.add("two-sum", title="Two Sum", frontend_id="1", curve=curve)
+    g.sync(remote)
+    g, r = on("mac")
+    g.sync(remote)
+    assert "two-sum" in deck(r)
+
+    # Same-day edits: the later one wins, whichever level it happens to be.
+    r.shift_level("coin-change", +3, curve)
+    g.sync(remote)
+    g, r = on("wsl")
+    g.pull(remote)
+    r.shift_level("coin-change", -2, curve)
+    expected = r.load()["coin-change"].level
+    g.sync(remote)
+    g, r = on("mac")
+    g.sync(remote)
+    assert r.load()["coin-change"].level == expected
+
+    # A postpone is an edit too, and survives the round trip.
+    r.postpone("coin-change")
+    postponed = r.load()["coin-change"].due
+    g.sync(remote)
+    g, r = on("wsl")
+    g.sync(remote)
+    assert r.load()["coin-change"].due == postponed
+
+    # Repeated syncing converges instead of oscillating, and stops committing.
+    for i in range(6):
+        g, _ = on("mac" if i % 2 == 0 else "wsl")
+        g.sync(remote)
+    mac_dump = on("mac")[1].dumps(on("mac")[1].load())
+    wsl_dump = on("wsl")[1].dumps(on("wsl")[1].load())
+    assert mac_dump == wsl_dump
+
+
+def test_a_push_race_with_the_other_machine_is_retried(tmp_path, monkeypatch):
+    import subprocess
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path / "home"))
+    from lc import gitsync, review
+
+    remote = _bare_repo(tmp_path)
+    review.add("two-sum", frontend_id="1", curve=[1, 2])
+    gitsync.push(remote)
+
+    # The remote moves once, inside our fetch-to-push window.
+    real = gitsync._commit_and_push
+    fired: list[int] = []
+
+    def racing(path, message):
+        """The other machine lands a push between our fetch and our push."""
+        if not fired:
+            fired.append(1)
+            other = tmp_path / "other-machine"
+            subprocess.run(["git", "clone", "--quiet", remote, str(other)], check=True)
+            (other / "note.txt").write_text("from the other machine\n")
+            subprocess.run(["git", "-C", str(other), "add", "note.txt"], check=True)
+            subprocess.run(
+                ["git", "-C", str(other), "-c", "user.name=o", "-c", "user.email=o@x",
+                 "commit", "--quiet", "-m", "other machine"], check=True)
+            subprocess.run(["git", "-C", str(other), "push", "--quiet", "origin", "HEAD"],
+                           check=True)
+        return real(path, message)
+
+    monkeypatch.setattr(gitsync, "_commit_and_push", racing)
+    review.shift_level("two-sum", +1, [1, 2])
+    count, changed = gitsync.push(remote)  # must not raise
+    assert fired and changed and count == 1
 
 
 def test_merge_prefers_the_most_recently_graded_side():

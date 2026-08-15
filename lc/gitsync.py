@@ -37,9 +37,11 @@ class SyncError(Exception):
     ``hint`` is the next thing to try, when lc recognises the failure.
     """
 
-    def __init__(self, message: str, hint: str = "") -> None:
+    def __init__(self, message: str, hint: str = "", retryable: bool = False) -> None:
         super().__init__(message)
         self.hint = hint
+        #: True when simply doing the whole sync again is the right response.
+        self.retryable = retryable
 
 
 #: Lines git prints that say nothing on their own. The last two are the tail of
@@ -52,24 +54,28 @@ _NOISE = (
     "and the repository exists.",
 )
 
-#: (needle in git's output) -> (what to say, what to try next)
+#: (needle in git's output) -> (what to say, what to try next, retry?)
 _KNOWN = (
     ("permission denied (publickey)",
      "GitHub rejected this machine's SSH key",
      "use the https:// URL for the repo instead, or add a key with "
-     "`gh ssh-key add ~/.ssh/id_ed25519.pub`"),
+     "`gh ssh-key add ~/.ssh/id_ed25519.pub`", False),
     ("could not read username",
      "git has no credentials for this repository",
-     "run `gh auth setup-git` so git can use your GitHub login"),
+     "run `gh auth setup-git` so git can use your GitHub login", False),
     ("authentication failed",
      "GitHub rejected those credentials",
-     "run `gh auth setup-git`, or check the repo URL"),
+     "run `gh auth setup-git`, or check the repo URL", False),
     ("repository not found",
      "GitHub says that repository does not exist",
-     "check the URL, and that your account can see it"),
+     "check the URL, and that your account can see it", False),
     ("host key verification failed",
      "the SSH host key was not accepted",
-     "connect once with `ssh -T git@github.com` to record it"),
+     "connect once with `ssh -T git@github.com` to record it", False),
+    # The other machine landed a push inside our fetch-to-push window.
+    ("failed to push some refs",
+     "the other machine pushed while this sync was running",
+     "run the sync again — lc will merge both sides", True),
 )
 
 
@@ -80,9 +86,9 @@ def _explain(command: str, output: str) -> SyncError:
              if not any(ln.lower().startswith(n) or ln.lower() == n for n in _NOISE)]
 
     lowered = " ".join(lines).lower()
-    for needle, reason, hint in _KNOWN:
+    for needle, reason, hint, retryable in _KNOWN:
         if needle in lowered:
-            return SyncError(f"git {command}: {reason}", hint)
+            return SyncError(f"git {command}: {reason}", hint, retryable)
 
     # Nothing recognised: prefer the line git meant as the diagnosis over the
     # last one it happened to print.
@@ -198,7 +204,7 @@ def render_table(items: dict[str, review.ReviewItem]) -> str:
     lines = [
         "# Review deck",
         "",
-        f"{len(items)} problem(s), soonest review first.",
+        f"{len(review.live(items))} problem(s), soonest review first.",
         "",
         "| # | Problem | Difficulty | Level | Next review |",
         "| ---: | --- | --- | ---: | --- |",
@@ -351,21 +357,35 @@ def push(url: str) -> tuple[int, bool]:
     """Publish the local deck. Returns (problems pushed, whether it changed).
 
     The remote is merged in first, so a deck another machine pushed while you
-    were away survives instead of being overwritten.
+    were away survives instead of being overwritten. If the other machine
+    lands a push inside that window the whole thing is simply redone — with
+    two machines syncing often, that race is rare but real, and it is not
+    worth showing the user.
     """
     try:
-        path, remote = fetch_remote_deck(url)
-        local = review.load()
-        merged, added, updated = review.merge(local, remote)
-        if added or updated:
-            review.save(merged)
-        write_deck(path, merged)
-        changed = _commit_and_push(path, f"review: {len(merged)} problem(s)")
+        for attempt in (1, 2):
+            try:
+                count, changed = _push_once(url)
+                break
+            except SyncError as exc:
+                if attempt == 2 or not exc.retryable:
+                    raise
     except SyncError as exc:
         record_sync(error=str(exc))
         raise
     record_sync()
-    return len(merged), changed
+    return count, changed
+
+
+def _push_once(url: str) -> tuple[int, bool]:
+    path, remote = fetch_remote_deck(url)
+    local = review.load()
+    merged, added, updated = review.merge(local, remote)
+    if added or updated:
+        review.save(merged)
+    write_deck(path, merged)
+    count = len(review.live(merged))
+    return count, _commit_and_push(path, f"review: {count} problem(s)")
 
 
 def sync(url: str) -> tuple[int, int, bool]:

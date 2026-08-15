@@ -17,7 +17,7 @@ import json
 import os
 import threading
 from dataclasses import asdict, dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from .config import Config, home
@@ -50,6 +50,17 @@ def curve_of(config: Config) -> list[int]:
     return days or list(DEFAULT_CURVE)
 
 
+def _stamp() -> str:
+    """Now, in UTC — the ordering key for syncing.
+
+    Microseconds, not seconds: remove-then-re-add, or two grades in quick
+    succession, land inside the same second, and a merge that cannot order
+    them keeps the wrong one. Fixed width, so plain string comparison sorts
+    it correctly.
+    """
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+
+
 @dataclass
 class ReviewItem:
     slug: str
@@ -62,6 +73,14 @@ class ReviewItem:
     added: str = ""   # ISO dates throughout
     graded: str = ""  # the day the level last changed (pass, fail or manual)
     due: str = ""     # next review day
+    #: UTC timestamp of the last edit of any kind. Syncing merges on this:
+    #: `graded` is a local date, so two machines editing on the same day tie,
+    #: and postponing does not touch it at all.
+    updated: str = ""
+    #: Set when the problem was taken off the deck. The entry stays behind as
+    #: a tombstone so the removal can reach the other machine instead of the
+    #: other machine handing the problem straight back.
+    removed: str = ""
 
     def due_in(self, today: date) -> int:
         """Days until due — 0 means today, negative means overdue."""
@@ -98,7 +117,8 @@ def items_from_raw(raw: object) -> dict[str, ReviewItem]:
             fields["level"] = max(1, int(fields.get("level", 1)))
         except (TypeError, ValueError, OverflowError):
             fields["level"] = 1
-        for key in ("title", "frontend_id", "difficulty", "added", "graded", "due"):
+        for key in ("title", "frontend_id", "difficulty", "added", "graded",
+                    "due", "updated", "removed"):
             if not isinstance(fields.get(key, ""), str):
                 fields[key] = ""
         items[slug] = ReviewItem(slug=slug, **fields)
@@ -153,10 +173,10 @@ def merge(
     """Combine two decks. Returns (merged, added, updated).
 
     The union of both sides, so nothing is lost by syncing. Where both know a
-    problem, the most recently graded copy wins — that is the machine you
-    actually reviewed on. Removals do not travel: a problem taken off one
-    machine's deck comes back on the next sync, and has to be removed on the
-    machine holding it too.
+    problem, the copy edited most recently wins — that is the machine you
+    were actually working on. Removals travel too: `remove` leaves a tombstone
+    behind, and a tombstone is just another edit, so it beats an older copy on
+    the other machine instead of that machine handing the problem back.
     """
     merged = dict(local)
     added = updated = 0
@@ -164,20 +184,31 @@ def merge(
         current = merged.get(slug)
         if current is None:
             merged[slug] = incoming
-            added += 1
-        elif _grade_key(incoming) > _grade_key(current):
+            if not incoming.removed:
+                added += 1
+        elif _edit_key(incoming) > _edit_key(current):
             merged[slug] = incoming
             updated += 1
     return merged, added, updated
 
 
-def _grade_key(item: ReviewItem) -> tuple[str, int, str]:
-    """Recency of a graded entry: when it was graded, then how far it got."""
-    return (item.graded, item.level, item.due)
+def _edit_key(item: ReviewItem) -> tuple[str, str, int, str]:
+    """How recent this copy is.
+
+    `updated` is the real answer. Decks written before lc recorded it fall
+    back to the old key, and sort below any stamped entry — which is right:
+    a machine that has since edited the problem knows more about it.
+    """
+    return (item.updated, item.graded, item.level, item.due)
+
+
+def live(items: dict[str, ReviewItem]) -> dict[str, ReviewItem]:
+    """The deck without its tombstones — what the user thinks of as the deck."""
+    return {slug: item for slug, item in items.items() if not item.removed}
 
 
 def order(items: dict[str, ReviewItem]) -> list[ReviewItem]:
-    """Soonest due first; ties in problem-number order."""
+    """Soonest due first; ties in problem-number order. Tombstones are out."""
     def key(item: ReviewItem) -> tuple[str, int]:
         try:
             fid = int(item.frontend_id)
@@ -185,12 +216,12 @@ def order(items: dict[str, ReviewItem]) -> list[ReviewItem]:
             fid = 0
         return (item.due, fid)
 
-    return sorted(items.values(), key=key)
+    return sorted(live(items).values(), key=key)
 
 
 def due_count(items: dict[str, ReviewItem], today: date | None = None) -> int:
     today = today or date.today()
-    return sum(1 for item in items.values() if item.due_in(today) <= 0)
+    return sum(1 for item in live(items).values() if item.due_in(today) <= 0)
 
 
 # ---------------------------------------------------------------- operations
@@ -203,6 +234,7 @@ def _schedule(item: ReviewItem, level: int, curve: list[int], today: date) -> No
     item.level = max(1, min(level, len(curve)))
     item.graded = today.isoformat()
     item.due = (today + timedelta(days=_interval(curve, item.level))).isoformat()
+    item.updated = _stamp()
 
 
 @_atomic
@@ -215,11 +247,15 @@ def add(
     curve: list[int],
     today: date | None = None,
 ) -> ReviewItem:
-    """Put a problem on the deck at level 1. Re-adding only freshens metadata."""
+    """Put a problem on the deck at level 1. Re-adding only freshens metadata.
+
+    A problem that was removed comes back at level 1: the tombstone is lifted
+    and the schedule starts over, which is what asking for it again means.
+    """
     today = today or date.today()
     items = load()
     item = items.get(slug)
-    if item is None:
+    if item is None or item.removed:
         item = ReviewItem(slug=slug, added=today.isoformat())
         _schedule(item, 1, curve, today)
         items[slug] = item
@@ -232,10 +268,13 @@ def add(
 
 @_atomic
 def remove(slug: str) -> bool:
+    """Take a problem off the deck, leaving a tombstone so the removal syncs."""
     items = load()
-    if slug not in items:
+    item = items.get(slug)
+    if item is None or item.removed:
         return False
-    del items[slug]
+    item.removed = date.today().isoformat()
+    item.updated = _stamp()
     save(items)
     return True
 
@@ -247,7 +286,7 @@ def shift_level(
     """Manual grade: move the level and schedule the next review from today."""
     items = load()
     item = items.get(slug)
-    if item is None:
+    if item is None or item.removed:
         return None
     _schedule(item, item.level + delta, curve, today or date.today())
     save(items)
@@ -260,13 +299,14 @@ def postpone(slug: str, today: date | None = None) -> ReviewItem | None:
     today = today or date.today()
     items = load()
     item = items.get(slug)
-    if item is None:
+    if item is None or item.removed:
         return None
     try:
         base = max(date.fromisoformat(item.due), today)
     except ValueError:
         base = today
     item.due = (base + timedelta(days=1)).isoformat()
+    item.updated = _stamp()   # postponing is an edit too, and syncing sorts on it
     save(items)
     return item
 
@@ -277,9 +317,10 @@ def postpone_due(today: date | None = None) -> int:
     today = today or date.today()
     items = load()
     moved = 0
-    for item in items.values():
+    for item in live(items).values():
         if item.due_in(today) <= 0:
             item.due = (today + timedelta(days=1)).isoformat()
+            item.updated = _stamp()
             moved += 1
     if moved:
         save(items)
@@ -299,7 +340,7 @@ def record_submit(
     today = today or date.today()
     items = load()
     item = items.get(slug)
-    if item is None:
+    if item is None or item.removed:
         return None
 
     if accepted:

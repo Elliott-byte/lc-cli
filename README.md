@@ -308,10 +308,14 @@ linked table so the repo page is readable on GitHub. It never writes a
 
 Merging happens in lc, not in git — you will never be asked to resolve a
 conflict. Both sides are unioned, and where both know a problem the copy
-graded most recently wins, which is the machine you actually reviewed on.
-One asymmetry worth knowing: removals do not travel. A problem you take off
-one machine's deck comes back on the next sync unless you remove it on the
-machine that still has it.
+edited most recently wins: every change stamps a UTC timestamp, so two
+machines editing on the same day still order correctly. Removals travel
+too — taking a problem off the deck leaves a tombstone behind, which is
+just another edit, so the other machine drops it rather than handing it
+back. Re-adding a removed problem revives it at level 1.
+
+If both machines push at the same moment one of them is rejected; lc simply
+redoes the sync, so you never see it.
 
 The deck is user data, kept in `~/.lc/review.json` away from the cache —
 deleting `cache.db` never touches it.

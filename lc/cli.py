@@ -903,7 +903,7 @@ def _deck_find(ref: str) -> review.ReviewItem | None:
     ref = ref.strip()
     unpadded = ref.lstrip("0") or ref
     slug = ref.lower().replace(" ", "-")
-    for item in review.load().values():
+    for item in review.live(review.load()).values():
         if item.slug == slug or item.frontend_id in (ref, unpadded):
             return item
         if item.title and item.title.lower() == ref.lower():
@@ -925,7 +925,7 @@ def review_list(ctx: typer.Context) -> None:
     """With no subcommand: show the deck, soonest review first."""
     if ctx.invoked_subcommand is not None:
         return
-    items = review.load()
+    items = review.live(review.load())
     if not items:
         console.print(
             Text("review deck is empty — press m in the TUI, or `lc review add 322`",

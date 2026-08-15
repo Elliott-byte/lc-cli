@@ -586,7 +586,7 @@ class LeetCodeTUI(App):
         slug = self.current_slug
         if not slug:
             return
-        deck = review.load()
+        deck = review.live(review.load())
         if slug in deck:
             item = deck[slug]
             self.notify(
@@ -702,7 +702,7 @@ class LeetCodeTUI(App):
         slug = self._review_slug()
         if not slug:
             return
-        item = review.load().get(slug)
+        item = review.live(review.load()).get(slug)
         review.remove(slug)
         self.notify(f"removed {item.title if item and item.title else slug} "
                     "from the review deck")
