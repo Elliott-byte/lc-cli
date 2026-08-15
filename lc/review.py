@@ -227,7 +227,11 @@ def due_count(items: dict[str, ReviewItem], today: date | None = None) -> int:
 # ---------------------------------------------------------------- operations
 
 def _interval(curve: list[int], level: int) -> int:
-    return curve[min(level, len(curve)) - 1]
+    """Days a pass at *level* buys. Levels past the end of the curve get its
+    top gap, so shortening the curve reschedules rather than crashing."""
+    if not curve:  # no caller does this, but scheduling must never divide by zero
+        curve = list(DEFAULT_CURVE)
+    return curve[min(max(level, 1), len(curve)) - 1]
 
 
 def _schedule(item: ReviewItem, level: int, curve: list[int], today: date) -> None:
@@ -259,9 +263,14 @@ def add(
         item = ReviewItem(slug=slug, added=today.isoformat())
         _schedule(item, 1, curve, today)
         items[slug] = item
+    # Freshening the metadata is an edit like any other: without a stamp the
+    # other machine's older, emptier copy would win the next merge.
+    before = (item.title, item.frontend_id, item.difficulty)
     item.title = title or item.title
     item.frontend_id = frontend_id or item.frontend_id
     item.difficulty = difficulty or item.difficulty
+    if (item.title, item.frontend_id, item.difficulty) != before:
+        item.updated = _stamp()
     save(items)
     return item
 

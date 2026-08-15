@@ -759,6 +759,67 @@ def test_review_pass_climbs_and_fail_restarts(tmp_path, monkeypatch):
     assert review.load()["s"].due == "2026-08-23"
 
 
+def test_grading_holds_its_invariants_over_a_long_run(tmp_path, monkeypatch):
+    """Submit on the due date, over and over, and the schedule stays sane."""
+    import random
+    from datetime import date
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    from lc import review
+
+    curve = list(review.DEFAULT_CURVE)
+    rng = random.Random(7)
+    review.add("p", frontend_id="1", curve=curve, today=date(2026, 1, 1))
+
+    for _ in range(80):
+        item = review.load()["p"]
+        day = date.fromisoformat(item.due)      # jump to when it comes due
+        before = item.level
+        passed = rng.random() < 0.7
+        review.record_submit("p", passed, curve, today=day)
+        item = review.load()["p"]
+
+        assert 1 <= item.level <= len(curve)
+        # the schedule is always exactly one curve gap past the grading day
+        gap = (date.fromisoformat(item.due) - date.fromisoformat(item.graded)).days
+        assert gap == curve[item.level - 1]
+        assert date.fromisoformat(item.due) > day, "a review must land in the future"
+        if passed:
+            assert item.level == min(before + 1, len(curve))
+        else:
+            assert item.level == 1
+
+
+def test_refreshing_metadata_stamps_the_edit(tmp_path, monkeypatch):
+    """Otherwise the other machine's emptier copy wins the next merge."""
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    from lc import review
+
+    curve = [1, 2, 4]
+    review.add("two-sum", curve=curve)
+    first = review.load()["two-sum"].updated
+
+    review.add("two-sum", title="Two Sum", frontend_id="1", difficulty="Easy",
+               curve=curve)
+    filled = review.load()["two-sum"]
+    assert filled.title == "Two Sum"
+    assert filled.updated > first, "a metadata change must be stamped"
+
+    # A no-op re-add changes nothing, so it must not churn the timestamp.
+    review.add("two-sum", title="Two Sum", frontend_id="1", difficulty="Easy",
+               curve=curve)
+    assert review.load()["two-sum"].updated == filled.updated
+
+
+def test_scheduling_survives_a_curve_that_lost_levels():
+    from lc import review
+
+    # A level past the end of the curve gets its top gap, never an IndexError.
+    assert review._interval([1, 2, 4], 9) == 4
+    assert review._interval([1, 2, 4], 0) == 1
+    assert review._interval([], 3) == review.DEFAULT_CURVE[2]
+
+
 def test_review_level_is_clamped_to_the_curve(tmp_path, monkeypatch):
     from datetime import date
 
