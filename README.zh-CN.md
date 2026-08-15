@@ -201,7 +201,8 @@ Python buffer 会保持空格缩进：Tab 键输出空格，粘贴进来的真 T
 起始代码用空格，判题机对一个混入的 Tab 直接报 `TabError`——`let g:lc_python_indent = 0`
 可以关闭。
 
-快捷键从文件自己的目录执行，所以在哪里启动的 Vim 无所谓。`<leader>` 默认是反斜杠。升级 `lc`
+题面面板里也绑了同样的快捷键，所以光标在哪个窗口都无所谓——`\t` 一样会保存解题文件、
+在题目目录里执行；在哪里启动的 Vim 也无所谓。`<leader>` 默认是反斜杠。升级 `lc`
 之后重新跑一次 `lc setup vim --force`；Neovim 用户把同一个文件复制到 `~/.config/nvim/plugin/`。
 
 ## 设置

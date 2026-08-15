@@ -324,6 +324,12 @@ def test_vim_quit_never_fights_the_statement_terminal():
     assert "<leader>q :xall" not in text
     assert "<leader>q :call <SID>LcQuitAll()" in text
 
+    # The pane carries the action keys too: landing in it and pressing \t
+    # used to do nothing at all.
+    pane = text.split("function! s:LcOpenStatement")[1].split("endfunction")[0]
+    for key in ("<leader>t", "<leader>s", "<leader>m", "<leader>q"):
+        assert key in pane, key
+
     # Closing the pane forces past the running job, in both window layouts.
     assert "close!" in text and "quit!" in text
     # ...but never at the cost of a real unsaved file.

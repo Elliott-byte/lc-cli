@@ -24,7 +24,9 @@ VIM_PLUGIN = r'''" lc.vim — Vim integration for the lc LeetCode CLI.
 " the editor supports it, the raw README.md otherwise; `let
 " g:lc_statement_render = 0` forces the plain file. The pane opens
 " automatically when the solution file is the only window; `let
-" g:lc_auto_statement = 0` turns that off. Inside the pane, q closes it.
+" g:lc_auto_statement = 0` turns that off. Inside the pane, q closes it —
+" and the keys above work there too, so it does not matter which window
+" has the cursor.
 " Quitting the solution (:q, ZZ, …) never strands you in the pane: a
 " statement pane left as the last window takes Vim down with it.
 " The leader key is backslash unless changed.
@@ -38,12 +40,46 @@ function! s:LcReadme() abort
   return expand('%:p:h') . '/README.md'
 endfunction
 
-function! s:LcSlug() abort
-  let l:meta_path = expand('%:p:h') . '/.lc.json'
+function! s:LcDir() abort
+  " The problem directory for whatever window you are in — the statement
+  " pane remembers it, so the keys work there too instead of doing nothing.
+  return get(b:, 'lc_statement_for', expand('%:p:h'))
+endfunction
+
+function! s:LcSlug(...) abort
+  let l:dir = a:0 ? a:1 : s:LcDir()
+  let l:meta_path = l:dir . '/.lc.json'
   if !filereadable(l:meta_path)
     return ''
   endif
   return get(json_decode(join(readfile(l:meta_path), '')), 'slug', '')
+endfunction
+
+function! s:LcSolutionWin(dir) abort
+  " The window holding a real file from this problem — where a judge run
+  " has to happen, since that is the buffer to write.
+  for l:w in range(1, winnr('$'))
+    let l:b = winbufnr(l:w)
+    if getbufvar(l:b, '&buftype') ==# '' && bufname(l:b) !=# ''
+          \ && fnamemodify(bufname(l:b), ':p:h') ==# a:dir
+      return l:w
+    endif
+  endfor
+  return -1
+endfunction
+
+function! s:LcJudge(action) abort
+  " Save and run `lc test` / `lc submit`. Pressing this in the statement
+  " pane hops to the solution first rather than silently doing nothing.
+  let l:dir = s:LcDir()
+  let l:win = s:LcSolutionWin(l:dir)
+  if l:win != -1
+    execute l:win . 'wincmd w'
+  endif
+  if &buftype ==# ''
+    write
+  endif
+  execute '!cd ' . shellescape(l:dir) . ' && lc ' . a:action
 endfunction
 
 function! s:LcStatementWin() abort
@@ -88,7 +124,15 @@ function! s:LcOpenStatement() abort
   endif
   let b:lc_statement_for = l:dir
   setlocal winfixwidth nonumber norelativenumber
+  " The same keys as the solution buffer: landing in the pane and pressing
+  " \t used to do nothing at all, with no hint why.
   nnoremap <buffer> q :call <SID>LcCloseStatement()<CR>
+  nnoremap <buffer> <leader>t :call <SID>LcJudge('test')<CR>
+  nnoremap <buffer> <leader>s :call <SID>LcJudge('submit')<CR>
+  nnoremap <buffer> <leader>p :call <SID>LcCloseStatement()<CR>
+  nnoremap <buffer> <leader>o :call <SID>LcOpenWeb()<CR>
+  nnoremap <buffer> <leader>m :call <SID>LcReview()<CR>
+  nnoremap <buffer> <leader>q :call <SID>LcQuitAll()<CR>
   wincmd p
 endfunction
 
@@ -155,7 +199,7 @@ function! s:LcReview() abort
   " `lc review add` with no argument reads .lc.json from the working
   " directory, so this works wherever Vim was started from. Runs without a
   " shell prompt: it is one line of output, not a judge run.
-  let l:out = system('cd ' . shellescape(expand('%:p:h')) . ' && lc review add')
+  let l:out = system('cd ' . shellescape(s:LcDir()) . ' && lc review add')
   echo substitute(substitute(l:out, '\n\+$', '', ''), '\n', ' ', 'g')
 endfunction
 
@@ -186,8 +230,8 @@ function! s:LcSetup() abort
     augroup END
   endif
   " shellescape() so a workspace path with spaces survives the shell.
-  nnoremap <buffer> <leader>t :w<CR>:execute '!cd ' . shellescape(expand('%:p:h')) . ' && lc test'<CR>
-  nnoremap <buffer> <leader>s :w<CR>:execute '!cd ' . shellescape(expand('%:p:h')) . ' && lc submit'<CR>
+  nnoremap <buffer> <leader>t :call <SID>LcJudge('test')<CR>
+  nnoremap <buffer> <leader>s :call <SID>LcJudge('submit')<CR>
   nnoremap <buffer> <leader>p :call <SID>LcToggleStatement()<CR>
   nnoremap <buffer> <leader>o :call <SID>LcOpenWeb()<CR>
   " Mid-solve: "I'll want to see this one again."

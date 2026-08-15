@@ -232,8 +232,10 @@ Python buffers are kept space-indented: Tab inserts spaces, and pasted tabs
 are converted on save. LeetCode's starters use spaces and the judge answers a
 single stray tab with a `TabError` — `let g:lc_python_indent = 0` disables it.
 
-The keys run from the file's own directory, so it doesn't matter where you
-launched Vim. `<leader>` is backslash unless you remapped it. After upgrading
+The keys work from the statement pane as well as the solution, so it does
+not matter which window has the cursor — `\t` saves the solution and runs
+from the problem's directory either way, whatever directory you launched
+Vim in. `<leader>` is backslash unless you remapped it. After upgrading
 lc, re-run `lc setup vim --force`; for Neovim, copy the file to
 `~/.config/nvim/plugin/`.
 
