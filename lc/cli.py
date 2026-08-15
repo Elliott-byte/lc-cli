@@ -935,11 +935,16 @@ def review_list(ctx: typer.Context) -> None:
 
     today = date.today()
     table = Table(box=None, header_style="dim")
-    table.add_column("#", justify="right", style="dim", width=5)
-    table.add_column("Title", no_wrap=True, overflow="ellipsis")
-    table.add_column("Difficulty", width=10)
-    table.add_column("Lv", justify="right", width=2)
-    table.add_column("Next", justify="right", width=6)
+    # Budget the title explicitly: left to itself Rich shrinks the fixed
+    # columns in a narrow terminal, eating the id — the thing you type into
+    # `lc review level 1140 5` — and dropping the level entirely.
+    chrome = 5 + 10 + 2 + 6 + 5 * 2  # fixed columns, plus per-column padding
+    table.add_column("#", justify="right", style="dim", width=5, no_wrap=True)
+    table.add_column("Title", no_wrap=True, overflow="ellipsis",
+                     width=max(16, console.width - chrome))
+    table.add_column("Difficulty", width=10, no_wrap=True)
+    table.add_column("Lv", justify="right", width=2, no_wrap=True)
+    table.add_column("Next", justify="right", width=6, no_wrap=True)
     for item in review.order(items):
         table.add_row(
             item.frontend_id,
