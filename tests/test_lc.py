@@ -1076,6 +1076,38 @@ def test_ago_reads_as_a_relative_clock():
     assert gitsync.ago(now + 60, now=now) == "just now"
 
 
+def test_git_errors_name_the_real_problem_not_the_last_line():
+    """Git's complaint is multi-line; its last line is often a sentence fragment."""
+    from lc import gitsync
+
+    ssh = (
+        "git@github.com: Permission denied (publickey).\n"
+        "fatal: Could not read from remote repository.\n"
+        "\n"
+        "Please make sure you have the correct access rights\n"
+        "and the repository exists.\n"
+    )
+    exc = gitsync._explain("clone", ssh)
+    assert "SSH key" in str(exc)
+    assert "and the repository exists" not in str(exc)  # the useless fragment
+    assert "https://" in exc.hint
+
+    creds = "fatal: could not read Username for 'https://github.com': terminal prompts disabled"
+    assert "credentials" in str(gitsync._explain("push", creds))
+    assert "gh auth setup-git" in gitsync._explain("push", creds).hint
+
+    missing = "remote: Repository not found.\nfatal: repository not found\n"
+    assert "does not exist" in str(gitsync._explain("clone", missing))
+
+    # Unrecognised: prefer git's own diagnosis line over whatever printed last.
+    other = ("Cloning into 'x'...\n"
+             "fatal: the disk is on fire\n"
+             "and the repository exists.\n")
+    assert str(gitsync._explain("clone", other)) == "git clone: fatal: the disk is on fire"
+    # And never crash on empty output.
+    assert "failed" in str(gitsync._explain("push", "  \n \n"))
+
+
 def test_git_sync_reports_a_bad_remote_cleanly(tmp_path, monkeypatch):
     monkeypatch.setenv("LC_HOME", str(tmp_path / "home"))
     from lc import gitsync

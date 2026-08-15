@@ -660,7 +660,9 @@ class LeetCodeTUI(App):
         try:
             added, updated, changed = gitsync.sync(url)
         except gitsync.SyncError as exc:
-            self.call_from_thread(self.notify, escape(str(exc)), severity="error")
+            message = str(exc) + (f"\n{exc.hint}" if exc.hint else "")
+            self.call_from_thread(self.notify, escape(message), severity="error",
+                                  timeout=12)
             self.call_from_thread(self.set_status, "review sync failed", "red")
             self.call_from_thread(self.refresh_sync_bar)
             return

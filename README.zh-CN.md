@@ -267,6 +267,10 @@ lc review push             # 只把本机的刷题本推上去
 它只读本地文件算出来——刷新列表永远不会去连网络——所以"synced"的意思是
 "上次通信时和仓库一致"，而不是"刚查过 GitHub"。没配仓库时这条整个不显示。
 
+除非你有 GitHub 认可的 SSH key，否则用 `https://` 开头的地址——只要 `gh`
+登录过，https 开箱即用。同步失败时会说明原因和下一步该做什么（比如
+`GitHub rejected this machine's SSH key` → 换 https 地址，或 `gh ssh-key add`）。
+
 lc 在 `~/.lc/review-repo` 保留一个私有克隆，往仓库里写两个文件：
 `review.json`（它读回来的刷题本）和 `REVIEW.md`（同一份数据的带链接表格，
 GitHub 上直接可读）。它**不会**写 `README.md`，所以指向一个已有 README 的

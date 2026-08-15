@@ -1092,7 +1092,7 @@ def review_pull() -> None:
         try:
             added, updated = gitsync.pull(url)
         except gitsync.SyncError as exc:
-            die(str(exc))
+            die(str(exc), exc.hint)
             raise
     _merge_report(added, updated)
 
@@ -1105,7 +1105,7 @@ def review_push() -> None:
         try:
             total, changed = gitsync.push(url)
         except gitsync.SyncError as exc:
-            die(str(exc))
+            die(str(exc), exc.hint)
             raise
     if changed:
         console.print(Text(f"✔ pushed {total} problem(s)", style="green"))
@@ -1121,7 +1121,7 @@ def review_sync() -> None:
         try:
             added, updated, changed = gitsync.sync(url)
         except gitsync.SyncError as exc:
-            die(str(exc))
+            die(str(exc), exc.hint)
             raise
     _merge_report(added, updated)
     console.print(

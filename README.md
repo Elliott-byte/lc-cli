@@ -296,6 +296,11 @@ the network — so "synced" means "agreed with the repo when we last talked to
 it", not "checked GitHub just now". With no repo configured the strip is
 hidden entirely.
 
+Use the `https://` URL unless you have an SSH key GitHub accepts — with
+`gh` logged in, https just works. A sync that fails says why and what to
+try (`GitHub rejected this machine's SSH key` → use the https URL, or
+`gh ssh-key add`).
+
 lc keeps a private clone in `~/.lc/review-repo` and writes two files:
 `review.json`, the deck it reads back, and `REVIEW.md`, the same deck as a
 linked table so the repo page is readable on GitHub. It never writes a

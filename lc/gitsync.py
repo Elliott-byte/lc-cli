@@ -32,7 +32,65 @@ TIMEOUT = 120
 
 
 class SyncError(Exception):
-    """Anything that stopped a sync, phrased for a terminal."""
+    """Anything that stopped a sync, phrased for a terminal.
+
+    ``hint`` is the next thing to try, when lc recognises the failure.
+    """
+
+    def __init__(self, message: str, hint: str = "") -> None:
+        super().__init__(message)
+        self.hint = hint
+
+
+#: Lines git prints that say nothing on their own. The last two are the tail of
+#: "Please make sure you have the correct access rights / and the repository
+#: exists." — reporting that fragment alone is what a naive "last line of
+#: stderr" does, and it reads as gibberish.
+_NOISE = (
+    "cloning into",
+    "please make sure you have the correct access rights",
+    "and the repository exists.",
+)
+
+#: (needle in git's output) -> (what to say, what to try next)
+_KNOWN = (
+    ("permission denied (publickey)",
+     "GitHub rejected this machine's SSH key",
+     "use the https:// URL for the repo instead, or add a key with "
+     "`gh ssh-key add ~/.ssh/id_ed25519.pub`"),
+    ("could not read username",
+     "git has no credentials for this repository",
+     "run `gh auth setup-git` so git can use your GitHub login"),
+    ("authentication failed",
+     "GitHub rejected those credentials",
+     "run `gh auth setup-git`, or check the repo URL"),
+    ("repository not found",
+     "GitHub says that repository does not exist",
+     "check the URL, and that your account can see it"),
+    ("host key verification failed",
+     "the SSH host key was not accepted",
+     "connect once with `ssh -T git@github.com` to record it"),
+)
+
+
+def _explain(command: str, output: str) -> SyncError:
+    """Turn git's multi-line complaint into one useful sentence, plus a hint."""
+    lines = [ln.strip() for ln in output.strip().splitlines() if ln.strip()]
+    lines = [ln for ln in lines
+             if not any(ln.lower().startswith(n) or ln.lower() == n for n in _NOISE)]
+
+    lowered = " ".join(lines).lower()
+    for needle, reason, hint in _KNOWN:
+        if needle in lowered:
+            return SyncError(f"git {command}: {reason}", hint)
+
+    # Nothing recognised: prefer the line git meant as the diagnosis over the
+    # last one it happened to print.
+    for prefix in ("remote:", "fatal:", "error:"):
+        for line in lines:
+            if line.lower().startswith(prefix):
+                return SyncError(f"git {command}: {line}")
+    return SyncError(f"git {command}: {lines[0] if lines else 'failed'}")
 
 
 def repo_dir() -> Path:
@@ -56,8 +114,7 @@ def _git(*args: str, cwd: Path | None = None) -> str:
             "for a password?"
         ) from None
     if proc.returncode != 0:
-        detail = (proc.stderr or proc.stdout).strip().splitlines()
-        raise SyncError(f"git {args[0]}: {detail[-1] if detail else 'failed'}")
+        raise _explain(args[0], proc.stderr or proc.stdout)
     return proc.stdout.strip()
 
 
