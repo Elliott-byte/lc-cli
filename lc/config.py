@@ -62,7 +62,9 @@ class Config:
 
     @property
     def workspace_path(self) -> Path:
-        return Path(self.workspace).expanduser()
+        # Path("") is Path(".") — a blank setting would quietly scatter solution
+        # files through whatever directory lc was launched from.
+        return Path(self.workspace or DEFAULT_WORKSPACE).expanduser()
 
     def resolve_editor(self) -> str | None:
         for candidate in (self.editor, os.environ.get("LC_EDITOR"), os.environ.get("VISUAL"),

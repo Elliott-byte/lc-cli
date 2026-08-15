@@ -12,7 +12,10 @@ submit drops back to level 1.
 
 from __future__ import annotations
 
+import functools
 import json
+import os
+import threading
 from dataclasses import asdict, dataclass
 from datetime import date, timedelta
 from pathlib import Path
@@ -111,12 +114,37 @@ def dumps(items: dict[str, ReviewItem]) -> str:
     return json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
 
 
+#: Serialises read-modify-write on the deck. The judge and git-sync workers
+#: are threads, and the UI grades problems on the main one — without this two
+#: of them interleave and the second save silently drops the first's change.
+#: Across processes there is no lock; the atomic rename below still leaves a
+#: whole file, and last writer wins.
+_LOCK = threading.RLock()
+
+
+def _atomic(fn):
+    """Run a read-modify-write of the deck without another thread interleaving."""
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        with _LOCK:
+            return fn(*args, **kwargs)
+
+    return wrapper
+
+
 def save(items: dict[str, ReviewItem]) -> None:
     path = review_path()
     # Write-then-rename: the deck is user data, a torn write must not eat it.
-    tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(dumps(items))
-    tmp.replace(path)
+    # The temp name carries pid and thread so two concurrent saves cannot
+    # rename each other's file out from under them.
+    tmp = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    try:
+        tmp.write_text(dumps(items))
+        tmp.replace(path)
+    finally:
+        # A failed write must not leave a stray temp file behind.
+        if tmp.exists():
+            tmp.unlink(missing_ok=True)
 
 
 def merge(
@@ -177,6 +205,7 @@ def _schedule(item: ReviewItem, level: int, curve: list[int], today: date) -> No
     item.due = (today + timedelta(days=_interval(curve, item.level))).isoformat()
 
 
+@_atomic
 def add(
     slug: str,
     *,
@@ -201,6 +230,7 @@ def add(
     return item
 
 
+@_atomic
 def remove(slug: str) -> bool:
     items = load()
     if slug not in items:
@@ -210,6 +240,7 @@ def remove(slug: str) -> bool:
     return True
 
 
+@_atomic
 def shift_level(
     slug: str, delta: int, curve: list[int], today: date | None = None
 ) -> ReviewItem | None:
@@ -223,6 +254,7 @@ def shift_level(
     return item
 
 
+@_atomic
 def postpone(slug: str, today: date | None = None) -> ReviewItem | None:
     """Push one problem's review a day past today (or past its future date)."""
     today = today or date.today()
@@ -239,6 +271,7 @@ def postpone(slug: str, today: date | None = None) -> ReviewItem | None:
     return item
 
 
+@_atomic
 def postpone_due(today: date | None = None) -> int:
     """The "not today" button: everything due today moves to tomorrow."""
     today = today or date.today()
@@ -253,6 +286,7 @@ def postpone_due(today: date | None = None) -> int:
     return moved
 
 
+@_atomic
 def record_submit(
     slug: str, accepted: bool, curve: list[int], today: date | None = None
 ) -> str | None:

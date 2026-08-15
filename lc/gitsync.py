@@ -114,8 +114,19 @@ def _git(*args: str, cwd: Path | None = None) -> str:
             "for a password?"
         ) from None
     if proc.returncode != 0:
-        raise _explain(args[0], proc.stderr or proc.stdout)
+        raise _explain(_command_name(args), proc.stderr or proc.stdout)
     return proc.stdout.strip()
+
+
+def _command_name(args: tuple[str, ...]) -> str:
+    """The subcommand, for the error message — not `-c` from `git -c k=v commit`."""
+    rest = iter(args)
+    for arg in rest:
+        if arg == "-c":
+            next(rest, None)  # skip its value
+        elif not arg.startswith("-"):
+            return arg
+    return "git"
 
 
 def _remote_url(path: Path) -> str:
@@ -176,27 +187,28 @@ def write_deck(path: Path, items: dict[str, review.ReviewItem]) -> None:
 
 
 def render_table(items: dict[str, review.ReviewItem]) -> str:
-    """The deck as Markdown, so the repo page is readable on GitHub."""
-    today = date.today()
+    """The deck as Markdown, so the repo page is readable on GitHub.
+
+    A pure function of the deck: absolute dates only, nothing derived from
+    "today". Anything relative — days overdue, how many are due now — would
+    change on its own overnight and commit a diff every morning for a deck
+    that never moved. The live view belongs in `lc review` and the TUI, where
+    it is recomputed anyway.
+    """
     lines = [
         "# Review deck",
         "",
-        f"{len(items)} problem(s) · {review.due_count(items, today)} due · "
-        f"synced {today.isoformat()}",
+        f"{len(items)} problem(s), soonest review first.",
         "",
         "| # | Problem | Difficulty | Level | Next review |",
         "| ---: | --- | --- | ---: | --- |",
     ]
     for item in review.order(items):
-        days = item.due_in(today)
-        when = "**today**" if days == 0 else (
-            f"**{-days}d overdue**" if days < 0 else f"{item.due} ({days}d)"
-        )
         title = item.title or item.slug
         link = f"[{title}](https://leetcode.com/problems/{item.slug}/)"
         lines.append(
             f"| {item.frontend_id} | {link} | {item.difficulty or '—'} "
-            f"| {item.level} | {when} |"
+            f"| {item.level} | {item.due or '—'} |"
         )
     lines.append("")
     lines.append("<sub>Written by [lc](https://github.com/Elliott-byte/lc-cli) "

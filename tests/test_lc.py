@@ -1076,6 +1076,79 @@ def test_ago_reads_as_a_relative_clock():
     assert gitsync.ago(now + 60, now=now) == "just now"
 
 
+def test_pushing_an_unchanged_deck_is_a_no_op_on_a_later_day(tmp_path, monkeypatch):
+    """REVIEW.md must be a function of the deck, not of what day it is.
+
+    Anything relative in it — "3d overdue", "2 due", "synced <today>" — would
+    diff overnight and commit every morning for a deck that never moved.
+    """
+    import datetime
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path / "home"))
+    from lc import gitsync, review
+
+    remote = _bare_repo(tmp_path)
+    review.add("coin-change", title="Coin Change", frontend_id="322",
+               difficulty="Medium", curve=[2, 4])
+    assert gitsync.push(remote) == (1, True)
+
+    real = datetime.date
+
+    class Tomorrow(real):
+        @classmethod
+        def today(cls):
+            return real.today() + datetime.timedelta(days=400)
+
+    monkeypatch.setattr(gitsync, "date", Tomorrow)
+    assert gitsync.push(remote)[1] is False
+    # ...and the rendered table still carries the facts, just absolute ones.
+    table = (gitsync.repo_dir() / gitsync.TABLE_FILE).read_text()
+    assert review.load()["coin-change"].due in table
+    assert "overdue" not in table
+
+
+def test_concurrent_deck_writes_neither_crash_nor_lose_entries(tmp_path, monkeypatch):
+    """The judge and sync workers are threads; the UI grades on the main one."""
+    import threading
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    from lc import review
+
+    curve = [2, 4, 8]
+    for i in range(10):
+        review.add(f"p{i}", title=f"P{i}", frontend_id=str(i), curve=curve)
+
+    errors: list[str] = []
+
+    def grade(lo: int, hi: int) -> None:
+        try:
+            for _ in range(20):
+                for i in range(lo, hi):
+                    review.shift_level(f"p{i}", +1, curve)
+                    review.shift_level(f"p{i}", -1, curve)
+        except Exception as exc:  # a crash in a worker is the bug
+            errors.append(repr(exc))
+
+    threads = [threading.Thread(target=grade, args=(0, 5)),
+               threading.Thread(target=grade, args=(5, 10))]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert errors == []
+    assert len(review.load()) == 10
+    # Every save cleans up after itself, whichever thread wrote it.
+    assert list(tmp_path.glob("review.json.*")) == []
+
+
+def test_blank_workspace_falls_back_instead_of_meaning_here():
+    from lc.config import DEFAULT_WORKSPACE, Config
+
+    assert Config(workspace="").workspace_path == DEFAULT_WORKSPACE
+    assert Config(workspace="~/code/lc").workspace_path.name == "lc"
+
+
 def test_git_errors_name_the_real_problem_not_the_last_line():
     """Git's complaint is multi-line; its last line is often a sentence fragment."""
     from lc import gitsync
@@ -1106,6 +1179,11 @@ def test_git_errors_name_the_real_problem_not_the_last_line():
     assert str(gitsync._explain("clone", other)) == "git clone: fatal: the disk is on fire"
     # And never crash on empty output.
     assert "failed" in str(gitsync._explain("push", "  \n \n"))
+
+    # `git -c user.name=lc commit` must be reported as "commit", not "-c".
+    assert gitsync._command_name(("-c", "user.name=lc", "commit", "-m", "x")) == "commit"
+    assert gitsync._command_name(("--quiet", "push")) == "push"
+    assert gitsync._command_name(("-c", "a=b")) == "git"
 
 
 def test_git_sync_reports_a_bad_remote_cleanly(tmp_path, monkeypatch):

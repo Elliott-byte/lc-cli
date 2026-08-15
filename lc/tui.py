@@ -322,6 +322,14 @@ class ConfigScreen(ModalScreen[bool]):
         if days is None:
             self.query_one("#cfg-curve", Input).focus()
             return
+        # Everything else may be blank and mean something; a blank workspace
+        # would just be "wherever lc was started", which is never intended.
+        if not self.query_one("#cfg-workspace", Input).value.strip():
+            self.query_one("#config-error", Static).update(
+                Text("workspace: give a directory for solution files")
+            )
+            self.query_one("#cfg-workspace", Input).focus()
+            return
         for name, _label, _placeholder in self.FIELDS:
             setattr(self.config, name, self.query_one(f"#cfg-{name}", Input).value.strip())
         self.config.review_curve = days
