@@ -74,6 +74,10 @@ function! s:LcOpenStatement() abort
     else
       execute 'terminal ++curwin ++norestore lc show ' . l:slug
     endif
+    " Vim names a terminal buffer after the command it ran, so the status
+    " line would read "!lc show two-sum [finished]" — which looks like
+    " something went wrong. Say what the pane is instead.
+    execute 'silent! file' fnameescape('[statement] ' . l:slug)
   else
     if !filereadable(s:LcReadme())
       return
