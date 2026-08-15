@@ -4,10 +4,10 @@
 not cache — ``cache.db`` can be deleted freely, this file is the deck.
 
 A problem sits at a level from 1 to ``len(curve)``; the curve says how many
-days a pass at each level buys before the next review. The default doubles —
-2, 4, 8, … days, the forgetting-curve shape — and ``lc config curve``
-replaces it. Passing a due review climbs one level, failing any submit drops
-back to level 1.
+days a pass at each level buys before the next review. The default is
+Ebbinghaus's — 1, 2, 4, 7, 15 days, then out to a year — and ``lc config
+curve`` replaces it. Passing a due review climbs one level, failing any
+submit drops back to level 1.
 """
 
 from __future__ import annotations
@@ -19,8 +19,10 @@ from pathlib import Path
 
 from .config import Config, home
 
-#: Days until the next review, by level: 2^level. `lc config curve` overrides.
-DEFAULT_CURVE = tuple(2 ** n for n in range(1, 11))
+#: Ebbinghaus's forgetting curve: the classic 1/2/4/7/15-day review ladder,
+#: continued out to a year for material you have clearly kept.
+#: `lc config curve` overrides it.
+DEFAULT_CURVE = (1, 2, 4, 7, 15, 30, 60, 90, 180, 365)
 
 
 def review_path() -> Path:

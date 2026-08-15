@@ -256,7 +256,7 @@ class ConfigScreen(ModalScreen[bool]):
             yield Label("Memory curve — days between reviews, one per level")
             yield Input(
                 value=", ".join(str(d) for d in self.curve),
-                placeholder="2, 4, 8, 16, 32",
+                placeholder="1, 2, 4, 7, 15",
                 id="cfg-curve",
             )
             yield Static("", id="curve-preview")
@@ -290,7 +290,7 @@ class ConfigScreen(ModalScreen[bool]):
         try:
             days = [int(part) for part in raw.replace(" ", "").split(",") if part]
         except ValueError:
-            error.update(Text("curve: days must be whole numbers, e.g. 2, 4, 8"))
+            error.update(Text("curve: days must be whole numbers, e.g. 1, 2, 4, 7"))
             return None
         if not days or any(not 1 <= d <= review.MAX_GAP_DAYS for d in days):
             error.update(

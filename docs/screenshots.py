@@ -202,7 +202,7 @@ async def shot_tui() -> None:
         await pilot.pause(0.5)
         from textual.widgets import Input
 
-        app.screen.query_one("#cfg-curve", Input).value = "1, 2, 4, 8, 16, 32"
+        app.screen.query_one("#cfg-curve", Input).value = "1, 2, 4, 7, 15, 30"
         app.screen.query_one("#cfg-review_repo", Input).value = (
             "git@github.com:you/lc-review.git"
         )

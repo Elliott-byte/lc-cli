@@ -222,7 +222,7 @@ the index). Refreshes keep your cursor on the problem it was on.
 Some problems deserve a second (and a fifth) meeting. `m` saves the one
 under the cursor to the **Review** tab, where it climbs levels along a
 forgetting curve: level 1 comes back after 2 days, level 2 after 4, then 8,
-16 — doubling up to level 10. When something is due, the tab title says so:
+15 — Ebbinghaus's ladder, out to a year at level 10. When something is due, the tab title says so:
 `Review (3)`, with the due problems sorted to the top.
 
 ![the review deck](docs/review.svg)
@@ -263,7 +263,7 @@ lc config lang go                  # default language for `lc pick`
 lc config workspace ~/code/leetcode
 lc config editor "code -w"         # otherwise $EDITOR / $VISUAL is used
 lc config curve 1,2,4,7,15,30      # six levels, gentler start
-lc config curve reset              # back to the doubling default
+lc config curve reset              # back to the Ebbinghaus default
 lc config repo git@github.com:you/lc-review.git
 ```
 

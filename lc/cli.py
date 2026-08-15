@@ -1207,9 +1207,9 @@ def config_repo(
 def config_curve(
     days: str = typer.Argument(
         ...,
-        help="days per level, comma-separated — e.g. '2,4,8,16,32' means level 1 "
-             "reviews after 2 days, level 2 after 4, and the top level is 5; "
-             "'reset' restores the default doubling curve",
+        help="days per level, comma-separated — e.g. '1,2,4,7,15' means level 1 "
+             "reviews after 1 day, level 2 after 2, and the top level is 5; "
+             "'reset' restores the default Ebbinghaus curve",
     ),
 ) -> None:
     """Set the review deck's memory curve (and with it, the number of levels)."""
@@ -1222,11 +1222,11 @@ def config_curve(
         try:
             curve = [int(part) for part in days.replace(" ", "").split(",") if part]
         except ValueError:
-            die(f"could not read {days!r}", "give days as numbers: `lc config curve 2,4,8`")
+            die(f"could not read {days!r}", "give days as numbers: `lc config curve 1,2,4,7`")
             return
         if not curve or any(not 1 <= d <= review.MAX_GAP_DAYS for d in curve):
             die(f"each level needs 1 to {review.MAX_GAP_DAYS} days",
-                "e.g. `lc config curve 2,4,8,16`")
+                "e.g. `lc config curve 1,2,4,7,15`")
             return
         cfg.review_curve = curve
         save_config(cfg)

@@ -808,6 +808,18 @@ def test_review_handles_unknown_slugs_and_corrupt_files(tmp_path, monkeypatch):
     assert "s" in review.load()
 
 
+def test_default_curve_is_ebbinghaus():
+    """The out-of-the-box schedule is the classic 1/2/4/7/15-day ladder."""
+    from lc import review
+
+    assert review.DEFAULT_CURVE[:5] == (1, 2, 4, 7, 15)
+    assert review.DEFAULT_CURVE == (1, 2, 4, 7, 15, 30, 60, 90, 180, 365)
+    # Strictly increasing, and every gap is a schedulable number of days.
+    gaps = list(review.DEFAULT_CURVE)
+    assert gaps == sorted(set(gaps))
+    assert all(1 <= g <= review.MAX_GAP_DAYS for g in gaps)
+
+
 def test_review_curve_of_sanitizes_config():
     from lc.config import Config
     from lc import review

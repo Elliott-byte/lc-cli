@@ -201,8 +201,8 @@ Python 解题 buffer 会保持空格缩进：Tab 键输出空格，粘贴进来�
 ## 刷题本（间隔重复）
 
 有的题值得见第二次、第五次。按 `m` 把光标下的题存进 **Review** 标签页，
-它会沿记忆曲线升级：1 级 2 天后再见，2 级 4 天，之后 8、16——一路翻倍到
-10 级。有题到期时标签页会直接写出来：`Review (3)`，到期的题排在最上面。
+它会沿艾宾浩斯记忆曲线升级：1 级 1 天后再见，然后 2、4、7、15 天——经典的
+复习阶梯，一路延伸到 10 级的一年。有题到期时标签页会直接写出来：`Review (3)`，到期的题排在最上面。
 
 ![刷题本](docs/review.svg)
 
@@ -238,7 +238,7 @@ lc config lang go                  # `lc pick` 的默认语言
 lc config workspace ~/code/leetcode
 lc config editor "code -w"         # 不设则用 $EDITOR / $VISUAL
 lc config curve 1,2,4,7,15,30      # 六级，起步更缓
-lc config curve reset              # 回到默认的翻倍曲线
+lc config curve reset              # 回到默认的艾宾浩斯曲线
 lc config repo git@github.com:you/lc-review.git
 ```
 

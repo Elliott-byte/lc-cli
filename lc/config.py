@@ -52,7 +52,7 @@ class Config:
         default_factory=lambda: ["python3", "javascript", "golang", "cpp", "java"]
     )
     #: Review-deck spacing: days until the next review, one entry per level.
-    #: Empty means lc's default doubling curve — see `lc config curve`.
+    #: Empty means lc's default Ebbinghaus curve — see `lc config curve`.
     review_curve: list[int] = field(default_factory=list)
     #: Git remote the review deck syncs with, e.g. git@github.com:you/lc-review.git
     review_repo: str = ""
