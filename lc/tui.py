@@ -8,20 +8,21 @@ from __future__ import annotations
 
 import os
 import time
+from datetime import date
 from typing import Iterable
 
 from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.widgets import DataTable, Footer, Input, Static
+from textual.widgets import DataTable, Footer, Input, Static, TabbedContent, TabPane
 from textual.widgets.data_table import RowDoesNotExist
 
 from rich.console import Group, RenderableType
 from rich.markup import escape
 from rich.text import Text
 
-from . import fx, store, workspace
+from . import fx, review, store, workspace
 from .api import (
     JudgeResult,
     LeetCode,
@@ -33,7 +34,13 @@ from .api import (
 from .browser import open_url
 from .config import load_config, load_credentials
 from .langs import choose
-from .render import difficulty_text, problem_header, render_statement, status_mark
+from .render import (
+    DIFFICULTY_STYLE,
+    difficulty_text,
+    problem_header,
+    render_statement,
+    status_mark,
+)
 
 DIFFICULTIES = ("", "Easy", "Medium", "Hard")
 STATUSES = ("", "todo", "attempted", "solved")
@@ -112,6 +119,80 @@ class ProblemList(DataTable):
                 self.move_cursor(row=selected)
 
 
+class ReviewList(DataTable):
+    """The Review tab: the spaced-repetition deck. Row keys are problem slugs."""
+
+    #: Columns other than the title, plus DataTable's per-cell padding.
+    _CHROME = 1 + 4 + 2 + 6 + 10
+
+    BINDINGS = [
+        # These live on the widget so they only fire — and only show in the
+        # footer — while the Review tab has focus.
+        Binding("plus,equals_sign", "app.review_level_up", "Lv+"),
+        Binding("minus", "app.review_level_down", "Lv-"),
+        Binding("z", "app.review_snooze", "+1d"),
+        Binding("Z", "app.review_snooze_due", "Due→tmrw"),
+        Binding("x", "app.review_remove", "Remove"),
+    ]
+
+    def __init__(self, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self._items: list[review.ReviewItem] = []
+        self._today = date.today()
+        self._title_width = 0
+
+    def on_mount(self) -> None:
+        self.cursor_type = "row"
+        self.zebra_stripes = True
+        self.add_column("", width=1, key="due-mark")
+        self.add_column("#", width=4, key="id")
+        self.add_column("Lv", width=2, key="level")
+        self.add_column("Due", width=6, key="due")
+        self.add_column("Title", key="title")
+
+    def _available(self) -> int:
+        return max((self.size.width or 46) - self._CHROME, 14)
+
+    def load_items(self, items: Iterable[review.ReviewItem], today: date) -> None:
+        self._items = list(items)
+        self._today = today
+        self._render_rows()
+
+    def _render_rows(self) -> None:
+        width = self._available()
+        self._title_width = width
+        selected = self.cursor_row
+        self.clear()
+        for item in self._items:
+            days = item.due_in(self._today)
+            if days < 0:
+                mark = Text("●", style="bold red")
+                due = Text(f"{days}d", style="bold red")
+            elif days == 0:
+                mark = Text("●", style="bold yellow")
+                due = Text("today", style="bold yellow")
+            else:
+                mark = Text("○", style="dim")
+                due = Text(f"{days}d", style="dim")
+            label = item.title or item.slug
+            if len(label) > width:
+                label = label[: width - 1] + "…"
+            self.add_row(
+                mark,
+                Text(item.frontend_id, style=DIFFICULTY_STYLE.get(item.difficulty, "dim")),
+                Text(str(item.level), style="bold" if days <= 0 else ""),
+                due,
+                Text(label),
+                key=item.slug,
+            )
+        if 0 <= selected < self.row_count:
+            self.move_cursor(row=selected)
+
+    def on_resize(self) -> None:
+        if self._items and self._available() != self._title_width:
+            self._render_rows()
+
+
 class LeetCodeTUI(App):
     CSS = """
     Screen { layers: base fx; }
@@ -120,9 +201,12 @@ class LeetCodeTUI(App):
     #body { height: 1fr; }
     #left { width: 40%; min-width: 40; max-width: 64; border-right: solid $panel; }
     #filter { border: none; height: 3; background: $boost; }
+    #tabs { height: 1fr; }
+    TabPane { padding: 0; }
     #right { padding: 1 2; }
     #status-bar { height: 1; background: $boost; color: $text-muted; padding: 0 1; }
     ProblemList { height: 1fr; }
+    ReviewList { height: 1fr; }
     """
 
     BINDINGS = [
@@ -133,6 +217,9 @@ class LeetCodeTUI(App):
         Binding("p", "pick", "Pick"),
         Binding("r", "run", "Run"),
         Binding("s", "submit", "Submit"),
+        # Priority: the Screen's own tab binding (focus-next) would win otherwise.
+        Binding("tab", "switch_pane", "Review", priority=True),
+        Binding("m", "save_review", "Save"),
         Binding("d", "cycle_difficulty", "Difficulty"),
         Binding("t", "cycle_status", "Status"),
         Binding("o", "open_web", "Web"),
@@ -146,6 +233,7 @@ class LeetCodeTUI(App):
         super().__init__()
         self.initial = initial
         self.config = load_config()
+        self.curve = review.curve_of(self.config)
         self.client = LeetCode(load_credentials())
         self.difficulty = ""
         self.status_filter = ""
@@ -161,7 +249,11 @@ class LeetCodeTUI(App):
         with Horizontal(id="body"):
             with Vertical(id="left"):
                 yield Input(placeholder="filter…", id="filter")
-                yield ProblemList(id="list")
+                with TabbedContent(id="tabs"):
+                    with TabPane("Problems", id="pane-problems"):
+                        yield ProblemList(id="list")
+                    with TabPane("Review", id="pane-review"):
+                        yield ReviewList(id="review")
             with VerticalScroll(id="right"):
                 yield Static("", id="statement")
         yield Static("", id="status-bar")
@@ -170,6 +262,7 @@ class LeetCodeTUI(App):
     def on_mount(self) -> None:
         self.title = "LeetCode"
         self.refresh_list()
+        self.refresh_review()
         if store.index_size() == 0:
             self.action_sync()
         self._daily_worker()
@@ -226,6 +319,30 @@ class LeetCodeTUI(App):
                 message += "  ·  ★ today's daily"
             self.set_status(message)
 
+    def refresh_review(self) -> None:
+        today = date.today()
+        items = review.load()
+        rows = review.order(items)
+        if self.keyword:
+            needle = self.keyword.lower()
+            rows = [
+                item for item in rows
+                if needle in (item.title or "").lower()
+                or needle in item.slug
+                or item.frontend_id == self.keyword
+            ]
+        self.query_one("#review", ReviewList).load_items(rows, today)
+        # The tab itself carries the day's workload, visible from either pane.
+        due = review.due_count(items, today)
+        self.query_one(TabbedContent).get_tab("pane-review").label = (
+            f"Review ({due})" if due else "Review"
+        )
+
+    def _active_table(self) -> DataTable:
+        if self.query_one(TabbedContent).active == "pane-review":
+            return self.query_one("#review", ReviewList)
+        return self.query_one("#list", ProblemList)
+
     # ----------------------------------------------------------------- events
 
     @on(Input.Changed, "#filter")
@@ -235,18 +352,30 @@ class LeetCodeTUI(App):
         # for a pause in typing instead.
         if self._filter_timer is not None:
             self._filter_timer.stop()
-        self._filter_timer = self.set_timer(0.15, self.refresh_list)
+        self._filter_timer = self.set_timer(0.15, self._apply_filter)
+
+    def _apply_filter(self) -> None:
+        self.refresh_list()
+        self.refresh_review()
 
     @on(Input.Submitted, "#filter")
     def _filter_submitted(self) -> None:
-        self.query_one("#list", ProblemList).focus()
+        self._active_table().focus()
 
     @on(DataTable.RowHighlighted, "#list")
+    @on(DataTable.RowHighlighted, "#review")
     def _row_highlighted(self, event: DataTable.RowHighlighted) -> None:
+        # A hidden pane rebuilding its rows re-highlights its cursor row too.
+        # Only the visible table may drive the statement pane — current_slug
+        # is what r/s/enter act on, so a stray event here would point them
+        # at a problem the user cannot even see.
+        if event.data_table is not self._active_table():
+            return
         if event.row_key is not None and event.row_key.value:
             self.load_problem(str(event.row_key.value))
 
     @on(DataTable.RowSelected, "#list")
+    @on(DataTable.RowSelected, "#review")
     def _row_selected(self) -> None:
         self.action_pick()
 
@@ -256,7 +385,105 @@ class LeetCodeTUI(App):
         self.query_one("#filter", Input).focus()
 
     def action_focus_list(self) -> None:
-        self.query_one("#list", ProblemList).focus()
+        self._active_table().focus()
+
+    def action_switch_pane(self) -> None:
+        tabs = self.query_one(TabbedContent)
+        tabs.active = (
+            "pane-problems" if tabs.active == "pane-review" else "pane-review"
+        )
+
+    @on(TabbedContent.TabActivated)
+    def _tab_activated(self) -> None:
+        # Key and mouse land here alike: focus the now-visible table and point
+        # the statement pane at whatever its cursor is on.
+        table = self._active_table()
+        table.focus()
+        if table.row_count:
+            key = table.coordinate_to_cell_key(table.cursor_coordinate).row_key
+            if key is not None and key.value:
+                self.load_problem(str(key.value))
+
+    # ------------------------------------------------------------ review deck
+
+    def action_save_review(self) -> None:
+        slug = self.current_slug
+        if not slug:
+            return
+        deck = review.load()
+        if slug in deck:
+            item = deck[slug]
+            self.notify(
+                f"already on the review deck (level {item.level}) — "
+                "x in the Review tab removes it",
+                severity="warning",
+            )
+            return
+        summary = store.find(slug)
+        problem = self.current if self.current and self.current.slug == slug else None
+        source = summary or problem
+        item = review.add(
+            slug,
+            title=source.title if source else slug,
+            frontend_id=source.frontend_id if source else "",
+            difficulty=source.difficulty if source else "",
+            curve=self.curve,
+        )
+        self.notify(
+            f"saved for review — level 1, first review in {item.due_in(date.today())}d"
+        )
+        self.refresh_review()
+
+    def _review_slug(self) -> str | None:
+        table = self.query_one("#review", ReviewList)
+        if not table.row_count:
+            return None
+        key = table.coordinate_to_cell_key(table.cursor_coordinate).row_key
+        return str(key.value) if key is not None and key.value else None
+
+    def _review_shift(self, delta: int) -> None:
+        slug = self._review_slug()
+        if not slug:
+            return
+        item = review.shift_level(slug, delta, self.curve)
+        if item:
+            self.notify(
+                f"level {item.level} — next review in {item.due_in(date.today())}d"
+            )
+            self.refresh_review()
+
+    def action_review_level_up(self) -> None:
+        self._review_shift(+1)
+
+    def action_review_level_down(self) -> None:
+        self._review_shift(-1)
+
+    def action_review_snooze(self) -> None:
+        slug = self._review_slug()
+        if not slug:
+            return
+        item = review.postpone(slug)
+        if item:
+            self.notify(f"postponed — due in {item.due_in(date.today())}d")
+            self.refresh_review()
+
+    def action_review_snooze_due(self) -> None:
+        moved = review.postpone_due()
+        if moved:
+            self.notify(f"postponed {moved} problem(s) to tomorrow")
+            self.refresh_review()
+        else:
+            self.notify("nothing due today")
+
+    def action_review_remove(self) -> None:
+        slug = self._review_slug()
+        if not slug:
+            return
+        item = review.load().get(slug)
+        review.remove(slug)
+        self.notify(f"removed {item.title if item and item.title else slug} "
+                    "from the review deck")
+        self.refresh_review()
 
     def action_cycle_difficulty(self) -> None:
         i = DIFFICULTIES.index(self.difficulty)
@@ -297,8 +524,10 @@ class LeetCodeTUI(App):
             with self.suspend():
                 workspace.open_in_editor(self.config, solution.file)
             # A `\t`/`\s` inside the editor may have judged this problem — the
-            # store already knows, so the ✔/✗ marks must not wait for a sync.
+            # store already knows, so the ✔/✗ marks must not wait for a sync,
+            # and a submit may also have moved it on the review deck.
             self.refresh_list()
+            self.refresh_review()
             self.refresh()
         else:
             self.notify(f"created {solution.file} (set $EDITOR to auto-open)")
@@ -318,12 +547,15 @@ class LeetCodeTUI(App):
         re-check the daily in case the UTC day rolled over."""
         self._daily_worker()
         self.refresh_list()
+        self.refresh_review()
 
     def action_daily(self) -> None:
         if not self.daily_slug:
             self.notify("today's daily is not known yet — check your connection",
                         severity="warning")
             return
+        # The daily lives in the problem list — make sure that pane is showing.
+        self.query_one(TabbedContent).active = "pane-problems"
         if not self.select_slug(self.daily_slug):
             self.notify("today's daily is hidden by the current filters",
                         severity="warning")
@@ -431,7 +663,11 @@ class LeetCodeTUI(App):
                 known = store.find(problem.slug)
                 if known is not None and not known.solved:
                     store.update_status(problem.slug, "notac")
+            note = review.record_submit(problem.slug, result.accepted, self.curve)
             self.call_from_thread(self.refresh_list)
+            self.call_from_thread(self.refresh_review)
+            if note:
+                self.call_from_thread(self.notify, note, timeout=8)
 
         self.call_from_thread(self._show_result, result, cases)
 

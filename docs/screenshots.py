@@ -134,6 +134,32 @@ def shot_test() -> None:
                      title="lc test  ·  in ~/leetcode/2213-longest-substring…")
 
 
+def seed_review() -> None:
+    """A little review deck: one overdue, one due today, one scheduled out.
+
+    Dues are set relative to today, so the rendered "-3d / today / 11d" —
+    and with it the SVG — is the same whichever day this runs.
+    """
+    from datetime import date, timedelta
+
+    from lc import review
+
+    curve = [2, 4, 8, 16]
+    review.add("trapping-rain-water", title="Trapping Rain Water",
+               frontend_id="42", difficulty="Hard", curve=curve)
+    review.add("coin-change", title="Coin Change", frontend_id="322",
+               difficulty="Medium", curve=curve)
+    review.add("lru-cache", title="LRU Cache", frontend_id="146",
+               difficulty="Medium", curve=curve)
+    items = review.load()
+    today = date.today()
+    items["trapping-rain-water"].due = (today - timedelta(days=3)).isoformat()
+    items["coin-change"].due = today.isoformat()
+    items["lru-cache"].due = (today + timedelta(days=11)).isoformat()
+    items["lru-cache"].level = 4
+    review.save(items)
+
+
 async def shot_tui() -> None:
     from lc import tui as tuimod
 
@@ -141,6 +167,7 @@ async def shot_tui() -> None:
     store.put_statement(DAILY_PROBLEM)
     store.set_meta("daily_date", time.strftime("%Y-%m-%d", time.gmtime()))
     store.set_meta("daily_slug", DAILY_SLUG)
+    seed_review()
 
     class FakeClient:
         authenticated = True
@@ -165,8 +192,11 @@ async def shot_tui() -> None:
             if app.daily_slug:
                 break
         await pilot.pause(0.5)
-        svg = app.export_screenshot(title="lc")
-    (DOCS / "tui.svg").write_text(svg)
+        (DOCS / "tui.svg").write_text(app.export_screenshot(title="lc"))
+        # The same app, flipped to the Review tab.
+        await pilot.press("tab")
+        await pilot.pause(0.5)
+        (DOCS / "review.svg").write_text(app.export_screenshot(title="lc — review"))
 
 
 if __name__ == "__main__":
@@ -174,4 +204,4 @@ if __name__ == "__main__":
     shot_test()
     asyncio.run(shot_tui())
     print("wrote", ", ".join(str(DOCS / f) for f in
-                             ("list.svg", "test.svg", "tui.svg")))
+                             ("list.svg", "test.svg", "tui.svg", "review.svg")))

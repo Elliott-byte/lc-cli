@@ -94,6 +94,7 @@ flow reminds you.
 | `lc submit` | Submit; prints verdict, runtime and percentiles |
 | `lc daily` | Today's daily challenge (`--pick` to start it immediately) |
 | `lc random -d medium` | A random unsolved problem |
+| `lc review` | The spaced-repetition deck (`add` / `rm` / `level` / `postpone`) |
 | `lc stat` | Your solve counts by difficulty |
 | `lc history 322` | Your recent submissions for a problem |
 | `lc code` | Print the current solution, highlighted |
@@ -132,6 +133,7 @@ lc config show
 lc config lang go                  # default language for `lc pick`
 lc config workspace ~/code/leetcode
 lc config editor "code -w"         # otherwise $EDITOR / $VISUAL is used
+lc config curve 2,4,8,16,32        # review-deck spacing, one gap per level
 ```
 
 Settings live in `~/.lc/config.json`; set `$LC_HOME` to move that whole
@@ -183,9 +185,11 @@ for Neovim, copy the same file to `~/.config/nvim/plugin/`.
 
 ## TUI
 
-Bare `lc` (or `lc tui`) opens a two-pane browser: problem list on the left,
-statement on the right. On a fresh machine it downloads the problem index by
-itself. The loop is: move to a problem, `enter` to open it in your editor,
+Bare `lc` (or `lc tui`) opens a two-pane browser: problems on the left,
+statement on the right. The left pane has a second tab — the review deck
+(next section) — and `tab` flips between them. On a fresh machine it
+downloads the problem index by itself. The loop is: move to a problem,
+`enter` to open it in your editor,
 write, quit the editor back to the list, `r` to run the samples, `s` to
 submit — repeat. `enter` on a problem you already started reopens your
 existing file.
@@ -206,6 +210,8 @@ the index). Refreshes keep your cursor on the problem it was on.
 | `enter` / `p` | Set up the solution file and open your editor |
 | `r` | Run the samples |
 | `s` | Submit |
+| `tab` | Switch between the Problems and Review tabs |
+| `m` | Save the problem to the review deck |
 | `d` | Cycle the difficulty filter |
 | `t` | Cycle the status filter |
 | `o` | Open the problem on leetcode.com |
@@ -213,6 +219,46 @@ the index). Refreshes keep your cursor on the problem it was on.
 | `ctrl+r` | Refresh the list from the local index |
 | `R` | Re-sync the problem index |
 | `q` | Quit |
+
+## Review deck
+
+Some problems deserve a second (and a fifth) meeting. `m` saves the one
+under the cursor to the **Review** tab, where it climbs levels along a
+forgetting curve: level 1 comes back after 2 days, level 2 after 4, then 8,
+16 — doubling up to level 10. When something is due, the tab title says so:
+`Review (3)`, with the due problems sorted to the top.
+
+![the review deck](docs/review.svg)
+
+Reviews grade themselves: re-solve the problem and submit. An accepted
+submit on a due problem climbs one level, a failed submit drops it back to
+level 1 and the spacing starts over. Submits count from anywhere — the TUI,
+`lc submit` in a shell, `\s` inside Vim. Solving a problem again before it
+is due is just practice; the schedule doesn't move.
+
+On the Review tab: `+`/`-` set the level by hand (rescheduled from today),
+`z` pushes one problem to tomorrow, `Z` pushes everything due, `x` removes
+it, and `enter` opens it in your editor as usual.
+
+The same deck from the shell:
+
+```bash
+lc review                  # the deck, soonest due first
+lc review add 322 -l 3     # save by hand, starting at level 3
+lc review postpone         # not today — everything due moves to tomorrow
+lc review rm 322
+```
+
+The curve is yours to shape — one gap per level, in days, and the number of
+entries is the number of levels:
+
+```bash
+lc config curve 1,2,4,7,15,30    # six levels, gentler start
+lc config curve reset            # back to the doubling default
+```
+
+The deck is user data, kept in `~/.lc/review.json` away from the cache —
+deleting `cache.db` never touches it.
 
 ## Notes
 

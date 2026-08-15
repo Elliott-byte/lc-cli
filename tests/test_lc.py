@@ -707,6 +707,215 @@ def test_store_meta_roundtrip(tmp_path, monkeypatch):
     assert store.get_meta("daily_slug") == "two-sum"
 
 
+# ---------------------------------------------------------------- review deck
+
+def _review_env(tmp_path, monkeypatch):
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    from lc import review
+    return review
+
+
+def test_review_add_schedules_the_first_review(tmp_path, monkeypatch):
+    from datetime import date
+
+    review = _review_env(tmp_path, monkeypatch)
+    d = date(2026, 8, 15)
+    item = review.add("coin-change", title="Coin Change", frontend_id="322",
+                      difficulty="Medium", curve=[2, 4, 8], today=d)
+    assert (item.level, item.due) == (1, "2026-08-17")
+
+    stored = review.load()["coin-change"]
+    assert stored.title == "Coin Change"
+    assert stored.added == "2026-08-15"
+    # Re-adding freshens metadata but must not reset the schedule.
+    review.shift_level("coin-change", +1, [2, 4, 8], today=d)
+    again = review.add("coin-change", title="Coin Change!", frontend_id="322",
+                       difficulty="Medium", curve=[2, 4, 8], today=d)
+    assert again.level == 2 and again.title == "Coin Change!"
+
+
+def test_review_pass_climbs_and_fail_restarts(tmp_path, monkeypatch):
+    from datetime import date
+
+    review = _review_env(tmp_path, monkeypatch)
+    curve = [2, 4, 8]
+    review.add("s", curve=curve, today=date(2026, 8, 15))
+
+    # Solving it again before it is due proves nothing — no climb.
+    assert review.record_submit("s", True, curve, today=date(2026, 8, 16)) is None
+
+    note = review.record_submit("s", True, curve, today=date(2026, 8, 17))
+    assert note is not None and "1 → 2" in note
+    assert review.load()["s"].due == "2026-08-21"  # 4 days out at level 2
+
+    # One day climbs at most once, however many accepted submits land.
+    assert review.record_submit("s", True, curve, today=date(2026, 8, 17)) is None
+
+    # A failed submit restarts the schedule from level 1.
+    note = review.record_submit("s", False, curve, today=date(2026, 8, 21))
+    assert note is not None and "level 1" in note
+    assert review.load()["s"].level == 1
+    assert review.load()["s"].due == "2026-08-23"
+
+
+def test_review_level_is_clamped_to_the_curve(tmp_path, monkeypatch):
+    from datetime import date
+
+    review = _review_env(tmp_path, monkeypatch)
+    curve = [2, 4]
+    d = date(2026, 8, 15)
+    review.add("s", curve=curve, today=d)
+    assert review.shift_level("s", +7, curve, today=d).level == 2  # top of a 2-level curve
+    assert review.load()["s"].due == "2026-08-19"
+    assert review.shift_level("s", -7, curve, today=d).level == 1
+    # Climbing while already at the top keeps the top interval.
+    review.shift_level("s", +1, curve, today=d)
+    note = review.record_submit("s", True, curve, today=date(2026, 8, 19))
+    assert note is not None and "top" in note
+    assert review.load()["s"].level == 2
+
+
+def test_review_postpone_single_and_all_due(tmp_path, monkeypatch):
+    from datetime import date
+
+    review = _review_env(tmp_path, monkeypatch)
+    d = date(2026, 8, 15)
+    review.add("overdue", curve=[1], today=date(2026, 8, 10))
+    review.add("later", curve=[30], today=d)
+
+    assert review.postpone_due(today=d) == 1  # only the overdue one moves
+    assert review.load()["overdue"].due == "2026-08-16"
+    assert review.load()["later"].due == "2026-09-14"
+
+    # Postponing one problem pushes past today for due items, past its own
+    # date for future ones.
+    assert review.postpone("overdue", today=d).due == "2026-08-17"
+    assert review.postpone("later", today=d).due == "2026-09-15"
+
+
+def test_review_handles_unknown_slugs_and_corrupt_files(tmp_path, monkeypatch):
+    review = _review_env(tmp_path, monkeypatch)
+    assert review.load() == {}
+    assert review.record_submit("ghost", True, [2]) is None
+    assert review.shift_level("ghost", 1, [2]) is None
+    assert review.postpone("ghost") is None
+    assert review.remove("ghost") is False
+
+    review.review_path().write_text("{not json")
+    assert review.load() == {}
+    review.add("s", curve=[2])  # writable again after the corruption
+    assert "s" in review.load()
+
+
+def test_review_curve_of_sanitizes_config():
+    from lc.config import Config
+    from lc import review
+
+    assert review.curve_of(Config()) == list(review.DEFAULT_CURVE)
+    assert review.curve_of(Config(review_curve=[2, 4, 8])) == [2, 4, 8]
+    assert review.curve_of(Config(review_curve=[3, "6"])) == [3, 6]
+    # Nothing usable — nonsense entries and a non-list — falls back whole.
+    assert review.curve_of(Config(review_curve=[0, -3, "x"])) == list(review.DEFAULT_CURVE)
+    assert review.curve_of(Config(review_curve="oops")) == list(review.DEFAULT_CURVE)
+    # A gap timedelta would choke on (int(1e999) raises OverflowError) or one
+    # past the cap must not survive into scheduling.
+    assert review.curve_of(Config(review_curve=[1e999, 2])) == [2]
+    assert review.curve_of(Config(review_curve=[999_999, 5])) == [5]
+
+
+def test_review_load_coerces_a_hand_edited_file(tmp_path, monkeypatch):
+    review = _review_env(tmp_path, monkeypatch)
+    review.review_path().write_text(json.dumps({
+        "ok": {"level": "3", "due": "2026-08-20", "title": "Fine"},
+        "odd": {"level": None, "due": 42, "title": 7},
+        "not-a-dict": [1, 2, 3],
+    }))
+    items = review.load()
+    assert "not-a-dict" not in items
+    assert items["ok"].level == 3 and items["ok"].due == "2026-08-20"
+    assert items["odd"].level == 1 and items["odd"].due == "" and items["odd"].title == ""
+    # ...and the coerced values survive every operation without crashing.
+    from datetime import date
+    d = date(2026, 8, 15)
+    assert items["odd"].due_in(d) == 0
+    assert review.shift_level("odd", +1, [2, 4], today=d).level == 2
+    assert review.postpone("ok", today=d).due == "2026-08-21"
+    assert review.record_submit("ok", False, [2, 4], today=d) is not None
+
+
+def test_cli_review_add_list_and_remove(tmp_path, monkeypatch):
+    from datetime import date
+
+    review = _review_env(tmp_path, monkeypatch)
+    from lc import store
+    from lc.api import ProblemSummary
+    from typer.testing import CliRunner
+    from lc.cli import app
+
+    store.replace_index([
+        ProblemSummary("322", "Coin Change", "coin-change", "Medium", 45.0, False, None),
+    ])
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["review", "add", "322", "-l", "3"])
+    assert result.exit_code == 0, result.output
+    item = review.load()["coin-change"]
+    assert item.level == 3
+    assert item.title == "Coin Change"
+
+    result = runner.invoke(app, ["review"])
+    assert result.exit_code == 0, result.output
+    assert "Coin Change" in result.output
+
+    # A plain re-add freshens the entry but must not reset the level.
+    result = runner.invoke(app, ["review", "add", "322"])
+    assert result.exit_code == 0, result.output
+    assert review.load()["coin-change"].level == 3
+
+    # Postpone: nothing due yet, then one due after we pull the date back.
+    result = runner.invoke(app, ["review", "postpone"])
+    assert "nothing due" in result.output
+    items = review.load()
+    items["coin-change"].due = date.today().isoformat()
+    review.save(items)
+    result = runner.invoke(app, ["review", "postpone"])
+    assert "postponed 1" in result.output
+
+    # `lc review level` sets the level by hand.
+    result = runner.invoke(app, ["review", "level", "322", "2"])
+    assert result.exit_code == 0, result.output
+    assert review.load()["coin-change"].level == 2
+
+    result = runner.invoke(app, ["review", "rm", "coin change"])
+    assert result.exit_code == 0, result.output
+    assert review.load() == {}
+
+    result = runner.invoke(app, ["review", "rm", "322"])
+    assert result.exit_code == 1  # already gone
+
+
+def test_cli_config_curve_roundtrip(tmp_path, monkeypatch):
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    from typer.testing import CliRunner
+    from lc import review
+    from lc.cli import app
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["config", "curve", "3, 6, 12"])
+    assert result.exit_code == 0, result.output
+    assert load_config().review_curve == [3, 6, 12]
+    assert review.curve_of(load_config()) == [3, 6, 12]
+
+    result = runner.invoke(app, ["config", "curve", "reset"])
+    assert result.exit_code == 0, result.output
+    assert load_config().review_curve == []
+    assert review.curve_of(load_config()) == list(review.DEFAULT_CURVE)
+
+    assert runner.invoke(app, ["config", "curve", "0"]).exit_code == 1
+    assert runner.invoke(app, ["config", "curve", "banana"]).exit_code == 1
+    assert runner.invoke(app, ["config", "curve", "2,999999"]).exit_code == 1
+
+
 # ------------------------------------------------------------------ bare `lc`
 
 def test_bare_lc_prints_help_when_not_a_terminal():

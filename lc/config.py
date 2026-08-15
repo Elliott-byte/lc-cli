@@ -51,6 +51,9 @@ class Config:
     favorite_langs: list[str] = field(
         default_factory=lambda: ["python3", "javascript", "golang", "cpp", "java"]
     )
+    #: Review-deck spacing: days until the next review, one entry per level.
+    #: Empty means lc's default doubling curve — see `lc config curve`.
+    review_curve: list[int] = field(default_factory=list)
     #: Keys in config.json this version does not know about — kept so settings
     #: written by a newer lc survive a round-trip through this one.
     extra: dict = field(default_factory=dict, repr=False)

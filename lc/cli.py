@@ -17,7 +17,9 @@ from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
 
-from . import __version__, browser, editors, fx, store
+from datetime import date
+
+from . import __version__, browser, editors, fx, review, store
 from .api import (
     AuthError,
     JudgeResult,
@@ -826,12 +828,17 @@ def submit(
         store.update_status(problem.slug, "ac")
     elif known is not None and not known.solved:
         store.update_status(problem.slug, "notac")
+    note = review.record_submit(
+        problem.slug, result.accepted, review.curve_of(load_config())
+    )
 
     if result.accepted:
         fx.play(console, big=True)
     else:
         fx.defeat(console, big=True)
     print_result(result, problem)
+    if note:
+        console.print(Text(f"  {note}", style="dim"))
     raise typer.Exit(0 if result.accepted else 1)
 
 
@@ -883,6 +890,155 @@ def code(ref: str = typer.Argument("", help="problem id, slug or title")) -> Non
     console.print(Syntax(source, language.lexer, theme="ansi_dark", line_numbers=True))
 
 
+# --------------------------------------------------------------------------- review
+
+review_app = typer.Typer(
+    help="Spaced-repetition deck: problems saved to re-solve on a schedule."
+)
+app.add_typer(review_app, name="review")
+
+
+def _deck_find(ref: str) -> review.ReviewItem | None:
+    """Resolve a user reference against the deck itself, so it works offline."""
+    ref = ref.strip()
+    unpadded = ref.lstrip("0") or ref
+    slug = ref.lower().replace(" ", "-")
+    for item in review.load().values():
+        if item.slug == slug or item.frontend_id in (ref, unpadded):
+            return item
+        if item.title and item.title.lower() == ref.lower():
+            return item
+    return None
+
+
+def due_text(days: int) -> Text:
+    """How a review date reads: '-3d' overdue, 'today', or '8d' out."""
+    if days < 0:
+        return Text(f"{days}d", style="bold red")
+    if days == 0:
+        return Text("today", style="bold yellow")
+    return Text(f"{days}d", style="dim")
+
+
+@review_app.callback(invoke_without_command=True)
+def review_list(ctx: typer.Context) -> None:
+    """With no subcommand: show the deck, soonest review first."""
+    if ctx.invoked_subcommand is not None:
+        return
+    items = review.load()
+    if not items:
+        console.print(
+            Text("review deck is empty — press m in the TUI, or `lc review add 322`",
+                 style="dim")
+        )
+        return
+
+    today = date.today()
+    table = Table(box=None, header_style="dim")
+    table.add_column("#", justify="right", style="dim", width=5)
+    table.add_column("Title", no_wrap=True, overflow="ellipsis")
+    table.add_column("Difficulty", width=10)
+    table.add_column("Lv", justify="right", width=2)
+    table.add_column("Next", justify="right", width=6)
+    for item in review.order(items):
+        table.add_row(
+            item.frontend_id,
+            item.title or item.slug,
+            difficulty_text(item.difficulty) if item.difficulty else Text("—"),
+            str(item.level),
+            due_text(item.due_in(today)),
+        )
+    console.print(table)
+
+    due = review.due_count(items, today)
+    if due:
+        console.print(
+            Text(f"\n{due} due — `lc review postpone` pushes them to tomorrow",
+                 style="dim")
+        )
+
+
+@review_app.command("add")
+def review_add(
+    ref: str = typer.Argument(..., help="problem id, slug or title"),
+    level: Optional[int] = typer.Option(
+        None, "--level", "-l", min=1, help="starting level"
+    ),
+) -> None:
+    """Save a problem to the review deck."""
+    config = load_config()
+    curve = review.curve_of(config)
+
+    summary = store.find(ref)
+    if summary is not None:
+        slug, title = summary.slug, summary.title
+        frontend_id, difficulty = summary.frontend_id, summary.difficulty
+    else:
+        # Not in the local index — ask LeetCode (also handles a first run).
+        with client() as lc:
+            problem = resolve_problem(ref, lc)
+        slug, title = problem.slug, problem.title
+        frontend_id, difficulty = problem.frontend_id, problem.difficulty
+
+    item = review.add(
+        slug, title=title, frontend_id=frontend_id, difficulty=difficulty, curve=curve
+    )
+    # Only an explicit --level moves an already-saved problem: a plain re-add
+    # must never knock a level-3 problem back to 1.
+    if level is not None and level != item.level:
+        item = review.shift_level(slug, level - item.level, curve)
+        assert item is not None
+    console.print(
+        Text("✔ ", style="green")
+        + Text(f"[{item.frontend_id}] {item.title} ", style="bold")
+        + Text(f"— level {item.level}, next review in {item.due_in(date.today())}d",
+               style="dim")
+    )
+
+
+@review_app.command("rm")
+def review_rm(ref: str = typer.Argument(..., help="problem id, slug or title")) -> None:
+    """Take a problem off the deck."""
+    item = _deck_find(ref)
+    if item is None:
+        die(f"{ref!r} is not on the review deck", "see the deck with `lc review`")
+        return
+    review.remove(item.slug)
+    console.print(Text(f"✔ removed [{item.frontend_id}] {item.title or item.slug}",
+                       style="green"))
+
+
+@review_app.command("level")
+def review_level(
+    ref: str = typer.Argument(..., help="problem id, slug or title"),
+    level: int = typer.Argument(..., min=1, help="new level (1 = shortest interval)"),
+) -> None:
+    """Set a problem's level by hand; the next review is scheduled from today."""
+    item = _deck_find(ref)
+    if item is None:
+        die(f"{ref!r} is not on the review deck", "add it with `lc review add`")
+        return
+    curve = review.curve_of(load_config())
+    updated = review.shift_level(item.slug, level - item.level, curve)
+    assert updated is not None
+    console.print(
+        Text("✔ ", style="green")
+        + Text(f"[{updated.frontend_id}] {updated.title or updated.slug} ", style="bold")
+        + Text(f"— level {updated.level}, next review in "
+               f"{updated.due_in(date.today())}d", style="dim")
+    )
+
+
+@review_app.command("postpone")
+def review_postpone() -> None:
+    """Not today: move everything due today (or overdue) to tomorrow."""
+    moved = review.postpone_due()
+    if moved:
+        console.print(Text(f"✔ postponed {moved} problem(s) to tomorrow", style="green"))
+    else:
+        console.print(Text("nothing due today", style="dim"))
+
+
 # --------------------------------------------------------------------------- config
 
 config_app = typer.Typer(help="Read and change lc settings.", no_args_is_help=True)
@@ -896,10 +1052,16 @@ def config_show() -> None:
     table = Table(box=None, header_style="dim")
     table.add_column("Setting", style="cyan")
     table.add_column("Value")
+    curve = review.curve_of(cfg)
     table.add_row("workspace", str(cfg.workspace_path))
     table.add_row("lang", cfg.lang)
     table.add_row("editor", cfg.resolve_editor() or Text("— (set $EDITOR)", style="dim"))
     table.add_row("favorite_langs", ", ".join(cfg.favorite_langs))
+    table.add_row(
+        "review curve",
+        ", ".join(str(d) for d in curve)
+        + (" (default)" if not cfg.review_curve else ""),
+    )
     table.add_row("lc home", str(home()))
     console.print(table)
 
@@ -936,6 +1098,40 @@ def config_editor(command: str = typer.Argument(..., help="e.g. 'code -w' or 'nv
     cfg.editor = command
     save_config(cfg)
     console.print(Text(f"✔ editor: {command}", style="green"))
+
+
+@config_app.command("curve")
+def config_curve(
+    days: str = typer.Argument(
+        ...,
+        help="days per level, comma-separated — e.g. '2,4,8,16,32' means level 1 "
+             "reviews after 2 days, level 2 after 4, and the top level is 5; "
+             "'reset' restores the default doubling curve",
+    ),
+) -> None:
+    """Set the review deck's memory curve (and with it, the number of levels)."""
+    cfg = load_config()
+    if days.strip().lower() in ("reset", "default"):
+        cfg.review_curve = []
+        save_config(cfg)
+        curve = list(review.DEFAULT_CURVE)
+    else:
+        try:
+            curve = [int(part) for part in days.replace(" ", "").split(",") if part]
+        except ValueError:
+            die(f"could not read {days!r}", "give days as numbers: `lc config curve 2,4,8`")
+            return
+        if not curve or any(not 1 <= d <= review.MAX_GAP_DAYS for d in curve):
+            die(f"each level needs 1 to {review.MAX_GAP_DAYS} days",
+                "e.g. `lc config curve 2,4,8,16`")
+            return
+        cfg.review_curve = curve
+        save_config(cfg)
+    console.print(
+        Text("✔ review curve: ", style="green")
+        + Text(", ".join(f"{d}d" for d in curve))
+        + Text(f"  (levels 1–{len(curve)})", style="dim")
+    )
 
 
 # --------------------------------------------------------------------------- setup
