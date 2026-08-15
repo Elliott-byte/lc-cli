@@ -88,14 +88,51 @@ function! s:LcOpenStatement() abort
   wincmd p
 endfunction
 
+function! s:LcUnsaved() abort
+  " Modified buffers holding a real file — the only ones worth protecting.
+  " A terminal or scratch buffer has nothing to save and must never stop us.
+  return filter(getbufinfo({'bufmodified': 1}),
+        \ 'getbufvar(v:val.bufnr, "&buftype") ==# "" && !empty(v:val.name)')
+endfunction
+
 function! s:LcCloseStatement() abort
-  " On the last window :close is an error (E444) — leaving Vim is what
-  " closing the last thing on screen means.
+  " The pane runs `lc show` in a terminal: its job blocks plain :close and
+  " :quit with E948, and there is nothing in it to save — so force it. On
+  " the last window :close would be E444 anyway; leaving Vim is what closing
+  " the last thing on screen means. Real unsaved work still gets a veto.
   if winnr('$') == 1 && tabpagenr('$') == 1
-    quit
+    if empty(s:LcUnsaved())
+      quit!
+    else
+      quit
+    endif
   else
-    close
+    close!
   endif
+endfunction
+
+function! s:LcQuitAll() abort
+  " Write every modified file, then go. `:xall` cannot do this: it tries to
+  " write the statement terminal too and dies on E382/E948 without quitting.
+  let l:here = bufnr('%')
+  let l:failed = []
+  for l:info in s:LcUnsaved()
+    try
+      execute 'buffer' l:info.bufnr
+      write
+    catch
+      call add(l:failed, fnamemodify(l:info.name, ':t'))
+    endtry
+  endfor
+  if !empty(l:failed)
+    execute 'buffer' l:here
+    echohl ErrorMsg
+    echo 'lc: could not write ' . join(l:failed, ', ') . ' — staying put'
+    echohl None
+    return
+  endif
+  " Everything real is on disk; the ! is only for the statement terminal.
+  qall!
 endfunction
 
 function! s:LcOpenWeb() abort
@@ -152,7 +189,7 @@ function! s:LcSetup() abort
   " Mid-solve: "I'll want to see this one again."
   nnoremap <buffer> <leader>m :call <SID>LcReview()<CR>
   " One stroke back to whatever launched Vim (the lc TUI resumes on exit).
-  nnoremap <buffer> <leader>q :xall<CR>
+  nnoremap <buffer> <leader>q :call <SID>LcQuitAll()<CR>
   " Fresh `lc pick` / `lc edit`: put the statement alongside the solution.
   if get(g:, 'lc_auto_statement', 1) && winnr('$') == 1
         \ && expand('%:t') !=# 'README.md'
@@ -168,7 +205,7 @@ augroup lc_cli
   " means everything else was quit — follow along. (Plain :quit, so a hidden
   " modified buffer still stops Vim rather than being discarded.)
   autocmd BufEnter * if winnr('$') == 1 && tabpagenr('$') == 1
-        \ && exists('b:lc_statement_for') | quit | endif
+        \ && exists('b:lc_statement_for') | call s:LcCloseStatement() | endif
 augroup END
 '''
 

@@ -315,6 +315,22 @@ def test_setup_vim_installs_the_plugin(tmp_path, monkeypatch):
     assert "lc review add" in text  # \m saves the problem mid-solve
 
 
+def test_vim_quit_never_fights_the_statement_terminal():
+    """The pane runs `lc show` in a terminal; its job blocks :quit and :xall."""
+    text = editors.VIM_PLUGIN
+
+    # \q must not map straight to :xall — that tries to write the terminal
+    # buffer (E382) and dies without quitting.
+    assert "<leader>q :xall" not in text
+    assert "<leader>q :call <SID>LcQuitAll()" in text
+
+    # Closing the pane forces past the running job, in both window layouts.
+    assert "close!" in text and "quit!" in text
+    # ...but never at the cost of a real unsaved file.
+    assert "LcUnsaved" in text
+    assert 'getbufvar(v:val.bufnr, "&buftype") ==# ""' in text
+
+
 def test_setup_vim_is_idempotent(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     editors.install_vim_plugin()
