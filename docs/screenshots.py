@@ -197,6 +197,17 @@ async def shot_tui() -> None:
         await pilot.press("tab")
         await pilot.pause(0.5)
         (DOCS / "review.svg").write_text(app.export_screenshot(title="lc — review"))
+        # ...and its settings screen, showing a curve mid-edit.
+        await pilot.press("c")
+        await pilot.pause(0.5)
+        from textual.widgets import Input
+
+        app.screen.query_one("#cfg-curve", Input).value = "1, 2, 4, 8, 16, 32"
+        app.screen.query_one("#cfg-review_repo", Input).value = (
+            "git@github.com:you/lc-review.git"
+        )
+        await pilot.pause(0.5)
+        (DOCS / "config.svg").write_text(app.export_screenshot(title="lc — settings"))
 
 
 if __name__ == "__main__":
@@ -204,4 +215,4 @@ if __name__ == "__main__":
     shot_test()
     asyncio.run(shot_tui())
     print("wrote", ", ".join(str(DOCS / f) for f in
-                             ("list.svg", "test.svg", "tui.svg", "review.svg")))
+                             ("list.svg", "test.svg", "tui.svg", "review.svg", "config.svg")))

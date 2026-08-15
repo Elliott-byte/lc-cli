@@ -312,6 +312,7 @@ def test_setup_vim_installs_the_plugin(tmp_path, monkeypatch):
     text = path.read_text()
     assert "lc test" in text and "lc submit" in text and ".lc.json" in text
     assert "LcToggleStatement" in text and "README.md" in text
+    assert "lc review add" in text  # \m saves the problem mid-solve
 
 
 def test_setup_vim_is_idempotent(tmp_path, monkeypatch):
@@ -914,6 +915,137 @@ def test_cli_config_curve_roundtrip(tmp_path, monkeypatch):
     assert runner.invoke(app, ["config", "curve", "0"]).exit_code == 1
     assert runner.invoke(app, ["config", "curve", "banana"]).exit_code == 1
     assert runner.invoke(app, ["config", "curve", "2,999999"]).exit_code == 1
+
+
+# ----------------------------------------------------------------- git sync
+
+def _bare_repo(tmp_path):
+    import subprocess
+
+    remote = tmp_path / "remote.git"
+    subprocess.run(["git", "init", "--quiet", "--bare", "-b", "main", str(remote)],
+                   check=True)
+    return str(remote)
+
+
+def test_merge_prefers_the_most_recently_graded_side():
+    from lc import review
+
+    def it(slug, level, graded):
+        return review.ReviewItem(slug=slug, level=level, graded=graded, due=graded)
+
+    local = {"a": it("a", 2, "2026-08-01"), "b": it("b", 1, "2026-08-10")}
+    remote = {"a": it("a", 5, "2026-08-09"), "c": it("c", 3, "2026-08-05")}
+    merged, added, updated = review.merge(local, remote)
+
+    assert (added, updated) == (1, 1)
+    assert merged["a"].level == 5      # remote graded later
+    assert merged["b"].level == 1      # local only, untouched
+    assert merged["c"].level == 3      # arrived from the remote
+    # A stale remote entry must not win.
+    back, added, updated = review.merge(merged, {"b": it("b", 9, "2026-07-01")})
+    assert (added, updated) == (0, 0) and back["b"].level == 1
+
+
+def test_git_sync_roundtrips_a_deck_between_two_homes(tmp_path, monkeypatch):
+    from datetime import date
+
+    remote = _bare_repo(tmp_path)
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path / "a"))
+    from lc import gitsync, review
+
+    review.add("coin-change", title="Coin Change", frontend_id="322",
+               difficulty="Medium", curve=[2, 4], today=date(2026, 8, 15))
+    total, changed = gitsync.push(remote)
+    assert (total, changed) == (1, True)
+    assert gitsync.push(remote)[1] is False  # nothing new to commit
+
+    # A second machine starts empty and pulls the deck down.
+    monkeypatch.setenv("LC_HOME", str(tmp_path / "b"))
+    assert review.load() == {}
+    assert gitsync.pull(remote) == (1, 0)
+    assert review.load()["coin-change"].title == "Coin Change"
+
+    # It grades the problem and syncs; the first machine picks that up.
+    review.record_submit("coin-change", True, [2, 4], today=date(2026, 8, 17))
+    gitsync.sync(remote)
+    monkeypatch.setenv("LC_HOME", str(tmp_path / "a"))
+    assert gitsync.pull(remote) == (0, 1)
+    assert review.load()["coin-change"].level == 2
+
+
+def test_git_sync_writes_a_readable_table(tmp_path, monkeypatch):
+    monkeypatch.setenv("LC_HOME", str(tmp_path / "home"))
+    from lc import gitsync, review
+
+    remote = _bare_repo(tmp_path)
+    review.add("coin-change", title="Coin Change", frontend_id="322",
+               difficulty="Medium", curve=[2])
+    gitsync.push(remote)
+
+    table = (gitsync.repo_dir() / gitsync.TABLE_FILE).read_text()
+    assert "| 322 | [Coin Change](https://leetcode.com/problems/coin-change/)" in table
+    assert (gitsync.repo_dir() / gitsync.DECK_FILE).exists()
+    # README.md is the user's to own — lc must never write one.
+    assert not (gitsync.repo_dir() / "README.md").exists()
+
+
+def test_git_sync_reports_a_bad_remote_cleanly(tmp_path, monkeypatch):
+    monkeypatch.setenv("LC_HOME", str(tmp_path / "home"))
+    from lc import gitsync
+
+    with pytest.raises(gitsync.SyncError):
+        gitsync.pull(str(tmp_path / "nope.git"))
+
+
+def test_cli_review_sync_without_a_repo_explains_itself(tmp_path, monkeypatch):
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    from typer.testing import CliRunner
+    from lc.cli import app
+
+    result = CliRunner().invoke(app, ["review", "sync"])
+    assert result.exit_code == 1
+    assert "lc config repo" in result.output
+
+
+def test_cli_config_repo_roundtrip(tmp_path, monkeypatch):
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    from typer.testing import CliRunner
+    from lc.cli import app
+
+    runner = CliRunner()
+    assert runner.invoke(app, ["config", "repo", "git@github.com:me/d.git"]).exit_code == 0
+    assert load_config().review_repo == "git@github.com:me/d.git"
+    assert runner.invoke(app, ["config", "repo", "none"]).exit_code == 0
+    assert load_config().review_repo == ""
+
+
+def test_cli_review_add_uses_the_current_problem_directory(tmp_path, monkeypatch):
+    """What Vim's \\m and a bare `lc review add` rely on."""
+    monkeypatch.setenv("LC_HOME", str(tmp_path / ".lc"))
+    from lc import review, store, workspace
+    from lc.api import ProblemSummary
+    from lc.config import Config
+    from typer.testing import CliRunner
+    from lc.cli import app
+
+    store.replace_index([
+        ProblemSummary("322", "Coin Change", "coin-change", "Medium", 45.0, False, None),
+    ])
+    created = workspace.create(Config(workspace=str(tmp_path / "ws")), PROBLEM,
+                               resolve("python3"))
+    monkeypatch.chdir(created.directory)
+
+    result = CliRunner().invoke(app, ["review", "add"])
+    assert result.exit_code == 0, result.output
+    assert "coin-change" in review.load()
+
+    # Outside a problem directory it says so instead of guessing.
+    monkeypatch.chdir(tmp_path)
+    result = CliRunner().invoke(app, ["review", "add"])
+    assert result.exit_code == 1
+    assert "not a problem directory" in result.output
 
 
 # ------------------------------------------------------------------ bare `lc`

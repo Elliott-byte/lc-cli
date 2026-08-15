@@ -19,7 +19,7 @@ from rich.text import Text
 
 from datetime import date
 
-from . import __version__, browser, editors, fx, review, store
+from . import __version__, browser, editors, fx, gitsync, review, store
 from .api import (
     AuthError,
     JudgeResult,
@@ -960,7 +960,9 @@ def review_list(ctx: typer.Context) -> None:
 
 @review_app.command("add")
 def review_add(
-    ref: str = typer.Argument(..., help="problem id, slug or title"),
+    ref: str = typer.Argument(
+        "", help="problem id, slug or title (default: this directory)"
+    ),
     level: Optional[int] = typer.Option(
         None, "--level", "-l", min=1, help="starting level"
     ),
@@ -968,6 +970,16 @@ def review_add(
     """Save a problem to the review deck."""
     config = load_config()
     curve = review.curve_of(config)
+
+    if not ref:
+        # No argument: the problem directory you are sitting in — this is what
+        # the editor keys bind to.
+        found = _current_dir_problem()
+        if not found:
+            die("no problem given and this is not a problem directory",
+                "cd into a problem directory or pass an id: `lc review add 322`")
+            return
+        ref = found[0]
 
     summary = store.find(ref)
     if summary is not None:
@@ -1039,6 +1051,70 @@ def review_postpone() -> None:
         console.print(Text("nothing due today", style="dim"))
 
 
+def _repo_url() -> str:
+    url = load_config().review_repo.strip()
+    if not url:
+        die("no review repo configured",
+            "`lc config repo git@github.com:you/lc-review.git` (an empty repo "
+            "you own — lc writes review.json and REVIEW.md into it)")
+    return url
+
+
+def _merge_report(added: int, updated: int) -> None:
+    if added or updated:
+        console.print(
+            Text("✔ ", style="green")
+            + Text(f"pulled {added} new, {updated} updated", style="")
+        )
+    else:
+        console.print(Text("already up to date", style="dim"))
+
+
+@review_app.command("pull")
+def review_pull() -> None:
+    """Bring the deck in your review repo into this machine's deck."""
+    url = _repo_url()
+    with console.status("pulling the review deck…", spinner="dots"):
+        try:
+            added, updated = gitsync.pull(url)
+        except gitsync.SyncError as exc:
+            die(str(exc))
+            raise
+    _merge_report(added, updated)
+
+
+@review_app.command("push")
+def review_push() -> None:
+    """Publish this machine's deck to your review repo."""
+    url = _repo_url()
+    with console.status("pushing the review deck…", spinner="dots"):
+        try:
+            total, changed = gitsync.push(url)
+        except gitsync.SyncError as exc:
+            die(str(exc))
+            raise
+    if changed:
+        console.print(Text(f"✔ pushed {total} problem(s)", style="green"))
+    else:
+        console.print(Text("nothing to push — the repo already matches", style="dim"))
+
+
+@review_app.command("sync")
+def review_sync() -> None:
+    """Pull, then push: make this machine and the repo agree."""
+    url = _repo_url()
+    with console.status("syncing the review deck…", spinner="dots"):
+        try:
+            added, updated, changed = gitsync.sync(url)
+        except gitsync.SyncError as exc:
+            die(str(exc))
+            raise
+    _merge_report(added, updated)
+    console.print(
+        Text("✔ pushed" if changed else "✔ repo already matches", style="green")
+    )
+
+
 # --------------------------------------------------------------------------- config
 
 config_app = typer.Typer(help="Read and change lc settings.", no_args_is_help=True)
@@ -1062,6 +1138,8 @@ def config_show() -> None:
         ", ".join(str(d) for d in curve)
         + (" (default)" if not cfg.review_curve else ""),
     )
+    table.add_row("review repo", cfg.review_repo or Text("— (lc config repo …)",
+                                                         style="dim"))
     table.add_row("lc home", str(home()))
     console.print(table)
 
@@ -1098,6 +1176,26 @@ def config_editor(command: str = typer.Argument(..., help="e.g. 'code -w' or 'nv
     cfg.editor = command
     save_config(cfg)
     console.print(Text(f"✔ editor: {command}", style="green"))
+
+
+@config_app.command("repo")
+def config_repo(
+    url: str = typer.Argument(
+        ..., help="git remote for the review deck; 'none' unsets it"
+    ),
+) -> None:
+    """Set the git repo `lc review sync` keeps your deck in."""
+    cfg = load_config()
+    if url.strip().lower() in ("none", "off", ""):
+        cfg.review_repo = ""
+        save_config(cfg)
+        console.print(Text("✔ review repo: none", style="green"))
+        return
+    cfg.review_repo = url.strip()
+    save_config(cfg)
+    console.print(Text(f"✔ review repo: {cfg.review_repo}", style="green"))
+    console.print(Text("  `lc review sync` publishes review.json + REVIEW.md there",
+                       style="dim"))
 
 
 @config_app.command("curve")

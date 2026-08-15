@@ -74,6 +74,11 @@ def load() -> dict[str, ReviewItem]:
         raw = json.loads(path.read_text())
     except (json.JSONDecodeError, OSError):
         return {}
+    return items_from_raw(raw)
+
+
+def items_from_raw(raw: object) -> dict[str, ReviewItem]:
+    """Decode a deck payload — from the local file or a synced repo."""
     if not isinstance(raw, dict):
         return {}
     known = set(ReviewItem.__dataclass_fields__) - {"slug"}
@@ -95,16 +100,50 @@ def load() -> dict[str, ReviewItem]:
     return items
 
 
-def save(items: dict[str, ReviewItem]) -> None:
+def dumps(items: dict[str, ReviewItem]) -> str:
+    """The deck as JSON: sorted and indented, so git diffs read cleanly."""
     payload = {
         slug: {k: v for k, v in asdict(item).items() if k != "slug"}
         for slug, item in sorted(items.items())
     }
+    return json.dumps(payload, indent=2, ensure_ascii=False) + "\n"
+
+
+def save(items: dict[str, ReviewItem]) -> None:
     path = review_path()
     # Write-then-rename: the deck is user data, a torn write must not eat it.
     tmp = path.with_name(path.name + ".tmp")
-    tmp.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
+    tmp.write_text(dumps(items))
     tmp.replace(path)
+
+
+def merge(
+    local: dict[str, ReviewItem], remote: dict[str, ReviewItem]
+) -> tuple[dict[str, ReviewItem], int, int]:
+    """Combine two decks. Returns (merged, added, updated).
+
+    The union of both sides, so nothing is lost by syncing. Where both know a
+    problem, the most recently graded copy wins — that is the machine you
+    actually reviewed on. Removals do not travel: a problem taken off one
+    machine's deck comes back on the next sync, and has to be removed on the
+    machine holding it too.
+    """
+    merged = dict(local)
+    added = updated = 0
+    for slug, incoming in remote.items():
+        current = merged.get(slug)
+        if current is None:
+            merged[slug] = incoming
+            added += 1
+        elif _grade_key(incoming) > _grade_key(current):
+            merged[slug] = incoming
+            updated += 1
+    return merged, added, updated
+
+
+def _grade_key(item: ReviewItem) -> tuple[str, int, str]:
+    """Recency of a graded entry: when it was graded, then how far it got."""
+    return (item.graded, item.level, item.due)
 
 
 def order(items: dict[str, ReviewItem]) -> list[ReviewItem]:

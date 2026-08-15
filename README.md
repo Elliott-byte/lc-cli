@@ -95,6 +95,7 @@ flow reminds you.
 | `lc daily` | Today's daily challenge (`--pick` to start it immediately) |
 | `lc random -d medium` | A random unsolved problem |
 | `lc review` | The spaced-repetition deck (`add` / `rm` / `level` / `postpone`) |
+| `lc review sync` | Sync the deck with your git repo (`pull` / `push` too) |
 | `lc stat` | Your solve counts by difficulty |
 | `lc history 322` | Your recent submissions for a problem |
 | `lc code` | Print the current solution, highlighted |
@@ -128,17 +129,10 @@ the target language, so the judge ignores it.
 
 ## Config
 
-```bash
-lc config show
-lc config lang go                  # default language for `lc pick`
-lc config workspace ~/code/leetcode
-lc config editor "code -w"         # otherwise $EDITOR / $VISUAL is used
-lc config curve 2,4,8,16,32        # review-deck spacing, one gap per level
-```
-
-Settings live in `~/.lc/config.json`; set `$LC_HOME` to move that whole
-directory. The problem index and cached statements go in `~/.lc/cache.db` —
-delete it any time, `lc` rebuilds it.
+Settings live in `~/.lc/config.json` and are edited with `lc config …` or on
+the TUI's settings screen — see [Settings](#settings). Set `$LC_HOME` to move
+that whole directory. The problem index and cached statements go in
+`~/.lc/cache.db` — delete it any time, `lc` rebuilds it.
 
 ## Vim
 
@@ -158,6 +152,7 @@ In a solution buffer (any file next to a `.lc.json`), normal mode:
 | `\s` | save, then `lc submit` |
 | `\p` | show/hide the problem statement in a left split |
 | `\o` | open the problem page in your browser (figures render there) |
+| `\m` | save this problem to the review deck |
 | `\q` | save everything, then quit Vim — back to the TUI/shell |
 
 Opening a solution file also opens the statement beside it automatically —
@@ -216,6 +211,8 @@ the index). Refreshes keep your cursor on the problem it was on.
 | `t` | Cycle the status filter |
 | `o` | Open the problem on leetcode.com |
 | `D` | Jump to today's daily challenge |
+| `c` | Settings (workspace, language, editor, curve, review repo) |
+| `g` | Sync the review deck with git (Review tab) |
 | `ctrl+r` | Refresh the list from the local index |
 | `R` | Re-sync the problem index |
 | `q` | Quit |
@@ -238,24 +235,63 @@ is due is just practice; the schedule doesn't move.
 
 On the Review tab: `+`/`-` set the level by hand (rescheduled from today),
 `z` pushes one problem to tomorrow, `Z` pushes everything due, `x` removes
-it, and `enter` opens it in your editor as usual.
+it, `g` syncs with your git repo, and `enter` opens it in your editor as
+usual. Mid-solve in Vim, `\m` saves the problem you are looking at.
 
 The same deck from the shell:
 
 ```bash
 lc review                  # the deck, soonest due first
 lc review add 322 -l 3     # save by hand, starting at level 3
+lc review add              # ...or the problem directory you are standing in
 lc review postpone         # not today — everything due moves to tomorrow
 lc review rm 322
 ```
 
-The curve is yours to shape — one gap per level, in days, and the number of
-entries is the number of levels:
+## Settings
+
+Press `c` in the TUI for the settings screen: workspace, default language,
+editor, review repo and the memory curve, with a live preview of what the
+curve you are typing means (`6 levels: lv1→1d · lv2→2d · lv3→4d …`).
+`ctrl+s` saves, `esc` cancels. The same settings from the shell:
+
+![the settings screen](docs/config.svg)
 
 ```bash
-lc config curve 1,2,4,7,15,30    # six levels, gentler start
-lc config curve reset            # back to the doubling default
+lc config show
+lc config lang go                  # default language for `lc pick`
+lc config workspace ~/code/leetcode
+lc config editor "code -w"         # otherwise $EDITOR / $VISUAL is used
+lc config curve 1,2,4,7,15,30      # six levels, gentler start
+lc config curve reset              # back to the doubling default
+lc config repo git@github.com:you/lc-review.git
 ```
+
+The curve is yours to shape — one gap per level, in days, and the number of
+entries is the number of levels.
+
+## Syncing the deck between machines
+
+Point lc at a git repo you own and the deck follows you around:
+
+```bash
+lc config repo git@github.com:you/lc-review.git
+lc review sync             # pull, merge, push  (or press g in the Review tab)
+lc review pull             # bring the repo's deck down only
+lc review push             # publish this machine's deck only
+```
+
+lc keeps a private clone in `~/.lc/review-repo` and writes two files:
+`review.json`, the deck it reads back, and `REVIEW.md`, the same deck as a
+linked table so the repo page is readable on GitHub. It never writes a
+`README.md`, so pointing lc at a repo that has one is safe.
+
+Merging happens in lc, not in git — you will never be asked to resolve a
+conflict. Both sides are unioned, and where both know a problem the copy
+graded most recently wins, which is the machine you actually reviewed on.
+One asymmetry worth knowing: removals do not travel. A problem you take off
+one machine's deck comes back on the next sync unless you remove it on the
+machine that still has it.
 
 The deck is user data, kept in `~/.lc/review.json` away from the cache —
 deleting `cache.db` never touches it.

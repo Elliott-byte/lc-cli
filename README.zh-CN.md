@@ -89,6 +89,7 @@ Windows 的 Chrome 和 Edge 用只有浏览器自己能解开的密钥加密 coo
 | `lc daily` | 今天的每日一题（`--pick` 直接开做） |
 | `lc random -d medium` | 随机抽一道没做过的题 |
 | `lc review` | 间隔重复刷题本（`add` / `rm` / `level` / `postpone`） |
+| `lc review sync` | 和你的 git 仓库同步刷题本（也有 `pull` / `push`） |
 | `lc stat` | 按难度统计你的解题数 |
 | `lc history 322` | 某题的最近提交记录 |
 | `lc code` | 高亮打印当前解答 |
@@ -120,16 +121,9 @@ lc test && lc submit -y
 
 ## 配置
 
-```bash
-lc config show
-lc config lang go                  # `lc pick` 的默认语言
-lc config workspace ~/code/leetcode
-lc config editor "code -w"         # 不设则用 $EDITOR / $VISUAL
-lc config curve 2,4,8,16,32        # 刷题本的记忆曲线，每级一个间隔
-```
-
-设置保存在 `~/.lc/config.json`；设 `$LC_HOME` 可整体挪走这个目录。题目索引和
-题面缓存在 `~/.lc/cache.db`——随时可以删，`lc` 会重建。
+设置保存在 `~/.lc/config.json`，用 `lc config …` 或 TUI 的设置页修改——见
+[设置页](#设置页)。设 `$LC_HOME` 可整体挪走这个目录。题目索引和题面缓存在
+`~/.lc/cache.db`——随时可以删，`lc` 会重建。
 
 ## Vim
 
@@ -149,6 +143,7 @@ lc setup vim
 | `\s` | 保存，然后 `lc submit` |
 | `\p` | 在左侧分屏显示/隐藏题面 |
 | `\o` | 在浏览器打开题目页（图片动画在那边看） |
+| `\m` | 把这道题存进刷题本 |
 | `\q` | 全部保存，然后退出 Vim——回到 TUI/shell |
 
 打开解题文件时题面会自动出现在旁边——`\p`（或在面板里按 `q`）隐藏，`\p`
@@ -197,6 +192,8 @@ Python 解题 buffer 会保持空格缩进：Tab 键输出空格，粘贴进来�
 | `t` | 切换状态过滤 |
 | `o` | 在 leetcode.com 打开该题 |
 | `D` | 跳到今天的每日一题 |
+| `c` | 设置页（工作区、语言、编辑器、曲线、刷题本仓库） |
+| `g` | 把刷题本同步到 git（Review 页） |
 | `ctrl+r` | 从本地索引刷新列表 |
 | `R` | 重新同步题目索引 |
 | `q` | 退出 |
@@ -214,23 +211,59 @@ Python 解题 buffer 会保持空格缩进：Tab 键输出空格，粘贴进来�
 Vim 里的 `\s`。没到期就又做了一遍只算练手，排期不动。
 
 Review 页里：`+`/`-` 手动调级（从今天起重新排期），`z` 把一道题推到明天，
-`Z` 推掉今天所有到期的题，`x` 移除，`enter` 照常在编辑器里打开。
+`Z` 推掉今天所有到期的题，`x` 移除，`g` 和 git 仓库同步，`enter` 照常在
+编辑器里打开。在 Vim 里写题写到一半，`\m` 直接把当前这道题存进去。
 
 同一个刷题本在 shell 里：
 
 ```bash
 lc review                  # 整个刷题本，最先到期的在前
 lc review add 322 -l 3     # 手动保存，从 3 级起步
+lc review add              # ……或者就存你正待着的这个题目目录
 lc review postpone         # 今天不想刷——到期的全推到明天
 lc review rm 322
 ```
 
-曲线随你定——每级一个间隔（单位天），条目数就是级数：
+## 设置页
+
+在 TUI 里按 `c` 打开设置页：工作区、默认语言、编辑器、刷题本仓库和记忆
+曲线，边打字边预览这条曲线的含义（`6 levels: lv1→1d · lv2→2d · lv3→4d …`）。
+`ctrl+s` 保存，`esc` 取消。同样的设置在 shell 里：
+
+![设置页](docs/config.svg)
 
 ```bash
-lc config curve 1,2,4,7,15,30    # 六级，起步更缓
-lc config curve reset            # 回到默认的翻倍曲线
+lc config show
+lc config lang go                  # `lc pick` 的默认语言
+lc config workspace ~/code/leetcode
+lc config editor "code -w"         # 不设则用 $EDITOR / $VISUAL
+lc config curve 1,2,4,7,15,30      # 六级，起步更缓
+lc config curve reset              # 回到默认的翻倍曲线
+lc config repo git@github.com:you/lc-review.git
 ```
+
+曲线随你定——每级一个间隔（单位天），条目数就是级数。
+
+## 跨机器同步刷题本
+
+指一个你自己的 git 仓库给 lc，刷题本就跟着你走：
+
+```bash
+lc config repo git@github.com:you/lc-review.git
+lc review sync             # 拉取、合并、推送（或在 Review 页按 g）
+lc review pull             # 只把仓库里的刷题本拉下来
+lc review push             # 只把本机的刷题本推上去
+```
+
+lc 在 `~/.lc/review-repo` 保留一个私有克隆，往仓库里写两个文件：
+`review.json`（它读回来的刷题本）和 `REVIEW.md`（同一份数据的带链接表格，
+GitHub 上直接可读）。它**不会**写 `README.md`，所以指向一个已有 README 的
+仓库也是安全的。
+
+合并在 lc 里做，不在 git 里——你永远不会被要求解决冲突。两边取并集，同一道题
+两边都有时，**最近判过分的那份**胜出，也就是你真正复习过的那台机器。有一个
+需要知道的不对称：删除不会传播。在一台机器上移除的题，下次同步会回来，除非
+在还留着它的那台机器上也删掉。
 
 刷题本是用户数据，存在 `~/.lc/review.json`，特意不放进缓存——删掉
 `cache.db` 不会碰到它。

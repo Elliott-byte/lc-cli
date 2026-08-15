@@ -15,14 +15,23 @@ from textual import on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
-from textual.widgets import DataTable, Footer, Input, Static, TabbedContent, TabPane
+from textual.screen import ModalScreen
+from textual.widgets import (
+    DataTable,
+    Footer,
+    Input,
+    Label,
+    Static,
+    TabbedContent,
+    TabPane,
+)
 from textual.widgets.data_table import RowDoesNotExist
 
 from rich.console import Group, RenderableType
 from rich.markup import escape
 from rich.text import Text
 
-from . import fx, review, store, workspace
+from . import fx, gitsync, review, store, workspace
 from .api import (
     JudgeResult,
     LeetCode,
@@ -32,7 +41,7 @@ from .api import (
     split_testcases,
 )
 from .browser import open_url
-from .config import load_config, load_credentials
+from .config import load_config, load_credentials, save_config
 from .langs import choose
 from .render import (
     DIFFICULTY_STYLE,
@@ -133,6 +142,7 @@ class ReviewList(DataTable):
         Binding("z", "app.review_snooze", "+1d"),
         Binding("Z", "app.review_snooze_due", "Due→tmrw"),
         Binding("x", "app.review_remove", "Remove"),
+        Binding("g", "app.review_sync", "Git sync"),
     ]
 
     def __init__(self, **kwargs) -> None:
@@ -193,6 +203,135 @@ class ReviewList(DataTable):
             self._render_rows()
 
 
+class ConfigScreen(ModalScreen[bool]):
+    """Settings, edited in place. Returns True when something was saved."""
+
+    CSS = """
+    ConfigScreen { align: center middle; }
+    #config-box {
+        width: 78; max-width: 96%; height: auto; max-height: 90%;
+        background: $surface; border: round $accent; padding: 1 2;
+    }
+    /* Single-line fields: the whole form, including the live curve preview,
+       has to fit without scrolling on a short terminal. */
+    #config-box > Label { color: $text-muted; margin-top: 1; }
+    #config-box > Input {
+        height: 1; border: none; padding: 0 1; background: $panel;
+    }
+    #config-box > Input:focus { background: $boost; color: $text; }
+    #curve-preview { color: $accent; height: auto; }
+    #config-error { color: $error; height: auto; }
+    #config-hint { color: $text-muted; margin-top: 1; }
+    """
+
+    BINDINGS = [
+        Binding("escape", "cancel", "Cancel"),
+        Binding("ctrl+s", "save", "Save"),
+    ]
+
+    #: (config attribute, label, placeholder)
+    FIELDS = (
+        ("workspace", "Workspace — where solution files are written", "~/leetcode"),
+        ("lang", "Default language for new problems", "python3"),
+        ("editor", "Editor command (blank uses $EDITOR)", "vim"),
+        ("review_repo", "Review repo — git remote the deck syncs with",
+         "git@github.com:you/lc-review.git"),
+    )
+
+    def __init__(self, config, curve: list[int]) -> None:
+        super().__init__()
+        self.config = config
+        self.curve = curve
+
+    def compose(self) -> ComposeResult:
+        with VerticalScroll(id="config-box"):
+            yield Static(Text("lc settings", style="bold"))
+            for name, label, placeholder in self.FIELDS:
+                yield Label(label)
+                yield Input(
+                    value=str(getattr(self.config, name, "") or ""),
+                    placeholder=placeholder,
+                    id=f"cfg-{name}",
+                )
+            yield Label("Memory curve — days between reviews, one per level")
+            yield Input(
+                value=", ".join(str(d) for d in self.curve),
+                placeholder="2, 4, 8, 16, 32",
+                id="cfg-curve",
+            )
+            yield Static("", id="curve-preview")
+            yield Static("", id="config-error")
+            yield Static(
+                Text("ctrl+s save · esc cancel · blank curve restores the default",
+                     style="dim"),
+                id="config-hint",
+            )
+
+    def on_mount(self) -> None:
+        self._preview()
+        self.query_one("#cfg-workspace", Input).focus()
+
+    @on(Input.Changed, "#cfg-curve")
+    def _curve_changed(self) -> None:
+        self._preview()
+
+    @on(Input.Submitted)
+    def _submitted(self) -> None:
+        # Enter anywhere in the form saves, like a dialog's default button.
+        self.action_save()
+
+    def _parse_curve(self) -> list[int] | None:
+        """The typed curve, or None when it cannot be read (error shown)."""
+        raw = self.query_one("#cfg-curve", Input).value.strip()
+        error = self.query_one("#config-error", Static)
+        if not raw:
+            error.update("")
+            return []  # empty means "lc's default"
+        try:
+            days = [int(part) for part in raw.replace(" ", "").split(",") if part]
+        except ValueError:
+            error.update(Text("curve: days must be whole numbers, e.g. 2, 4, 8"))
+            return None
+        if not days or any(not 1 <= d <= review.MAX_GAP_DAYS for d in days):
+            error.update(
+                Text(f"curve: each level needs 1 to {review.MAX_GAP_DAYS} days")
+            )
+            return None
+        error.update("")
+        return days
+
+    def _preview(self) -> None:
+        days = self._parse_curve()
+        preview = self.query_one("#curve-preview", Static)
+        if days is None:
+            preview.update("")
+            return
+        effective = days or list(review.DEFAULT_CURVE)
+        shown = " · ".join(
+            f"lv{i}→{d}d" for i, d in enumerate(effective[:8], 1)
+        )
+        if len(effective) > 8:
+            shown += " · …"
+        suffix = " (lc default)" if not days else ""
+        preview.update(
+            Text(f"{len(effective)} levels: {shown}{suffix}", style="dim")
+        )
+
+    def action_save(self) -> None:
+        days = self._parse_curve()
+        if days is None:
+            self.query_one("#cfg-curve", Input).focus()
+            return
+        for name, _label, _placeholder in self.FIELDS:
+            setattr(self.config, name, self.query_one(f"#cfg-{name}", Input).value.strip())
+        self.config.review_curve = days
+        save_config(self.config)
+        self.dismiss(True)
+
+    def action_cancel(self) -> None:
+        self.dismiss(False)
+
+
 class LeetCodeTUI(App):
     CSS = """
     Screen { layers: base fx; }
@@ -220,6 +359,7 @@ class LeetCodeTUI(App):
         # Priority: the Screen's own tab binding (focus-next) would win otherwise.
         Binding("tab", "switch_pane", "Review", priority=True),
         Binding("m", "save_review", "Save"),
+        Binding("c", "settings", "Settings"),
         Binding("d", "cycle_difficulty", "Difficulty"),
         Binding("t", "cycle_status", "Status"),
         Binding("o", "open_web", "Web"),
@@ -474,6 +614,49 @@ class LeetCodeTUI(App):
             self.refresh_review()
         else:
             self.notify("nothing due today")
+
+    def action_review_sync(self) -> None:
+        url = self.config.review_repo.strip()
+        if not url:
+            self.notify(
+                "no review repo yet — press c and fill in 'Review repo'",
+                severity="warning",
+            )
+            return
+        self.set_status("syncing the review deck…", "yellow")
+        self._review_sync_worker(url)
+
+    @work(thread=True, exclusive=True, group="review-sync")
+    def _review_sync_worker(self, url: str) -> None:
+        try:
+            added, updated, changed = gitsync.sync(url)
+        except gitsync.SyncError as exc:
+            self.call_from_thread(self.notify, escape(str(exc)), severity="error")
+            self.call_from_thread(self.set_status, "review sync failed", "red")
+            return
+        parts = []
+        if added or updated:
+            parts.append(f"pulled {added} new, {updated} updated")
+        parts.append("pushed" if changed else "repo already matched")
+        message = "review sync: " + ", ".join(parts)
+        self.call_from_thread(self.refresh_review)
+        self.call_from_thread(self.set_status, message, "green")
+        self.call_from_thread(self.notify, message)
+
+    # ---------------------------------------------------------------- settings
+
+    def action_settings(self) -> None:
+        def saved(changed: bool | None) -> None:
+            if not changed:
+                return
+            # Re-read from disk so the app and config.json cannot drift, and
+            # pick up a curve change everywhere at once.
+            self.config = load_config()
+            self.curve = review.curve_of(self.config)
+            self.refresh_review()
+            self.notify("settings saved")
+
+        self.push_screen(ConfigScreen(load_config(), self.curve), saved)
 
     def action_review_remove(self) -> None:
         slug = self._review_slug()

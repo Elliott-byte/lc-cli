@@ -18,6 +18,7 @@ VIM_PLUGIN = r'''" lc.vim — Vim integration for the lc LeetCode CLI.
 "   <leader>s   write the file, then run `lc submit`
 "   <leader>p   show/hide the problem statement in a left split
 "   <leader>o   open the problem page in your browser (for figures/animations)
+"   <leader>m   save this problem to the lc review deck (spaced repetition)
 "   <leader>q   write everything, then quit Vim (back to the lc TUI/shell)
 " The statement pane shows `lc show` fully rendered in a terminal split when
 " the editor supports it, the raw README.md otherwise; `let
@@ -109,6 +110,14 @@ function! s:LcOpenWeb() abort
   endif
 endfunction
 
+function! s:LcReview() abort
+  " `lc review add` with no argument reads .lc.json from the working
+  " directory, so this works wherever Vim was started from. Runs without a
+  " shell prompt: it is one line of output, not a judge run.
+  let l:out = system('cd ' . shellescape(expand('%:p:h')) . ' && lc review add')
+  echo substitute(substitute(l:out, '\n\+$', '', ''), '\n', ' ', 'g')
+endfunction
+
 function! s:LcToggleStatement() abort
   let l:win = s:LcStatementWin()
   if l:win != -1 && winnr('$') > 1
@@ -140,6 +149,8 @@ function! s:LcSetup() abort
   nnoremap <buffer> <leader>s :w<CR>:execute '!cd ' . shellescape(expand('%:p:h')) . ' && lc submit'<CR>
   nnoremap <buffer> <leader>p :call <SID>LcToggleStatement()<CR>
   nnoremap <buffer> <leader>o :call <SID>LcOpenWeb()<CR>
+  " Mid-solve: "I'll want to see this one again."
+  nnoremap <buffer> <leader>m :call <SID>LcReview()<CR>
   " One stroke back to whatever launched Vim (the lc TUI resumes on exit).
   nnoremap <buffer> <leader>q :xall<CR>
   " Fresh `lc pick` / `lc edit`: put the statement alongside the solution.
