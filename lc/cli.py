@@ -828,9 +828,7 @@ def submit(
         store.update_status(problem.slug, "ac")
     elif known is not None and not known.solved:
         store.update_status(problem.slug, "notac")
-    note = review.record_submit(
-        problem.slug, result.accepted, review.curve_of(load_config())
-    )
+    note = review.record_submit(problem.slug, result.accepted)
 
     if result.accepted:
         fx.play(console, big=True)
@@ -946,9 +944,16 @@ def review_list(ctx: typer.Context) -> None:
     table.add_column("Lv", justify="right", width=2, no_wrap=True)
     table.add_column("Next", justify="right", width=6, no_wrap=True)
     for item in review.order(items):
+        attempt = item.attempt_today(today)
+        title = Text(item.title or item.slug)
+        if attempt:
+            # Submitted today and waiting to be graded.
+            title = Text("✔ " if attempt == "passed" else "✗ ",
+                         style="bold green" if attempt == "passed" else "bold red")
+            title.append(item.title or item.slug)
         table.add_row(
             item.frontend_id,
-            item.title or item.slug,
+            title,
             difficulty_text(item.difficulty) if item.difficulty else Text("—"),
             str(item.level),
             due_text(item.due_in(today)),

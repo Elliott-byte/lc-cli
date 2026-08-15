@@ -735,28 +735,41 @@ def test_review_add_schedules_the_first_review(tmp_path, monkeypatch):
     assert again.level == 2 and again.title == "Coin Change!"
 
 
-def test_review_pass_climbs_and_fail_restarts(tmp_path, monkeypatch):
+def test_a_submit_marks_the_problem_without_grading_it(tmp_path, monkeypatch):
+    """Levels are the user's to set — lc only records that they re-solved it."""
     from datetime import date
 
     review = _review_env(tmp_path, monkeypatch)
-    curve = [2, 4, 8]
-    review.add("s", curve=curve, today=date(2026, 8, 15))
+    curve = [1, 2, 4, 7]
+    d = date(2026, 8, 15)
+    review.add("s", curve=curve, today=d)
+    review.shift_level("s", +2, curve, today=d)      # level 3
+    before = review.load()["s"]
 
-    # Solving it again before it is due proves nothing — no climb.
-    assert review.record_submit("s", True, curve, today=date(2026, 8, 16)) is None
+    note = review.record_submit("s", True, today=d)
+    after = review.load()["s"]
+    assert (after.level, after.due) == (before.level, before.due), "must not reschedule"
+    assert after.attempt_today(d) == "passed"
+    assert note is not None and "press +" in note
 
-    note = review.record_submit("s", True, curve, today=date(2026, 8, 17))
-    assert note is not None and "1 → 2" in note
-    assert review.load()["s"].due == "2026-08-21"  # 4 days out at level 2
+    # A failed submit marks it the other way, still without touching the level.
+    review.record_submit("s", False, today=d)
+    after = review.load()["s"]
+    assert (after.level, after.due) == (before.level, before.due)
+    assert after.attempt_today(d) == "failed"
 
-    # One day climbs at most once, however many accepted submits land.
-    assert review.record_submit("s", True, curve, today=date(2026, 8, 17)) is None
+    # Grading by hand moves it and clears the mark.
+    graded = review.shift_level("s", +1, curve, today=d)
+    assert graded.level == 4
+    assert graded.attempt_today(d) == ""
+    assert review.load()["s"].attempt_today(d) == ""
 
-    # A failed submit restarts the schedule from level 1.
-    note = review.record_submit("s", False, curve, today=date(2026, 8, 21))
-    assert note is not None and "level 1" in note
-    assert review.load()["s"].level == 1
-    assert review.load()["s"].due == "2026-08-23"
+    # Yesterday's mark does not colour today's row.
+    review.record_submit("s", True, today=d)
+    assert review.load()["s"].attempt_today(date(2026, 8, 16)) == ""
+
+    # A problem that is not on the deck is simply ignored.
+    assert review.record_submit("ghost", True, today=d) is None
 
 
 def test_grading_holds_its_invariants_over_a_long_run(tmp_path, monkeypatch):
@@ -776,7 +789,8 @@ def test_grading_holds_its_invariants_over_a_long_run(tmp_path, monkeypatch):
         day = date.fromisoformat(item.due)      # jump to when it comes due
         before = item.level
         passed = rng.random() < 0.7
-        review.record_submit("p", passed, curve, today=day)
+        review.record_submit("p", passed, today=day)          # marks it
+        review.shift_level("p", 1 if passed else -99, curve, today=day)  # you grade it
         item = review.load()["p"]
 
         assert 1 <= item.level <= len(curve)
@@ -830,11 +844,9 @@ def test_review_level_is_clamped_to_the_curve(tmp_path, monkeypatch):
     assert review.shift_level("s", +7, curve, today=d).level == 2  # top of a 2-level curve
     assert review.load()["s"].due == "2026-08-19"
     assert review.shift_level("s", -7, curve, today=d).level == 1
-    # Climbing while already at the top keeps the top interval.
+    # Climbing while already at the top stays at the top.
     review.shift_level("s", +1, curve, today=d)
-    note = review.record_submit("s", True, curve, today=date(2026, 8, 19))
-    assert note is not None and "top" in note
-    assert review.load()["s"].level == 2
+    assert review.shift_level("s", +1, curve, today=d).level == 2
 
 
 def test_review_postpone_single_and_all_due(tmp_path, monkeypatch):
@@ -858,7 +870,7 @@ def test_review_postpone_single_and_all_due(tmp_path, monkeypatch):
 def test_review_handles_unknown_slugs_and_corrupt_files(tmp_path, monkeypatch):
     review = _review_env(tmp_path, monkeypatch)
     assert review.load() == {}
-    assert review.record_submit("ghost", True, [2]) is None
+    assert review.record_submit("ghost", True) is None
     assert review.shift_level("ghost", 1, [2]) is None
     assert review.postpone("ghost") is None
     assert review.remove("ghost") is False
@@ -914,7 +926,7 @@ def test_review_load_coerces_a_hand_edited_file(tmp_path, monkeypatch):
     assert items["odd"].due_in(d) == 0
     assert review.shift_level("odd", +1, [2, 4], today=d).level == 2
     assert review.postpone("ok", today=d).due == "2026-08-21"
-    assert review.record_submit("ok", False, [2, 4], today=d) is not None
+    assert review.record_submit("ok", False, today=d) is not None
 
 
 def test_cli_review_add_list_and_remove(tmp_path, monkeypatch):
@@ -1148,7 +1160,7 @@ def test_git_sync_roundtrips_a_deck_between_two_homes(tmp_path, monkeypatch):
     assert review.load()["coin-change"].title == "Coin Change"
 
     # It grades the problem and syncs; the first machine picks that up.
-    review.record_submit("coin-change", True, [2, 4], today=date(2026, 8, 17))
+    review.shift_level("coin-change", +1, [2, 4], today=date(2026, 8, 17))
     gitsync.sync(remote)
     monkeypatch.setenv("LC_HOME", str(tmp_path / "a"))
     assert gitsync.pull(remote) == (0, 1)

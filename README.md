@@ -4,8 +4,8 @@
 
 Browse problems, read statements, write solutions in your own editor, and run
 them against LeetCode's real judge — without leaving the shell. Problems worth
-a second look go on a spaced-repetition deck that grades itself from your
-submissions and follows you between machines.
+a second look go on a spaced-repetition deck that remembers what you have
+re-solved today and follows you between machines.
 
 ```bash
 lc                              # the full-screen browser: pick, edit, test, submit
@@ -102,16 +102,21 @@ re-downloads the whole index.
 
 Some problems deserve a second — and a fifth — meeting. Press `m` and the
 problem joins the **Review** tab, where it climbs Ebbinghaus's forgetting
-curve: back after 1 day, then 2, 4, 7, 15, and on out to a year at level 10.
+curve: level 1 comes back after 1 day, then 2, 4, 7, 15, out to a year at
+level 10.
 Due problems sort to the top and the tab title counts them: `Review (3)`.
 
 ![the review deck](docs/review.svg)
 
-**Reviews grade themselves.** Re-solve a due problem and submit: accepted
-climbs one level, failed drops back to level 1 and the spacing starts over.
-Submits count from anywhere — the TUI, `lc submit` in a shell, `\s` in Vim.
-Solving something before it is due is just practice; the schedule doesn't
-move.
+**You grade, lc remembers.** Re-solve a due problem and submit: lc marks the
+row — green with a `✔` when it passed, red with a `✗` when it did not — and
+leaves the level alone. Press `+` to move it up (or `-` to drop it) and the
+mark clears. Levels stay yours: a problem solved by luck, or after peeking,
+should not quietly buy itself another month.
+
+Submits count from anywhere — the TUI, `lc submit` in a shell, `\s` in Vim —
+so a problem you solved in Vim is already green when you get back to the
+list.
 
 Nothing is ever added behind your back. Only `m`, Vim's `\m`, and
 `lc review add` put a problem on the deck.

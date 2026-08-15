@@ -6,8 +6,8 @@ not cache — ``cache.db`` can be deleted freely, this file is the deck.
 A problem sits at a level from 1 to ``len(curve)``; the curve says how many
 days a pass at each level buys before the next review. The default is
 Ebbinghaus's — 1, 2, 4, 7, 15 days, then out to a year — and ``lc config
-curve`` replaces it. Passing a due review climbs one level, failing any
-submit drops back to level 1.
+curve`` replaces it. Levels move only when you say so: submitting a deck
+problem marks it as attempted today, and you grade it with + or -.
 """
 
 from __future__ import annotations
@@ -81,6 +81,11 @@ class ReviewItem:
     #: a tombstone so the removal can reach the other machine instead of the
     #: other machine handing the problem straight back.
     removed: str = ""
+    #: The day of the last submit lc saw for this problem, and how it went.
+    #: Levels are yours to set; this only marks the row, so you can see which
+    #: problems you have already re-solved today and are ready to grade.
+    attempted: str = ""
+    attempt_passed: bool = False
 
     def due_in(self, today: date) -> int:
         """Days until due — 0 means today, negative means overdue."""
@@ -88,6 +93,12 @@ class ReviewItem:
             return (date.fromisoformat(self.due) - today).days
         except ValueError:
             return 0
+
+    def attempt_today(self, today: date) -> str:
+        """'passed' / 'failed' if it was submitted today, '' otherwise."""
+        if not self.attempted or self.attempted != today.isoformat():
+            return ""
+        return "passed" if self.attempt_passed else "failed"
 
 
 def load() -> dict[str, ReviewItem]:
@@ -118,9 +129,10 @@ def items_from_raw(raw: object) -> dict[str, ReviewItem]:
         except (TypeError, ValueError, OverflowError):
             fields["level"] = 1
         for key in ("title", "frontend_id", "difficulty", "added", "graded",
-                    "due", "updated", "removed"):
+                    "due", "updated", "removed", "attempted"):
             if not isinstance(fields.get(key, ""), str):
                 fields[key] = ""
+        fields["attempt_passed"] = bool(fields.get("attempt_passed"))
         items[slug] = ReviewItem(slug=slug, **fields)
     return items
 
@@ -239,6 +251,9 @@ def _schedule(item: ReviewItem, level: int, curve: list[int], today: date) -> No
     item.graded = today.isoformat()
     item.due = (today + timedelta(days=_interval(curve, item.level))).isoformat()
     item.updated = _stamp()
+    # Grading answers the "you solved this today" prompt, so the mark clears.
+    item.attempted = ""
+    item.attempt_passed = False
 
 
 @_atomic
@@ -338,13 +353,18 @@ def postpone_due(today: date | None = None) -> int:
 
 @_atomic
 def record_submit(
-    slug: str, accepted: bool, curve: list[int], today: date | None = None
+    slug: str, accepted: bool, today: date | None = None
 ) -> str | None:
-    """Let judge verdicts drive the deck: a due pass climbs, any fail restarts.
+    """Note that a deck problem was submitted today, without grading it.
 
-    Returns a short human-readable line when the schedule changed, else None.
-    Only real submits belong here — passing the samples proves nothing about
-    recall.
+    Levels are the user's to set: lc marks the problem as re-solved and the
+    Review tab colours the row, which is the cue to press + (or -). Deciding
+    the level automatically would silently reschedule a problem you might
+    have solved by luck, or looked up.
+
+    Returns a short human-readable line, or None when the problem is not on
+    the deck. Only real submits belong here — passing the samples proves
+    nothing about recall.
     """
     today = today or date.today()
     items = load()
@@ -352,21 +372,11 @@ def record_submit(
     if item is None or item.removed:
         return None
 
-    if accepted:
-        # Early practice doesn't climb, and one day climbs at most once.
-        if item.due_in(today) > 0 or item.graded == today.isoformat():
-            return None
-        before = item.level
-        _schedule(item, item.level + 1, curve, today)
-        save(items)
-        gap = _interval(curve, item.level)
-        if item.level == before:  # already at the top of the curve
-            return f"review: level {item.level} (top), next in {gap}d"
-        return f"review: level {before} → {item.level}, next in {gap}d"
-
-    before_state = (item.level, item.due)
-    _schedule(item, 1, curve, today)
-    if (item.level, item.due) == before_state:
-        return None
+    item.attempted = today.isoformat()
+    item.attempt_passed = accepted
+    item.updated = _stamp()
     save(items)
-    return f"review: back to level 1, next in {_interval(curve, 1)}d"
+
+    if accepted:
+        return f"review: solved — level {item.level}, press + to move it up"
+    return f"review: not solved — level {item.level}, press - to drop it"

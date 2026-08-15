@@ -168,6 +168,10 @@ class ReviewList(DataTable):
         self._today = today
         self._render_rows()
 
+    #: Row background for a problem submitted today — the cue that it is
+    #: waiting for you to grade it with + or -.
+    ATTEMPT_BG = {"passed": "on #14532d", "failed": "on #4c1d24"}
+
     def _render_rows(self) -> None:
         width = self._available()
         self._title_width = width
@@ -175,24 +179,41 @@ class ReviewList(DataTable):
         self.clear()
         for item in self._items:
             days = item.due_in(self._today)
-            if days < 0:
-                mark = Text("●", style="bold red")
-                due = Text(f"{days}d", style="bold red")
+            attempt = item.attempt_today(self._today)
+            # A row you solved today is tinted whole, so it reads as one block
+            # rather than a stray coloured cell.
+            bg = self.ATTEMPT_BG.get(attempt, "")
+
+            def paint(text: str, style: str = "") -> Text:
+                return Text(text, style=f"{style} {bg}".strip())
+
+            if attempt:
+                mark = paint("✔" if attempt == "passed" else "✗",
+                             "bold green" if attempt == "passed" else "bold red")
+            elif days < 0:
+                mark = paint("●", "bold red")
             elif days == 0:
-                mark = Text("●", style="bold yellow")
-                due = Text("today", style="bold yellow")
+                mark = paint("●", "bold yellow")
             else:
-                mark = Text("○", style="dim")
-                due = Text(f"{days}d", style="dim")
+                mark = paint("○", "dim")
+
+            if days < 0:
+                due = paint(f"{days}d", "bold red")
+            elif days == 0:
+                due = paint("today", "bold yellow")
+            else:
+                due = paint(f"{days}d", "dim")
+
             label = item.title or item.slug
             if len(label) > width:
                 label = label[: width - 1] + "…"
             self.add_row(
                 mark,
-                Text(item.frontend_id, style=DIFFICULTY_STYLE.get(item.difficulty, "dim")),
-                Text(str(item.level), style="bold" if days <= 0 else ""),
+                paint(item.frontend_id,
+                      DIFFICULTY_STYLE.get(item.difficulty, "dim")),
+                paint(str(item.level), "bold" if days <= 0 else ""),
                 due,
-                Text(label),
+                paint(label),
                 key=item.slug,
             )
         if 0 <= selected < self.row_count:
@@ -886,7 +907,7 @@ class LeetCodeTUI(App):
                 known = store.find(problem.slug)
                 if known is not None and not known.solved:
                     store.update_status(problem.slug, "notac")
-            note = review.record_submit(problem.slug, result.accepted, self.curve)
+            note = review.record_submit(problem.slug, result.accepted)
             self.call_from_thread(self.refresh_list)
             self.call_from_thread(self.refresh_review)
             if note:
