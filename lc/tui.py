@@ -651,7 +651,9 @@ class LeetCodeTUI(App):
                 severity="warning",
             )
             return
-        self.set_status("syncing the review deck…", "yellow")
+        # The sync strip owns this story from here: the status bar keeps
+        # reporting the problem list, and the notification says what the sync
+        # actually did. Three channels repeating "syncing…" is noise.
         self.refresh_sync_bar("⟳ syncing…", "syncing")
         self._review_sync_worker(url)
 
@@ -663,17 +665,15 @@ class LeetCodeTUI(App):
             message = str(exc) + (f"\n{exc.hint}" if exc.hint else "")
             self.call_from_thread(self.notify, escape(message), severity="error",
                                   timeout=12)
-            self.call_from_thread(self.set_status, "review sync failed", "red")
             self.call_from_thread(self.refresh_sync_bar)
             return
         parts = []
         if added or updated:
             parts.append(f"pulled {added} new, {updated} updated")
         parts.append("pushed" if changed else "repo already matched")
-        message = "review sync: " + ", ".join(parts)
+        # The strip says *where you stand*; this says *what just happened*.
         self.call_from_thread(self.refresh_review)
-        self.call_from_thread(self.set_status, message, "green")
-        self.call_from_thread(self.notify, message)
+        self.call_from_thread(self.notify, "review sync: " + ", ".join(parts))
 
     # ---------------------------------------------------------------- settings
 
