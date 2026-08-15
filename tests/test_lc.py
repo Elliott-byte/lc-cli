@@ -750,7 +750,7 @@ def test_a_submit_marks_the_problem_without_grading_it(tmp_path, monkeypatch):
     after = review.load()["s"]
     assert (after.level, after.due) == (before.level, before.due), "must not reschedule"
     assert after.attempt_today(d) == "passed"
-    assert note is not None and "press +" in note
+    assert note is not None and "solved" in note and "level 3" in note
 
     # A failed submit marks it the other way, still without touching the level.
     review.record_submit("s", False, today=d)
@@ -770,6 +770,26 @@ def test_a_submit_marks_the_problem_without_grading_it(tmp_path, monkeypatch):
 
     # A problem that is not on the deck is simply ignored.
     assert review.record_submit("ghost", True, today=d) is None
+
+
+def test_a_malformed_attempt_flag_never_claims_a_pass(tmp_path, monkeypatch):
+    """"false" is a truthy string — reading it as a pass is the worse mistake."""
+    from datetime import date
+
+    review = _review_env(tmp_path, monkeypatch)
+    today = date(2026, 8, 15)
+    for raw, expected in ((True, True), (False, False), ("false", False),
+                          ("true", False), (1, False), (None, False)):
+        items = review.items_from_raw(
+            {"s": {"attempted": today.isoformat(), "attempt_passed": raw}}
+        )
+        assert items["s"].attempt_passed is expected, raw
+    # And the mark only describes today.
+    items = review.items_from_raw(
+        {"s": {"attempted": "2026-08-14", "attempt_passed": True}}
+    )
+    assert items["s"].attempt_today(today) == ""
+    assert items["s"].attempt_today(date(2026, 8, 14)) == "passed"
 
 
 def test_grading_holds_its_invariants_over_a_long_run(tmp_path, monkeypatch):

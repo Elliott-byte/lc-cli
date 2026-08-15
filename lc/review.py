@@ -132,7 +132,9 @@ def items_from_raw(raw: object) -> dict[str, ReviewItem]:
                     "due", "updated", "removed", "attempted"):
             if not isinstance(fields.get(key, ""), str):
                 fields[key] = ""
-        fields["attempt_passed"] = bool(fields.get("attempt_passed"))
+        # `is True`, not bool(): a hand-edited "false" is a truthy *string*,
+        # and claiming a problem passed when it did not is the worse mistake.
+        fields["attempt_passed"] = fields.get("attempt_passed") is True
         items[slug] = ReviewItem(slug=slug, **fields)
     return items
 
@@ -377,6 +379,6 @@ def record_submit(
     item.updated = _stamp()
     save(items)
 
-    if accepted:
-        return f"review: solved — level {item.level}, press + to move it up"
-    return f"review: not solved — level {item.level}, press - to drop it"
+    # Just the fact — the TUI can say "press +", a shell cannot.
+    verdict = "solved" if accepted else "not solved"
+    return f"review: {verdict} — still at level {item.level}"

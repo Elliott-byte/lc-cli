@@ -837,6 +837,10 @@ def submit(
     print_result(result, problem)
     if note:
         console.print(Text(f"  {note}", style="dim"))
+        console.print(
+            Text(f"  grade it: `lc review level {problem.frontend_id} <level>`",
+                 style="dim")
+        )
     raise typer.Exit(0 if result.accepted else 1)
 
 
@@ -936,7 +940,8 @@ def review_list(ctx: typer.Context) -> None:
     # Budget the title explicitly: left to itself Rich shrinks the fixed
     # columns in a narrow terminal, eating the id — the thing you type into
     # `lc review level 1140 5` — and dropping the level entirely.
-    chrome = 5 + 10 + 2 + 6 + 5 * 2  # fixed columns, plus per-column padding
+    # +2 for the ✔/✗ that today's attempts prefix the title with.
+    chrome = 5 + 10 + 2 + 6 + 5 * 2 + 2
     table.add_column("#", justify="right", style="dim", width=5, no_wrap=True)
     table.add_column("Title", no_wrap=True, overflow="ellipsis",
                      width=max(16, console.width - chrome))

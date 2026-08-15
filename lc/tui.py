@@ -911,7 +911,11 @@ class LeetCodeTUI(App):
             self.call_from_thread(self.refresh_list)
             self.call_from_thread(self.refresh_review)
             if note:
-                self.call_from_thread(self.notify, note, timeout=8)
+                key = "+" if result.accepted else "-"
+                self.call_from_thread(
+                    self.notify, f"{note} · press {key} in the Review tab",
+                    timeout=8,
+                )
 
         self.call_from_thread(self._show_result, result, cases)
 

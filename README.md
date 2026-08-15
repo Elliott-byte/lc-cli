@@ -116,7 +116,8 @@ should not quietly buy itself another month.
 
 Submits count from anywhere — the TUI, `lc submit` in a shell, `\s` in Vim —
 so a problem you solved in Vim is already green when you get back to the
-list.
+list. The mark describes today: it clears when you grade the problem, and
+otherwise fades overnight.
 
 Nothing is ever added behind your back. Only `m`, Vim's `\m`, and
 `lc review add` put a problem on the deck.
