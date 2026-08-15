@@ -98,9 +98,13 @@ re-downloads the whole index.
 | `d` / `t` | Cycle the difficulty / status filter |
 | `o` | Open the problem on leetcode.com |
 | `D` | Jump to today's daily challenge |
-| `ctrl+r` | Refresh the list from the local index |
-| `R` | Re-sync the problem index |
+| `?` | Every key, including the ones kept off the footer |
 | `q` | Quit |
+
+The footer shows the solving loop only. `c` (settings), `d`/`t` (filters),
+`o` (open on leetcode.com), `D` (jump to the daily), `ctrl+r` (refresh from
+the local index) and `R` (re-download it) all still work — press `?` for the
+full list.
 
 ## Review deck
 

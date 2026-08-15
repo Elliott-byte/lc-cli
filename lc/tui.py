@@ -154,13 +154,16 @@ class ReviewList(DataTable):
 
     BINDINGS = [
         # These live on the widget so they only fire — and only show in the
-        # footer — while the Review tab has focus.
-        Binding("plus,equals_sign", "app.review_level_up", "Lv+"),
-        Binding("minus", "app.review_level_down", "Lv-"),
-        Binding("z", "app.review_snooze", "+1d"),
-        Binding("Z", "app.review_snooze_due", "Due→tmrw"),
-        Binding("x", "app.review_remove", "Remove"),
-        Binding("g", "app.review_sync", "Git sync"),
+        # footer — while the Review tab has focus. One footer slot documents
+        # the pair; the rest are in `?`.
+        Binding("plus,equals_sign", "app.review_level_up", "Grade +/-"),
+        Binding("g", "app.review_sync", "Sync"),
+
+        Binding("minus", "app.review_level_down", "Grade down", show=False),
+        Binding("z", "app.review_snooze", "Postpone this one", show=False),
+        Binding("Z", "app.review_snooze_due", "Postpone everything due",
+                show=False),
+        Binding("x", "app.review_remove", "Take off the deck", show=False),
     ]
 
     def __init__(self, **kwargs) -> None:
@@ -399,24 +402,28 @@ class LeetCodeTUI(App):
     #sync-bar.-off { display: none; }
     """
 
+    # Only the solving loop is on the footer. The rest still works and is one
+    # `?` away — a footer listing fifteen keys is a wall, not a reminder.
     BINDINGS = [
-        Binding("q", "quit", "Quit"),
         Binding("slash", "focus_filter", "Filter"),
         # `enter` is handled via DataTable.RowSelected rather than a priority
         # binding, so that enter in the filter box just returns focus to the list.
-        Binding("p", "pick", "Pick"),
+        Binding("p", "pick", "Edit"),
         Binding("r", "run", "Run"),
         Binding("s", "submit", "Submit"),
+        Binding("m", "save_review", "Save"),
         # Priority: the Screen's own tab binding (focus-next) would win otherwise.
         Binding("tab", "switch_pane", "Review", priority=True),
-        Binding("m", "save_review", "Save"),
-        Binding("c", "settings", "Settings"),
-        Binding("d", "cycle_difficulty", "Difficulty"),
-        Binding("t", "cycle_status", "Status"),
-        Binding("o", "open_web", "Web"),
-        Binding("D", "daily", "Daily"),
-        Binding("ctrl+r", "refresh", "Refresh"),
-        Binding("R", "sync", "Sync"),
+        Binding("question_mark", "toggle_keys", "Keys"),
+        Binding("q", "quit", "Quit"),
+
+        Binding("c", "settings", "Settings", show=False),
+        Binding("d", "cycle_difficulty", "Difficulty filter", show=False),
+        Binding("t", "cycle_status", "Status filter", show=False),
+        Binding("o", "open_web", "Open on leetcode.com", show=False),
+        Binding("D", "daily", "Jump to today's daily", show=False),
+        Binding("ctrl+r", "refresh", "Refresh from the local index", show=False),
+        Binding("R", "sync", "Re-download the problem index", show=False),
         Binding("escape", "focus_list", "", show=False),
     ]
 
@@ -725,6 +732,13 @@ class LeetCodeTUI(App):
         self.call_from_thread(self.notify, "review sync: " + ", ".join(parts))
 
     # ---------------------------------------------------------------- settings
+
+    def action_toggle_keys(self) -> None:
+        """`?` — the full key list, including everything kept off the footer."""
+        if self.screen.query("HelpPanel"):
+            self.action_hide_help_panel()
+        else:
+            self.action_show_help_panel()
 
     def action_settings(self) -> None:
         def saved(changed: bool | None) -> None:

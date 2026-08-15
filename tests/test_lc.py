@@ -1528,6 +1528,29 @@ def test_choose_resolves_aliases_and_falls_back():
 
 # ----------------------------------------------------------------------- tui
 
+def test_the_footer_carries_the_loop_and_hides_the_rest():
+    """A footer of fifteen keys is a wall; the rest live behind `?`."""
+    from lc.tui import LeetCodeTUI, ReviewList
+
+    app_shown = {b.key for b in LeetCodeTUI.BINDINGS if b.show}
+    app_hidden = {b.key for b in LeetCodeTUI.BINDINGS if not b.show}
+    assert app_shown == {"slash", "p", "r", "s", "m", "tab", "question_mark", "q"}
+    # Everything taken off the footer must still be bound, not deleted.
+    for key in ("c", "d", "t", "o", "D", "ctrl+r", "R"):
+        assert key in app_hidden, key
+
+    review_shown = {b.key for b in ReviewList.BINDINGS if b.show}
+    assert review_shown == {"plus,equals_sign", "g"}
+    review_hidden = {b.key for b in ReviewList.BINDINGS if not b.show}
+    assert {"minus", "z", "Z", "x"} <= review_hidden
+
+    # Every binding still names an action, shown or not.
+    for binding in LeetCodeTUI.BINDINGS + ReviewList.BINDINGS:
+        assert binding.action, binding.key
+    # ...and `?` reaches the panel that lists them all.
+    assert hasattr(LeetCodeTUI, "action_toggle_keys")
+
+
 def test_daily_note_says_which_day_and_when_it_turns_over():
     """East of Greenwich the local date runs ahead of LeetCode's UTC daily."""
     import time
