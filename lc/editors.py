@@ -146,7 +146,44 @@ function! s:LcOpenStatement() abort
   nnoremap <buffer> <leader>o :call <SID>LcOpenWeb()<CR>
   nnoremap <buffer> <leader>m :call <SID>LcReview()<CR>
   nnoremap <buffer> <leader>q :call <SID>LcQuitAll()<CR>
-  wincmd p
+  call s:LcKeyHints([['', 'q close'], ['t', 'test'], ['s', 'submit'],
+        \ ['q', 'quit']])
+  " Back to the code, by name rather than by "previous window" — that is
+  " where you are here to type, and window order is not ours to assume.
+  let l:back = s:LcSolutionWin(l:dir)
+  if l:back != -1
+    execute l:back . 'wincmd w'
+  else
+    wincmd p
+  endif
+endfunction
+
+function! s:LcHintText() abort
+  " As many hints as the window can show, most useful first — a status line
+  " that overflows just loses its right-hand end silently.
+  let l:lead = get(g:, 'mapleader', '\')
+  let l:parts = map(copy(get(b:, 'lc_hints', [])),
+        \ 'v:val[0] ==# "" ? v:val[1] : l:lead . v:val[0] . " " . v:val[1]')
+  let l:room = winwidth(0) - 16
+  while len(l:parts) > 1 && strwidth(join(l:parts, '  ')) > l:room
+    call remove(l:parts, -1)
+  endwhile
+  return join(l:parts, '  ')
+endfunction
+
+function! s:LcKeyHints(keys) abort
+  " The keys, on the window's own status line — Vim has no footer, and a
+  " message echoed once is gone by the time you want it. `let
+  " g:lc_statusline = 0` leaves your own status line alone.
+  if !get(g:, 'lc_statusline', 1)
+    return
+  endif
+  let b:lc_hints = a:keys
+  " %< truncates the name first, so the keys survive a narrow window.
+  let &l:statusline = '%<%f %m%= %{' . expand('<SID>') . 'LcHintText()} '
+  if &laststatus < 2
+    set laststatus=2
+  endif
 endfunction
 
 function! s:LcUnsaved() abort
@@ -272,6 +309,8 @@ function! s:LcSetup() abort
   nnoremap <buffer> <leader>m :call <SID>LcReview()<CR>
   " One stroke back to whatever launched Vim (the lc TUI resumes on exit).
   nnoremap <buffer> <leader>q :call <SID>LcQuitAll()<CR>
+  call s:LcKeyHints([['t', 'test'], ['s', 'submit'], ['q', 'quit'],
+        \ ['p', 'statement'], ['m', 'deck'], ['o', 'web']])
   " Fresh `lc pick` / `lc edit`: put the statement alongside the solution.
   if get(g:, 'lc_auto_statement', 1) && winnr('$') == 1
         \ && expand('%:t') !=# 'README.md'

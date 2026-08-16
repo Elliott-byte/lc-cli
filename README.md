@@ -241,7 +241,10 @@ Python buffers are kept space-indented: Tab inserts spaces, and pasted tabs
 are converted on save. LeetCode's starters use spaces and the judge answers a
 single stray tab with a `TabError` — `let g:lc_python_indent = 0` disables it.
 
-The keys work from the statement pane as well as the solution, so it does
+The keys are listed on each window's status line, shortened to fit a narrow
+split (`let g:lc_statusline = 0` leaves your own status line alone). The
+cursor starts in the solution — the statement is there to read, not to type
+in — and the keys work from the pane as well, so it does
 not matter which window has the cursor — `\t` saves the solution and runs
 from the problem's directory either way, whatever directory you launched
 Vim in. `<leader>` is backslash unless you remapped it. After upgrading

@@ -330,6 +330,15 @@ def test_vim_quit_never_fights_the_statement_terminal():
     for key in ("<leader>t", "<leader>s", "<leader>m", "<leader>q"):
         assert key in pane, key
 
+    # The keys are on the status line — Vim has no footer to put them on.
+    assert "LcKeyHints" in text and "statusline" in text
+    assert "lc_statusline" in text          # ...and you can turn it off
+    # They shrink to fit rather than losing their right-hand end silently.
+    assert "winwidth(0)" in text and "call remove(l:parts, -1)" in text
+    # The cursor lands in the solution, found by name rather than by
+    # "previous window".
+    assert "LcSolutionWin(l:dir)" in text
+
     # :q means "leave" from either window, not "close one of the two".
     assert "QuitPre" in text and "LcPaneQuit" in text
     # The terminal job must not veto :q / :qa with E948.
