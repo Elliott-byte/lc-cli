@@ -243,11 +243,11 @@ single stray tab with a `TabError` — `let g:lc_python_indent = 0` disables it.
 
 The keys are listed on each window's status line, shortened to fit a narrow
 split (`let g:lc_statusline = 0` leaves your own status line alone). The
-cursor starts in the solution — the statement is there to read, not to type
-in — and the keys work from the pane as well, so it does
-not matter which window has the cursor — `\t` saves the solution and runs
-from the problem's directory either way, whatever directory you launched
-Vim in. `<leader>` is backslash unless you remapped it. After upgrading
+cursor starts in the solution, and the pane is read-only: the statement is
+there to read, not to type in. `ctrl+w h` goes over to it and `ctrl+w l`
+comes back. The keys work from the pane as well, so it does not matter which
+window has the cursor — `\t` saves the solution and runs from the problem's
+directory either way, whatever directory you launched Vim in. `<leader>` is backslash unless you remapped it. After upgrading
 lc, re-run `lc setup vim --force`; for Neovim, copy the file to
 `~/.config/nvim/plugin/`.
 

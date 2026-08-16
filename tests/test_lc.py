@@ -338,11 +338,24 @@ def test_vim_quit_never_fights_the_statement_terminal():
     # The cursor lands in the solution, found by name rather than by
     # "previous window".
     assert "LcSolutionWin(l:dir)" in text
+    assert "LcFocusSolution(l:dir)" in text
+    # A terminal opened with ++curwin seizes the cursor in Terminal-Job mode
+    # once Vim reaches its main loop, undoing the jump above: start the job
+    # hidden and show the buffer afterwards instead.
+    assert "terminal ++curwin" not in text
+    assert "'hidden': 1" in text
+    # Vim re-enters the first window when startup finishes, which is the
+    # pane — the jump has to be repeated after that.
+    assert "v:vim_did_enter" in text
+    # The README fallback is a real file in the problem directory too, so
+    # the solution lookup must not mistake the pane for the solution and
+    # write the statement instead.
+    assert "getbufvar(l:b, 'lc_statement_for', '') ==# ''" in text
 
     # :q means "leave" from either window, not "close one of the two".
     assert "QuitPre" in text and "LcPaneQuit" in text
     # The terminal job must not veto :q / :qa with E948.
-    assert "++kill=term" in text
+    assert "'term_kill': 'term'" in text
     # ...nor :wall / :wqa fail on E382 trying to write it.
     assert "BufWriteCmd" in text
 

@@ -24,9 +24,9 @@ VIM_PLUGIN = r'''" lc.vim — Vim integration for the lc LeetCode CLI.
 " the editor supports it, the raw README.md otherwise; `let
 " g:lc_statement_render = 0` forces the plain file. The pane opens
 " automatically when the solution file is the only window; `let
-" g:lc_auto_statement = 0` turns that off. Inside the pane, q closes it —
-" and the keys above work there too, so it does not matter which window
-" has the cursor.
+" g:lc_auto_statement = 0` turns that off. The pane is read-only and the
+" cursor starts in the solution — CTRL-W h goes over to read, q closes the
+" pane, and the keys above work there too.
 " Quitting the solution (:q, ZZ, …) never strands you in the pane: a
 " statement pane left as the last window takes Vim down with it.
 " The leader key is backslash unless changed.
@@ -57,10 +57,13 @@ endfunction
 
 function! s:LcSolutionWin(dir) abort
   " The window holding a real file from this problem — where a judge run
-  " has to happen, since that is the buffer to write.
+  " has to happen, since that is the buffer to write. The statement pane is
+  " a real file too when it falls back to README.md, so skip it by its mark:
+  " otherwise the pane counts as its own solution and \t writes the README.
   for l:w in range(1, winnr('$'))
     let l:b = winbufnr(l:w)
     if getbufvar(l:b, '&buftype') ==# '' && bufname(l:b) !=# ''
+          \ && getbufvar(l:b, 'lc_statement_for', '') ==# ''
           \ && fnamemodify(bufname(l:b), ':p:h') ==# a:dir
       return l:w
     endif
@@ -93,6 +96,17 @@ function! s:LcStatementWin() abort
   return -1
 endfunction
 
+function! s:LcFocusSolution(dir) abort
+  " By name rather than by "previous window": window order is not ours to
+  " assume, and `wincmd p` is only a guess about how we got here.
+  let l:back = s:LcSolutionWin(a:dir)
+  if l:back != -1
+    execute l:back . 'wincmd w'
+  elseif &buftype !=# ''
+    wincmd p
+  endif
+endfunction
+
 function! s:LcOpenStatement() abort
   let l:dir = expand('%:p:h')
   let l:slug = s:LcSlug()
@@ -107,19 +121,28 @@ function! s:LcOpenStatement() abort
     execute 'vertical resize ' . l:width
     if has('nvim')
       call termopen('lc show ' . shellescape(l:slug))
+      execute 'silent! file' fnameescape('[statement] ' . l:slug)
     else
-      " ++kill=term so the pane's job cannot veto :q / :qa with E948. Older
-      " Vim without the option still works, it just complains on quit.
+      " Started hidden and then shown, never with ++curwin: a terminal opened
+      " into the current window seizes the cursor in Terminal-Job mode when
+      " Vim returns to its main loop, undoing any wincmd we do here — you land
+      " in the statement typing at `lc show`. A buffer displayed after the
+      " fact grabs nothing, so the cursor stays where we put it.
+      " term_name because Vim otherwise names the buffer after the command it
+      " ran, and the pane would read "!lc show two-sum [finished]" — which
+      " looks like something went wrong. term_kill so the job cannot veto
+      " :q / :qa with E948; older Vim without it still works, it just
+      " complains on quit.
+      let l:opts = {'hidden': 1, 'norestore': 1, 'curwin': 0,
+            \ 'term_name': '[statement] ' . l:slug, 'term_kill': 'term'}
       try
-        execute 'terminal ++curwin ++norestore ++kill=term lc show ' . l:slug
-      catch /E475/
-        execute 'terminal ++curwin ++norestore lc show ' . l:slug
+        let l:buf = term_start('lc show ' . shellescape(l:slug), l:opts)
+      catch /E475\|E118/
+        call remove(l:opts, 'term_kill')
+        let l:buf = term_start('lc show ' . shellescape(l:slug), l:opts)
       endtry
+      execute 'keepalt buffer' l:buf
     endif
-    " Vim names a terminal buffer after the command it ran, so the status
-    " line would read "!lc show two-sum [finished]" — which looks like
-    " something went wrong. Say what the pane is instead.
-    execute 'silent! file' fnameescape('[statement] ' . l:slug)
   else
     if !filereadable(s:LcReadme())
       return
@@ -137,6 +160,11 @@ function! s:LcOpenStatement() abort
     autocmd! * <buffer>
     autocmd BufWriteCmd <buffer> setlocal nomodified
   augroup END
+  " The pane is something to read: 'nomodifiable' comes with the terminal
+  " buffer, and the README fallback sets it above. (Forcing Terminal-Normal
+  " mode early would make it read-only sooner, but Vim stops drawing job
+  " output into a buffer in that mode — you would get a blank statement.
+  " `lc show` prints and exits, and Vim leaves job mode when it does.)
   " The same keys as the solution buffer: landing in the pane and pressing
   " \t used to do nothing at all, with no hint why.
   nnoremap <buffer> q :call <SID>LcCloseStatement()<CR>
@@ -148,13 +176,14 @@ function! s:LcOpenStatement() abort
   nnoremap <buffer> <leader>q :call <SID>LcQuitAll()<CR>
   call s:LcKeyHints([['', 'q close'], ['t', 'test'], ['s', 'submit'],
         \ ['q', 'quit']])
-  " Back to the code, by name rather than by "previous window" — that is
-  " where you are here to type, and window order is not ours to assume.
-  let l:back = s:LcSolutionWin(l:dir)
-  if l:back != -1
-    execute l:back . 'wincmd w'
-  else
-    wincmd p
+  " Back to the code — that is what you are here to type in.
+  call s:LcFocusSolution(l:dir)
+  " Once more after startup finishes: Vim re-enters the first window when it
+  " is done opening files, which is the pane, and for a terminal pane that
+  " means Terminal-Job mode with `lc show` eating your keys. A zero timer
+  " runs after that and before you can type, so the cursor ends up here.
+  if !v:vim_did_enter
+    call timer_start(0, {-> s:LcFocusSolution(l:dir)})
   endif
 endfunction
 
