@@ -227,9 +227,10 @@ In a solution buffer (any file next to a `.lc.json`), normal mode:
 
 Opening a solution file opens the statement beside it automatically — hide it
 with `\p` (or `q` inside the pane), bring it back with `\p`, or set
-`let g:lc_auto_statement = 0` to open it manually. Quitting the solution with
-plain `:q` doesn't strand you in that pane either: left as the last window, it
-takes Vim down with it, and you land back where you started.
+`let g:lc_auto_statement = 0` to open it manually. `:q` means "leave" from
+either window — the pane is an accessory, not a second document to close
+separately — and so do `:qa`, `:x`, `ZZ` and `\q`. Anything unsaved still
+vetoes it, exactly as in plain Vim.
 
 The pane shows the statement fully rendered — `lc show` in a small terminal
 split, same colors and example boxes as the CLI — whenever your Vim has

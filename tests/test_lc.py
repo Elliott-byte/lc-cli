@@ -330,6 +330,13 @@ def test_vim_quit_never_fights_the_statement_terminal():
     for key in ("<leader>t", "<leader>s", "<leader>m", "<leader>q"):
         assert key in pane, key
 
+    # :q means "leave" from either window, not "close one of the two".
+    assert "QuitPre" in text and "LcPaneQuit" in text
+    # The terminal job must not veto :q / :qa with E948.
+    assert "++kill=term" in text
+    # ...nor :wall / :wqa fail on E382 trying to write it.
+    assert "BufWriteCmd" in text
+
     # Closing the pane forces past the running job, in both window layouts.
     assert "close!" in text and "quit!" in text
     # ...but never at the cost of a real unsaved file.

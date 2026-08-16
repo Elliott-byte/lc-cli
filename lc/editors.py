@@ -108,7 +108,13 @@ function! s:LcOpenStatement() abort
     if has('nvim')
       call termopen('lc show ' . shellescape(l:slug))
     else
-      execute 'terminal ++curwin ++norestore lc show ' . l:slug
+      " ++kill=term so the pane's job cannot veto :q / :qa with E948. Older
+      " Vim without the option still works, it just complains on quit.
+      try
+        execute 'terminal ++curwin ++norestore ++kill=term lc show ' . l:slug
+      catch /E475/
+        execute 'terminal ++curwin ++norestore lc show ' . l:slug
+      endtry
     endif
     " Vim names a terminal buffer after the command it ran, so the status
     " line would read "!lc show two-sum [finished]" — which looks like
@@ -124,6 +130,13 @@ function! s:LcOpenStatement() abort
   endif
   let b:lc_statement_for = l:dir
   setlocal winfixwidth nonumber norelativenumber
+  " :wall and :wqa try to write every modified buffer, and a terminal cannot
+  " be written (E382) — which aborts the whole command. There is nothing to
+  " save in here, so let the write succeed and do nothing.
+  augroup lc_cli_pane
+    autocmd! * <buffer>
+    autocmd BufWriteCmd <buffer> setlocal nomodified
+  augroup END
   " The same keys as the solution buffer: landing in the pane and pressing
   " \t used to do nothing at all, with no hint why.
   nnoremap <buffer> q :call <SID>LcCloseStatement()<CR>
@@ -156,6 +169,27 @@ function! s:LcCloseStatement() abort
     endif
   else
     close!
+  endif
+endfunction
+
+function! s:LcPaneQuit() abort
+  " :q with the cursor in the statement pane means "I am done", not "dismiss
+  " this accessory" — closing only the pane leaves you one more :q away from
+  " where you were going, and on a running `lc show` it fails outright with
+  " E948. q and \p still close the pane and keep you in Vim.
+  " Anything unsaved vetoes it: then :q behaves like plain Vim.
+  if !empty(s:LcUnsaved())
+    return          " something real is unsaved: let :q behave like plain Vim
+  endif
+  if exists('b:lc_statement_for')
+    qall!           " :q from the pane means leave
+    return
+  endif
+  " ...and so does :q from the solution when the pane is the only thing left
+  " beside it — nobody quits the code to sit in the statement. Splits you
+  " opened yourself are none of our business, so require exactly the two.
+  if winnr('$') == 2 && tabpagenr('$') == 1 && s:LcStatementWin() != -1
+    qall!
   endif
 endfunction
 
@@ -248,6 +282,9 @@ endfunction
 augroup lc_cli
   autocmd!
   autocmd BufReadPost,BufNewFile * call s:LcSetup()
+  " QuitPre fires before :q decides which window to close, which is where the
+  " statement pane gets to say "that means leave".
+  autocmd QuitPre * call s:LcPaneQuit()
   " :q in the solution closes only that window, dropping the user into the
   " statement pane with no obvious way on. A pane left as the last window
   " means everything else was quit — follow along. (Plain :quit, so a hidden
