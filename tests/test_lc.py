@@ -344,6 +344,12 @@ def test_vim_quit_never_fights_the_statement_terminal():
     # hidden and show the buffer afterwards instead.
     assert "terminal ++curwin" not in text
     assert "'hidden': 1" in text
+    # term_start() splits a string command itself and never runs a shell, so
+    # the slug must go in as a list element: shellescape()'d, `lc show` got
+    # the quotes as part of the slug and the pane read "no problem matching".
+    assert "let l:cmd = ['lc', 'show', l:slug]" in text
+    assert "term_start(l:cmd" in text
+    assert "term_start('lc show" not in text
     # Vim re-enters the first window when startup finishes, which is the
     # pane — the jump has to be repeated after that.
     assert "v:vim_did_enter" in text

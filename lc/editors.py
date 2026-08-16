@@ -133,13 +133,18 @@ function! s:LcOpenStatement() abort
       " looks like something went wrong. term_kill so the job cannot veto
       " :q / :qa with E948; older Vim without it still works, it just
       " complains on quit.
+      " A list, not a string: term_start() splits a string into arguments
+      " itself and never involves a shell, so shellescape() would hand `lc`
+      " a slug with the quotes still on it — "no problem matching
+      " "'two-sum'"". A list is passed through untouched, spaces and all.
+      let l:cmd = ['lc', 'show', l:slug]
       let l:opts = {'hidden': 1, 'norestore': 1, 'curwin': 0,
             \ 'term_name': '[statement] ' . l:slug, 'term_kill': 'term'}
       try
-        let l:buf = term_start('lc show ' . shellescape(l:slug), l:opts)
+        let l:buf = term_start(l:cmd, l:opts)
       catch /E475\|E118/
         call remove(l:opts, 'term_kill')
-        let l:buf = term_start('lc show ' . shellescape(l:slug), l:opts)
+        let l:buf = term_start(l:cmd, l:opts)
       endtry
       execute 'keepalt buffer' l:buf
     endif
