@@ -197,6 +197,7 @@ class ReviewList(DataTable):
         width = self._available()
         self._title_width = width
         selected = self.cursor_row
+        here = self._cursor_slug()
         self.clear()
         for item in self._items:
             days = item.due_in(self._today)
@@ -237,8 +238,24 @@ class ReviewList(DataTable):
                 paint(label),
                 key=item.slug,
             )
+        # Stay on the problem, not on the row number. Grading changes a due
+        # date, which re-sorts the deck — restoring the old index would leave
+        # the cursor on whatever slid into that slot, so the next + or - would
+        # grade a problem the user never looked at.
+        if here is not None:
+            try:
+                self.move_cursor(row=self.get_row_index(here))
+                return
+            except RowDoesNotExist:
+                pass    # taken off the deck: fall back to where it used to be
         if 0 <= selected < self.row_count:
             self.move_cursor(row=selected)
+
+    def _cursor_slug(self) -> str | None:
+        if not self.row_count or not 0 <= self.cursor_row < self.row_count:
+            return None
+        key = self.coordinate_to_cell_key(self.cursor_coordinate).row_key
+        return str(key.value) if key is not None and key.value else None
 
     def on_resize(self) -> None:
         if self._items and self._available() != self._title_width:

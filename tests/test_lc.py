@@ -1620,3 +1620,48 @@ def test_pin_daily_moves_the_daily_to_the_front():
     assert pin_daily(rows, "word-ladder") is False
     assert pin_daily(rows, None) is False
     assert [p.slug for p in rows] == ["coin-change", "two-sum"]
+
+
+def test_grading_keeps_the_cursor_on_the_problem(tmp_path, monkeypatch):
+    """A grade re-sorts the deck; the cursor has to follow the problem.
+
+    Restoring it by row number instead left it on whatever slid into that
+    slot, so a second + or - graded a problem the user never looked at — and
+    the one they were aiming at looked like it had not moved.
+    """
+    import asyncio
+    from datetime import date
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    from lc import review, tui
+
+    today = date.today().isoformat()
+
+    def item(slug, fid, level):
+        return {"title": slug, "frontend_id": fid, "difficulty": "Easy",
+                "level": level, "added": today, "graded": today,
+                "due": today, "updated": "2026-01-01T00:00:00.000000Z"}
+
+    # Same due date today, so the order is by problem number: two-sum first.
+    (tmp_path / "review.json").write_text(json.dumps({
+        "two-sum": item("two-sum", "1", 6),
+        "move-zeroes": item("move-zeroes", "283", 1),
+    }))
+
+    async def grade():
+        app = tui.LeetCodeTUI()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.press("tab")        # to the Review tab
+            await pilot.pause()
+            seen = []
+            for key in ("minus", "plus", "plus"):
+                await pilot.press(key)
+                await pilot.pause()
+                deck = review.load()
+                seen.append((deck["two-sum"].level, deck["move-zeroes"].level))
+            return seen
+
+    # Every keystroke lands on the row the cursor started on, even though
+    # demoting it (6 -> 5, due in 15 days) moves it below move-zeroes.
+    assert asyncio.run(grade()) == [(5, 1), (6, 1), (7, 1)]
