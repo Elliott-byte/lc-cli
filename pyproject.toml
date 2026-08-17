@@ -1,6 +1,6 @@
 [project]
 name = "lc-cli"
-version = "0.7.11"
+version = "0.7.12"
 description = "Practice LeetCode from your terminal"
 readme = "README.md"
 requires-python = ">=3.10"

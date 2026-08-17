@@ -159,7 +159,11 @@ class ReviewList(DataTable):
         Binding("plus,equals_sign", "app.review_level_up", "Grade +/-"),
         Binding("g", "app.review_sync", "Sync"),
 
-        Binding("minus", "app.review_level_down", "Grade down", show=False),
+        # Both halves of each key: + is shift-=, and _ is shift--. Binding
+        # only one of a pair means holding shift silently does nothing, which
+        # reads as "grading is broken" rather than "wrong key".
+        Binding("minus,underscore", "app.review_level_down", "Grade down",
+                show=False),
         Binding("z", "app.review_snooze", "Postpone this one", show=False),
         Binding("Z", "app.review_snooze_due", "Postpone everything due",
                 show=False),

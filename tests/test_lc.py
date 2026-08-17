@@ -1577,7 +1577,7 @@ def test_the_footer_carries_the_loop_and_hides_the_rest():
     review_shown = {b.key for b in ReviewList.BINDINGS if b.show}
     assert review_shown == {"plus,equals_sign", "g"}
     review_hidden = {b.key for b in ReviewList.BINDINGS if not b.show}
-    assert {"minus", "z", "Z", "x"} <= review_hidden
+    assert {"minus,underscore", "z", "Z", "x"} <= review_hidden
 
     # Every binding still names an action, shown or not.
     for binding in LeetCodeTUI.BINDINGS + ReviewList.BINDINGS:
@@ -1655,7 +1655,9 @@ def test_grading_keeps_the_cursor_on_the_problem(tmp_path, monkeypatch):
             await pilot.press("tab")        # to the Review tab
             await pilot.pause()
             seen = []
-            for key in ("minus", "plus", "plus"):
+            # underscore too: it is shift-minus, and binding only half of a
+            # shifted pair means holding shift silently does nothing.
+            for key in ("minus", "plus", "plus", "underscore"):
                 await pilot.press(key)
                 await pilot.pause()
                 deck = review.load()
@@ -1664,4 +1666,4 @@ def test_grading_keeps_the_cursor_on_the_problem(tmp_path, monkeypatch):
 
     # Every keystroke lands on the row the cursor started on, even though
     # demoting it (6 -> 5, due in 15 days) moves it below move-zeroes.
-    assert asyncio.run(grade()) == [(5, 1), (6, 1), (7, 1)]
+    assert asyncio.run(grade()) == [(5, 1), (6, 1), (7, 1), (6, 1)]

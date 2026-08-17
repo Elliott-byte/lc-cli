@@ -134,7 +134,7 @@ On the Review tab:
 
 | Key | Action |
 | --- | --- |
-| `+` / `-` | Set the level by hand (rescheduled from today) |
+| `+` `=` / `-` `_` | Set the level by hand (rescheduled from today) |
 | `z` | Postpone this problem to tomorrow |
 | `Z` | Postpone everything due — the "not today" button |
 | `x` | Take it off the deck |
