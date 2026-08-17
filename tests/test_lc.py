@@ -1694,3 +1694,19 @@ def test_grading_keeps_the_cursor_on_the_problem(tmp_path, monkeypatch):
     # demoting it (6 -> 5, due in 15 days) moves it below move-zeroes.
     # ...and 0 says "no idea at all", from wherever it was.
     assert asyncio.run(grade()) == [(5, 1), (6, 1), (7, 1), (6, 1), (1, 1)]
+
+
+def test_problem_header_url_is_a_real_hyperlink():
+    """It was styled to look like a link but was not one — clicks did nothing."""
+    import io
+
+    from rich.console import Console
+
+    from lc.render import problem_header
+
+    out = io.StringIO()
+    Console(file=out, force_terminal=True, width=80).print(problem_header(PROBLEM))
+    line = next(l for l in out.getvalue().splitlines() if "leetcode.com" in l)
+    # OSC 8, the terminal hyperlink escape — not just blue and underlined.
+    assert "\x1b]8;" in line
+    assert PROBLEM.url in line          # ...and still readable where OSC 8 is not

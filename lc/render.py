@@ -389,5 +389,10 @@ def problem_header(problem) -> RenderableType:
     meta.add_row("likes", Text(f"{problem.likes} 👍  {problem.dislikes} 👎"))
     if problem.tags:
         meta.add_row("tags", Text(", ".join(problem.tags), style="cyan"))
-    meta.add_row("url", Text(problem.url, style="blue underline"))
+    # A real terminal hyperlink (OSC 8), not just blue-and-underlined text:
+    # it looked clickable and was not. Terminals that cannot do OSC 8 still
+    # show the URL itself, so nothing is lost.
+    meta.add_row(
+        "url", Text(problem.url, style=f"blue underline link {problem.url}")
+    )
     return Group(title, Text(""), meta)
