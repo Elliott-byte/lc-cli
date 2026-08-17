@@ -7,7 +7,8 @@ A problem sits at a level from 1 to ``len(curve)``; the curve says how many
 days a pass at each level buys before the next review. The default is
 Ebbinghaus's — 1, 2, 4, 7, 15 days, then out to a year — and ``lc config
 curve`` replaces it. Levels move only when you say so: submitting a deck
-problem marks it as attempted today, and you grade it with + or -.
+problem marks it as attempted today, and you grade it with + or - — or with
+0, for a problem you did not remember at all.
 """
 
 from __future__ import annotations
@@ -315,6 +316,25 @@ def shift_level(
     if item is None or item.removed:
         return None
     _schedule(item, item.level + delta, curve, today or date.today())
+    save(items)
+    return item
+
+
+@_atomic
+def forget(
+    slug: str, curve: list[int], today: date | None = None
+) -> ReviewItem | None:
+    """"I had no idea": straight back to level 1, so it returns tomorrow.
+
+    A lapse is not one level down. Stepping a level-9 problem to 8 still buys
+    it three months, which is no way to treat something you just failed — and
+    pressing `-` eight times to say so is not a grade, it is a chore.
+    """
+    items = load()
+    item = items.get(slug)
+    if item is None or item.removed:
+        return None
+    _schedule(item, 1, curve, today or date.today())
     save(items)
     return item
 

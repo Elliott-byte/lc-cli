@@ -164,6 +164,8 @@ class ReviewList(DataTable):
         # reads as "grading is broken" rather than "wrong key".
         Binding("minus,underscore", "app.review_level_down", "Grade down",
                 show=False),
+        Binding("0", "app.review_forget", "Forgot it — back to level 1",
+                show=False),
         Binding("z", "app.review_snooze", "Postpone this one", show=False),
         Binding("Z", "app.review_snooze_due", "Postpone everything due",
                 show=False),
@@ -702,6 +704,18 @@ class LeetCodeTUI(App):
 
     def action_review_level_down(self) -> None:
         self._review_shift(-1)
+
+    def action_review_forget(self) -> None:
+        slug = self._review_slug()
+        if not slug:
+            return
+        item = review.forget(slug, self.curve)
+        if item:
+            self.notify(
+                f"forgotten — back to level 1, next review in "
+                f"{item.due_in(date.today())}d"
+            )
+            self.refresh_review()
 
     def action_review_snooze(self) -> None:
         slug = self._review_slug()

@@ -122,6 +122,10 @@ leaves the level alone. Press `+` to move it up (or `-` to drop it) and the
 mark clears. Levels stay yours: a problem solved by luck, or after peeking,
 should not quietly buy itself another month.
 
+For the ones you drew a blank on, `0` goes straight back to level 1 and the
+problem returns tomorrow. One step down is not enough for a lapse — a level-9
+problem stepped to 8 still buys itself three months.
+
 Submits count from anywhere — the TUI, `lc submit` in a shell, `\s` in Vim —
 so a problem you solved in Vim is already green when you get back to the
 list. The mark describes today: it clears when you grade the problem, and
@@ -135,6 +139,7 @@ On the Review tab:
 | Key | Action |
 | --- | --- |
 | `+` `=` / `-` `_` | Set the level by hand (rescheduled from today) |
+| `0` | Forgot it completely — straight back to level 1 |
 | `z` | Postpone this problem to tomorrow |
 | `Z` | Postpone everything due — the "not today" button |
 | `x` | Take it off the deck |

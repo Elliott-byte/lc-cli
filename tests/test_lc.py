@@ -926,6 +926,32 @@ def test_review_level_is_clamped_to_the_curve(tmp_path, monkeypatch):
     assert review.shift_level("s", +1, curve, today=d).level == 2
 
 
+def test_review_forget_drops_straight_to_level_one(tmp_path, monkeypatch):
+    """A lapse is not one level down: it comes back tomorrow, from any level."""
+    from datetime import date
+
+    review = _review_env(tmp_path, monkeypatch)
+    curve = list(review.DEFAULT_CURVE)
+    d = date(2026, 8, 15)
+    review.add("s", curve=curve, today=d)
+    review.shift_level("s", +8, curve, today=d)          # up to level 9
+    assert review.load()["s"].due == "2027-02-11"        # 180 days away
+
+    item = review.forget("s", curve, today=d)
+    assert (item.level, item.due) == (1, "2026-08-16")   # tomorrow
+    assert item.graded == "2026-08-15"
+    # Grading answers the "you solved this today" prompt either way.
+    assert item.attempted == "" and item.attempt_passed is False
+    assert review.load()["s"].level == 1                 # and it is on disk
+
+    # Already at the bottom: still a grade, still back tomorrow.
+    assert review.forget("s", curve, today=d).due == "2026-08-16"
+    # Unknown and removed problems are a no-op, not a crash.
+    assert review.forget("nope", curve, today=d) is None
+    review.remove("s")
+    assert review.forget("s", curve, today=d) is None
+
+
 def test_review_postpone_single_and_all_due(tmp_path, monkeypatch):
     from datetime import date
 
@@ -1657,7 +1683,7 @@ def test_grading_keeps_the_cursor_on_the_problem(tmp_path, monkeypatch):
             seen = []
             # underscore too: it is shift-minus, and binding only half of a
             # shifted pair means holding shift silently does nothing.
-            for key in ("minus", "plus", "plus", "underscore"):
+            for key in ("minus", "plus", "plus", "underscore", "0"):
                 await pilot.press(key)
                 await pilot.pause()
                 deck = review.load()
@@ -1666,4 +1692,5 @@ def test_grading_keeps_the_cursor_on_the_problem(tmp_path, monkeypatch):
 
     # Every keystroke lands on the row the cursor started on, even though
     # demoting it (6 -> 5, due in 15 days) moves it below move-zeroes.
-    assert asyncio.run(grade()) == [(5, 1), (6, 1), (7, 1), (6, 1)]
+    # ...and 0 says "no idea at all", from wherever it was.
+    assert asyncio.run(grade()) == [(5, 1), (6, 1), (7, 1), (6, 1), (1, 1)]
