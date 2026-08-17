@@ -392,7 +392,11 @@ def problem_header(problem) -> RenderableType:
     # A real terminal hyperlink (OSC 8), not just blue-and-underlined text:
     # it looked clickable and was not. Terminals that cannot do OSC 8 still
     # show the URL itself, so nothing is lost.
-    meta.add_row(
-        "url", Text(problem.url, style=f"blue underline link {problem.url}")
-    )
+    url = Text(problem.url, style=f"blue underline link {problem.url}")
+    # OSC 8 only helps where the terminal sees the click. It does not inside
+    # the TUI, which captures the mouse, nor inside Vim's terminal, which
+    # swallows the escape entirely. So hand Textual its own handle on the
+    # same text: plain Rich printing ignores meta, leaving `lc show` as is.
+    url.apply_meta({"@click": "app.open_web()"})
+    meta.add_row("url", url)
     return Group(title, Text(""), meta)

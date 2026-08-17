@@ -101,9 +101,10 @@ re-downloads the whole index.
 | `?` | Every key, including the ones kept off the footer |
 | `q` | Quit |
 
-The statement's `url` line is a real terminal hyperlink, but the TUI captures
-the mouse, so a bare click goes to lc rather than to your terminal — hold ⌘
-(or shift) while clicking, or just press `o`.
+Click the statement's `url` line to open the problem in your browser — or
+press `o`, which does the same from either tab. (In Vim's statement pane the
+URL is not clickable: Vim's terminal drops the escape that makes it a link.
+`\o` opens it there.)
 
 The footer shows the solving loop only. `c` (settings), `d`/`t` (filters),
 `o` (open on leetcode.com), `D` (jump to the daily), `ctrl+r` (refresh from

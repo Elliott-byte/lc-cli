@@ -1710,3 +1710,36 @@ def test_problem_header_url_is_a_real_hyperlink():
     # OSC 8, the terminal hyperlink escape — not just blue and underlined.
     assert "\x1b]8;" in line
     assert PROBLEM.url in line          # ...and still readable where OSC 8 is not
+
+
+def test_clicking_the_url_in_the_tui_opens_the_browser(tmp_path, monkeypatch):
+    """OSC 8 is not enough: the TUI captures the mouse, so the terminal never
+    sees the click. Textual dispatches its own clicks through style meta."""
+    import asyncio
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    from lc import tui
+
+    opened: list[str] = []
+    monkeypatch.setattr(tui, "open_url", lambda url: opened.append(url) or True)
+
+    async def click_it():
+        app = tui.LeetCodeTUI()
+        async with app.run_test(size=(120, 40)) as pilot:
+            app._show(PROBLEM)          # no network: render this problem directly
+            await pilot.pause()
+            cells = [
+                (x, y)
+                for y in range(40)
+                for x in range(120)
+                if app.screen.get_style_at(x, y).meta.get("@click")
+            ]
+            if not cells:
+                return None
+            await pilot.click(offset=cells[len(cells) // 2])
+            await pilot.pause()
+            return len(cells)
+
+    cells = asyncio.run(click_it())
+    assert cells and cells >= len(PROBLEM.url) - 2   # the url itself is the target
+    assert opened == [PROBLEM.url]
