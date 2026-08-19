@@ -26,7 +26,9 @@ VIM_PLUGIN = r'''" lc.vim — Vim integration for the lc LeetCode CLI.
 " automatically when the solution file is the only window; `let
 " g:lc_auto_statement = 0` turns that off. The pane is read-only and the
 " cursor starts in the solution — CTRL-W h goes over to read, q closes the
-" pane, and the keys above work there too.
+" pane, and the keys above work there too. Double-clicking the pane's url
+" line opens the problem page: Vim owns the mouse there, so the terminal
+" never sees the click, and Vim's terminal drops the hyperlink escape anyway.
 " Quitting the solution (:q, ZZ, …) never strands you in the pane: a
 " statement pane left as the last window takes Vim down with it.
 " The leader key is backslash unless changed.
@@ -179,6 +181,7 @@ function! s:LcOpenStatement() abort
   nnoremap <buffer> <leader>o :call <SID>LcOpenWeb()<CR>
   nnoremap <buffer> <leader>m :call <SID>LcReview()<CR>
   nnoremap <buffer> <leader>q :call <SID>LcQuitAll()<CR>
+  nnoremap <buffer> <2-LeftMouse> <LeftMouse>:call <SID>LcClickOpen()<CR>
   call s:LcKeyHints([['', 'q close'], ['t', 'test'], ['s', 'submit'],
         \ ['q', 'quit']])
   " Back to the code — that is what you are here to type in.
@@ -306,6 +309,16 @@ function! s:LcReview() abort
   " shell prompt: it is one line of output, not a judge run.
   let l:out = system('cd ' . shellescape(s:LcDir()) . ' && lc review add')
   echo substitute(substitute(l:out, '\n\+$', '', ''), '\n', ' ', 'g')
+endfunction
+
+function! s:LcClickOpen() abort
+  " Vim owns the mouse in the pane (defaults.vim sets mouse=a), so a click on
+  " the URL never reaches the terminal — and Vim's terminal drops the escape
+  " that would make it a hyperlink anyway. Double-clicking the line that
+  " carries the URL is the gesture people try; make it the one that works.
+  if getline('.') =~# 'leetcode\.com/problems/'
+    call s:LcOpenWeb()
+  endif
 endfunction
 
 function! s:LcToggleStatement() abort

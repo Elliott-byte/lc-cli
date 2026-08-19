@@ -358,6 +358,11 @@ def test_vim_quit_never_fights_the_statement_terminal():
     # write the statement instead.
     assert "getbufvar(l:b, 'lc_statement_for', '') ==# ''" in text
 
+    # Vim owns the mouse in the pane, and its terminal drops the hyperlink
+    # escape, so the URL can only be opened by something Vim itself binds.
+    assert "<2-LeftMouse>" in pane and "LcClickOpen" in text
+    assert "leetcode\\.com/problems/" in text
+
     # :q means "leave" from either window, not "close one of the two".
     assert "QuitPre" in text and "LcPaneQuit" in text
     # The terminal job must not veto :q / :qa with E948.
@@ -1811,3 +1816,20 @@ def test_the_splitter_hands_width_to_either_pane(tmp_path, monkeypatch):
     # Neither side is ever squeezed away, and the two always fill the row.
     assert all(l >= floor and r >= floor for l, r in shapes)
     assert all(l + 1 + r == 160 for l, r in shapes)
+
+
+def test_a_narrow_pane_folds_the_url_instead_of_cutting_it():
+    """Vim's statement split is ~60 columns, and a URL is one long word: it
+    was truncated mid-slug, which cannot be clicked, copied or even read."""
+    import io
+
+    from rich.console import Console
+
+    from lc.render import problem_header
+
+    out = io.StringIO()
+    Console(file=out, width=60, no_color=True).print(problem_header(PROBLEM))
+    text = out.getvalue()
+    assert "…" not in text
+    # Folded across lines, so join what is left of the layout back together.
+    assert PROBLEM.url in "".join(line.strip() for line in text.splitlines())

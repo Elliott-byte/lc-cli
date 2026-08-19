@@ -378,7 +378,10 @@ def problem_header(problem) -> RenderableType:
 
     meta = Table.grid(padding=(0, 2))
     meta.add_column(style="dim")
-    meta.add_column()
+    # fold, not ellipsis: a URL is one long word, so a narrow pane — Vim's
+    # statement split especially — cut it off mid-slug. Half a URL cannot be
+    # clicked, copied or read.
+    meta.add_column(overflow="fold")
     meta.add_row("difficulty", difficulty_text(problem.difficulty))
     if problem.ac_rate:
         meta.add_row("acceptance", Text(f"{problem.ac_rate:.1f}%"))

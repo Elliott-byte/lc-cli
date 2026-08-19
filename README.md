@@ -105,9 +105,10 @@ Drag the divider between the two panes to give either side more room; it
 stops when one of them is down to 24 columns.
 
 Click the statement's `url` line to open the problem in your browser — or
-press `o`, which does the same from either tab. (In Vim's statement pane the
-URL is not clickable: Vim's terminal drops the escape that makes it a link.
-`\o` opens it there.)
+press `o`, which does the same from either tab. In Vim's statement pane the
+same line takes a double-click (`\o` works from either window): Vim owns the
+mouse there, so a single click never reaches the terminal, and Vim's terminal
+drops the escape that would make the URL a link.
 
 The footer shows the solving loop only. `c` (settings), `d`/`t` (filters),
 `o` (open on leetcode.com), `D` (jump to the daily), `ctrl+r` (refresh from
