@@ -1768,3 +1768,46 @@ def test_the_key_list_can_be_closed_without_quitting(tmp_path, monkeypatch):
     assert asyncio.run(keys()) == [
         (True, True), (False, True), (True, True), (False, True), (False, False)
     ]
+
+
+def test_the_splitter_hands_width_to_either_pane(tmp_path, monkeypatch):
+    """The divider used to be the left pane's border — paint, with nothing
+    there for the mouse to grab."""
+    import asyncio
+
+    from textual import events
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    from lc import tui
+
+    async def drag():
+        app = tui.LeetCodeTUI()
+        shapes = []
+        async with app.run_test(size=(160, 40)) as pilot:
+            await pilot.pause()
+            left = app.query_one("#left")
+            right = app.query_one("#right")
+            bar = app.query_one("#splitter", tui.Splitter)
+            shapes.append((left.region.width, right.region.width))
+            for target in (100, 30, 2, 400):
+                await pilot.mouse_down(tui.Splitter, offset=(0, 5))
+                await pilot.pause()
+                bar.post_message(events.MouseMove(
+                    widget=bar, x=0, y=5, delta_x=1, delta_y=0, button=1,
+                    shift=False, meta=False, ctrl=False,
+                    screen_x=target, screen_y=5,
+                ))
+                await pilot.pause()
+                await pilot.mouse_up(tui.Splitter, offset=(0, 5))
+                await pilot.pause()
+                shapes.append((left.region.width, right.region.width))
+        return shapes
+
+    floor = tui.Splitter.MIN_PANE
+    shapes = asyncio.run(drag())
+    assert shapes[1][0] == 100 and shapes[2][0] == 30   # the pane follows the mouse
+    assert shapes[3][0] == floor                        # dragged off the left edge
+    assert shapes[4][1] == floor                        # ...and off the right
+    # Neither side is ever squeezed away, and the two always fill the row.
+    assert all(l >= floor and r >= floor for l, r in shapes)
+    assert all(l + 1 + r == 160 for l, r in shapes)

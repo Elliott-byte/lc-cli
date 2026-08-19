@@ -101,6 +101,9 @@ re-downloads the whole index.
 | `?` | Every key, including the ones kept off the footer |
 | `q` | Quit |
 
+Drag the divider between the two panes to give either side more room; it
+stops when one of them is down to 24 columns.
+
 Click the statement's `url` line to open the problem in your browser — or
 press `o`, which does the same from either tab. (In Vim's statement pane the
 URL is not clickable: Vim's terminal drops the escape that makes it a link.

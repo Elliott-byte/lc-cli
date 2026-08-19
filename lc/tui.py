@@ -11,7 +11,7 @@ import time
 from datetime import date
 from typing import Iterable
 
-from textual import on, work
+from textual import events, on, work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
@@ -26,8 +26,10 @@ from textual.widgets import (
     TabPane,
 )
 from textual.widgets.data_table import RowDoesNotExist
+from textual.strip import Strip
 
 from rich.console import Group, RenderableType
+from rich.segment import Segment
 from rich.markup import escape
 from rich.text import Text
 
@@ -268,6 +270,50 @@ class ReviewList(DataTable):
             self._render_rows()
 
 
+class Splitter(Static):
+    """The bar between the panes — drag it to hand width to either side.
+
+    A widget rather than the left pane's `border-right`, because a border is
+    paint: there is nothing there for the mouse to take hold of.
+    """
+
+    DEFAULT_CSS = """
+    Splitter { width: 1; height: 1fr; color: $panel; }
+    Splitter:hover, Splitter.-dragging { color: $accent; }
+    """
+
+    #: Neither side may be squeezed below this, however far you drag.
+    MIN_PANE = 24
+
+    def render_line(self, y: int) -> Strip:
+        # The same rule the left pane's border used to draw, so nothing about
+        # the layout looks different until you reach for it.
+        return Strip([Segment("│", self.rich_style)])
+
+    def on_mouse_down(self, event: events.MouseDown) -> None:
+        self.capture_mouse()
+        self.add_class("-dragging")
+
+    def on_mouse_up(self, event: events.MouseUp) -> None:
+        self.release_mouse()
+        self.remove_class("-dragging")
+
+    def on_mouse_move(self, event: events.MouseMove) -> None:
+        if not self.has_class("-dragging"):
+            return
+        left = self.screen.query_one("#left")
+        # -1 for the bar itself, or the right pane ends up a cell short.
+        room = self.screen.size.width - self.MIN_PANE - 1
+        width = max(self.MIN_PANE, min(event.screen_x - left.region.x, room))
+        # The CSS bounds size the opening layout. Once you have taken hold of
+        # the bar, the width you drag to is the width you meant — so widen them
+        # to the drag limits rather than clearing them, which only falls back
+        # to the stylesheet.
+        left.styles.min_width = self.MIN_PANE
+        left.styles.max_width = room
+        left.styles.width = width
+
+
 class ConfigScreen(ModalScreen[bool]):
     """Settings, edited in place. Returns True when something was saved."""
 
@@ -411,11 +457,11 @@ class LeetCodeTUI(App):
     #fx { layer: fx; width: 100%; height: 100%; align: center middle; }
     #fx-frame { width: auto; height: auto; }
     #body { height: 1fr; }
-    #left { width: 40%; min-width: 40; max-width: 64; border-right: solid $panel; }
+    #left { width: 40%; min-width: 40; max-width: 64; }
     #filter { border: none; height: 3; background: $boost; }
     #tabs { height: 1fr; }
     TabPane { padding: 0; }
-    #right { padding: 1 2; }
+    #right { width: 1fr; padding: 1 2; }
     #status-bar { height: 1; background: $boost; color: $text-muted; padding: 0 1; }
     ProblemList { height: 1fr; }
     ReviewList { height: 1fr; }
@@ -476,6 +522,7 @@ class LeetCodeTUI(App):
                     with TabPane("Review", id="pane-review"):
                         yield ReviewList(id="review")
                         yield Static("", id="sync-bar")
+            yield Splitter(id="splitter")
             with VerticalScroll(id="right"):
                 yield Static("", id="statement")
         yield Static("", id="status-bar")
