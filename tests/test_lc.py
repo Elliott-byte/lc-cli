@@ -1746,7 +1746,9 @@ def test_clicking_the_url_in_the_tui_opens_the_browser(tmp_path, monkeypatch):
             return len(cells)
 
     cells = asyncio.run(click_it())
-    assert cells and cells >= len(PROBLEM.url) - 2   # the url itself is the target
+    shown = PROBLEM.url.removeprefix("https://").rstrip("/")
+    assert cells and cells >= len(shown) - 2     # the url itself is the target
+    # ...and the click still opens the full address, scheme and all.
     assert opened == [PROBLEM.url]
 
 
@@ -1818,18 +1820,32 @@ def test_the_splitter_hands_width_to_either_pane(tmp_path, monkeypatch):
     assert all(l + 1 + r == 160 for l, r in shapes)
 
 
-def test_a_narrow_pane_folds_the_url_instead_of_cutting_it():
+def test_a_narrow_pane_shows_the_whole_url():
     """Vim's statement split is ~60 columns, and a URL is one long word: it
-    was truncated mid-slug, which cannot be clicked, copied or even read."""
+    was truncated mid-slug, which cannot be clicked, copied or even read.
+    Folding it instead was honest but ugly — a lone "/" on its own line — so
+    the scheme and trailing slash go, which fits most problems on one line."""
     import io
+    from dataclasses import replace
 
     from rich.console import Console
 
     from lc.render import problem_header
 
-    out = io.StringIO()
-    Console(file=out, width=60, no_color=True).print(problem_header(PROBLEM))
-    text = out.getvalue()
-    assert "…" not in text
-    # Folded across lines, so join what is left of the layout back together.
-    assert PROBLEM.url in "".join(line.strip() for line in text.splitlines())
+    def url_lines(problem, width=60):
+        out = io.StringIO()
+        Console(file=out, width=width, no_color=True).print(problem_header(problem))
+        lines = out.getvalue().splitlines()
+        i = next(n for n, l in enumerate(lines) if l.startswith("url"))
+        rest = [l for l in lines[i + 1:] if l.strip()]
+        return [lines[i]] + rest[:1]
+
+    shown = PROBLEM.url.removeprefix("https://").rstrip("/")
+    lines = url_lines(PROBLEM)
+    assert "…" not in "".join(lines)
+    assert shown in lines[0]              # one line, whole address
+
+    # A slug long enough to fold still breaks inside itself, never onto a
+    # line holding nothing but the trailing slash.
+    long_lines = url_lines(replace(PROBLEM, slug="a" * 60))
+    assert len(long_lines) == 2 and len(long_lines[1].strip()) > 1

@@ -394,8 +394,13 @@ def problem_header(problem) -> RenderableType:
         meta.add_row("tags", Text(", ".join(problem.tags), style="cyan"))
     # A real terminal hyperlink (OSC 8), not just blue-and-underlined text:
     # it looked clickable and was not. Terminals that cannot do OSC 8 still
-    # show the URL itself, so nothing is lost.
-    url = Text(problem.url, style=f"blue underline link {problem.url}")
+    # show the address itself, so nothing is lost.
+    # Shown without the scheme or the trailing slash — nine columns that buy
+    # most problems a single line in a narrow pane. Folding is honest but
+    # ugly, and its worst case is a lone "/" on a line of its own. The link
+    # still points at the full URL.
+    shown = problem.url.removeprefix("https://").rstrip("/")
+    url = Text(shown, style=f"blue underline link {problem.url}")
     # OSC 8 only helps where the terminal sees the click. It does not inside
     # the TUI, which captures the mouse, nor inside Vim's terminal, which
     # swallows the escape entirely. So hand Textual its own handle on the
