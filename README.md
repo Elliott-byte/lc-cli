@@ -109,7 +109,7 @@ URL is not clickable: Vim's terminal drops the escape that makes it a link.
 The footer shows the solving loop only. `c` (settings), `d`/`t` (filters),
 `o` (open on leetcode.com), `D` (jump to the daily), `ctrl+r` (refresh from
 the local index) and `R` (re-download it) all still work — press `?` for the
-full list.
+full list, and `?`, `esc` or `q` to put it away again.
 
 ## Review deck
 

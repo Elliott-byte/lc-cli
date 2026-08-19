@@ -1743,3 +1743,28 @@ def test_clicking_the_url_in_the_tui_opens_the_browser(tmp_path, monkeypatch):
     cells = asyncio.run(click_it())
     assert cells and cells >= len(PROBLEM.url) - 2   # the url itself is the target
     assert opened == [PROBLEM.url]
+
+
+def test_the_key_list_can_be_closed_without_quitting(tmp_path, monkeypatch):
+    """`?` opens an overlay with no obvious way out, and `q` sat right there
+    in the footer — pressing it to dismiss the list quit the whole app."""
+    import asyncio
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    from lc import tui
+
+    async def keys():
+        app = tui.LeetCodeTUI()
+        seen = []
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            for key in ("question_mark", "escape", "question_mark", "q", "q"):
+                await pilot.press(key)
+                await pilot.pause()
+                seen.append((bool(app.screen.query("HelpPanel")), not app._exit))
+        return seen
+
+    # open, esc closes it, open again, q closes it — and only then does q quit.
+    assert asyncio.run(keys()) == [
+        (True, True), (False, True), (True, True), (False, True), (False, False)
+    ]

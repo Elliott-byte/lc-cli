@@ -632,6 +632,11 @@ class LeetCodeTUI(App):
         self.query_one("#filter", Input).focus()
 
     def action_focus_list(self) -> None:
+        # esc closes the key list first — the list even names esc among the
+        # keys, so pressing it and having nothing happen is a trap.
+        if self._keys_open():
+            self.action_hide_help_panel()
+            return
         self._active_table().focus()
 
     def action_switch_pane(self) -> None:
@@ -768,12 +773,24 @@ class LeetCodeTUI(App):
 
     # ---------------------------------------------------------------- settings
 
+    def _keys_open(self) -> bool:
+        return bool(self.screen.query("HelpPanel"))
+
     def action_toggle_keys(self) -> None:
         """`?` — the full key list, including everything kept off the footer."""
-        if self.screen.query("HelpPanel"):
+        if self._keys_open():
             self.action_hide_help_panel()
         else:
             self.action_show_help_panel()
+
+    async def action_quit(self) -> None:
+        """`q` — but the key list is an overlay, and backing out of it is what
+        `q` means there. It used to quit the app instead: you opened the list
+        to find your way around and lost the session for it."""
+        if self._keys_open():
+            self.action_hide_help_panel()
+            return
+        self.exit()
 
     def action_settings(self) -> None:
         def saved(changed: bool | None) -> None:
