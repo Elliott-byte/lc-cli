@@ -98,11 +98,18 @@ re-downloads the whole index.
 | `d` / `t` | Cycle the difficulty / status filter |
 | `o` | Open the problem on leetcode.com |
 | `D` | Jump to today's daily challenge |
+| `space` | Pause/resume the solve clock (covers the statement) |
 | `?` | Every key, including the ones kept off the footer |
 | `q` | Quit |
 
 Drag the divider between the two panes to give either side more room; it
 stops when one of them is down to 24 columns.
+
+Opening a problem starts a solve clock in the status bar. `space` pauses it
+behind a cover that hides the statement — a stopped clock beside a readable
+problem would be free reading time — and `space` again resumes. A failed
+submit leaves it running; an accepted one stops it and reports your time.
+`lc config timer off` turns the whole thing off.
 
 Click the statement's `url` line to open the problem in your browser — or
 press `o`, which does the same from either tab. In Vim's statement pane the

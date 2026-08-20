@@ -286,6 +286,50 @@ class ReviewList(DataTable):
             self._render_rows()
 
 
+def clock(seconds: float) -> str:
+    """mm:ss under an hour, h:mm:ss beyond — a solve clock, not a datetime."""
+    total = int(seconds)
+    h, rest = divmod(total, 3600)
+    m, sec = divmod(rest, 60)
+    return f"{h}:{m:02d}:{sec:02d}" if h else f"{m:02d}:{sec:02d}"
+
+
+class BreakScreen(ModalScreen[None]):
+    """The pause cover: opaque on purpose, so the statement cannot be read
+    while the clock is stopped. Closing it is what resumes the timer."""
+
+    CSS = """
+    BreakScreen { background: $background; align: center middle; }
+    #break-box {
+        width: auto; height: auto; padding: 2 6;
+        background: $surface; border: round $accent;
+    }
+    /* width: auto on the children too — a Static defaults to 1fr, which
+       collapses to nothing inside an auto-width box. */
+    #break-box > Static { width: auto; }
+    #break-time { text-align: center; text-style: bold; }
+    #break-hint { color: $text-muted; margin-top: 1; }
+    """
+
+    BINDINGS = [
+        Binding("space,escape,enter,q", "resume", "Resume"),
+    ]
+
+    def __init__(self, elapsed: float) -> None:
+        super().__init__()
+        self.elapsed = elapsed
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="break-box"):
+            yield Static(Text(f"⏸  {clock(self.elapsed)}", style="bold"),
+                         id="break-time")
+            yield Static(Text("paused — space resumes the clock",
+                              style="dim"), id="break-hint")
+
+    def action_resume(self) -> None:
+        self.dismiss(None)
+
+
 class Splitter(Static):
     """The bar between the panes — drag it to hand width to either side.
 
@@ -510,6 +554,7 @@ class LeetCodeTUI(App):
         Binding("ctrl+r", "refresh", "Refresh from the local index", show=False),
         Binding("R", "sync", "Re-download the problem index", show=False),
         Binding("escape", "focus_list", "", show=False),
+        Binding("space", "timer_pause", "Pause the solve timer", show=False),
     ]
 
     def __init__(self, initial: str | None = None) -> None:
@@ -525,6 +570,15 @@ class LeetCodeTUI(App):
         self.current_slug: str = ""
         self.daily_slug: str | None = None
         self._filter_timer = None
+        # The solve timer: which problem it clocks, seconds banked while
+        # paused, when the running stretch began (None = paused/stopped),
+        # and whether an accepted submit already ended it.
+        self._timer_slug: str = ""
+        self._timer_accum: float = 0.0
+        self._timer_started: float | None = None
+        self._timer_done = False
+        self._timer_was_solved = False
+        self._status_message: tuple[str, str] = ("", "dim")
 
     # ----------------------------------------------------------------- layout
 
@@ -546,6 +600,9 @@ class LeetCodeTUI(App):
 
     def on_mount(self) -> None:
         self.title = "LeetCode"
+        if self.config.timer_on:
+            # Redraws only the status line: cheap enough to run every second.
+            self.set_interval(1.0, self._render_status)
         self.refresh_list()
         self.refresh_review()
         if store.index_size() == 0:
@@ -571,6 +628,11 @@ class LeetCodeTUI(App):
     # ----------------------------------------------------------------- state
 
     def set_status(self, message: str, style: str = "") -> None:
+        self._status_message = (message, style or "dim")
+        self._render_status()
+
+    def _render_status(self) -> None:
+        message, style = self._status_message
         bar = self.query_one("#status-bar", Static)
         filters = []
         if self.difficulty:
@@ -578,7 +640,80 @@ class LeetCodeTUI(App):
         if self.status_filter:
             filters.append(self.status_filter)
         prefix = f"[{' · '.join(filters)}] " if filters else ""
-        bar.update(Text(prefix + message, style=style or "dim"))
+        text = Text(prefix + message, style=style)
+        timer = self._timer_text()
+        if timer:
+            # The clock rides on the right of whatever the bar says, so a
+            # transient "submitting…" never knocks it off the screen.
+            text.append("  ·  " if message else "", style=style)
+            text.append(timer, style="bold" if self._timer_running else "dim")
+        bar.update(text)
+
+    # ------------------------------------------------------------ solve timer
+
+    @property
+    def _timer_running(self) -> bool:
+        return self._timer_started is not None
+
+    def _timer_elapsed(self) -> float:
+        run = time.monotonic() - self._timer_started if self._timer_running else 0.0
+        return self._timer_accum + run
+
+    def _timer_text(self) -> str:
+        if not self._timer_slug:
+            return ""
+        mark = "✔" if self._timer_done else ("⏱" if self._timer_running else "⏸")
+        return f"{mark} {clock(self._timer_elapsed())}"
+
+    def _timer_begin(self, slug: str) -> None:
+        """Opening a problem starts (or resumes) its clock.
+
+        A different problem — or one already clocked out by a submit — starts
+        from zero; reopening the one being solved just keeps counting.
+        """
+        if not self.config.timer_on:
+            return
+        if slug != self._timer_slug or self._timer_done:
+            self._timer_slug = slug
+            self._timer_accum = 0.0
+            self._timer_done = False
+            # Whether it was already solved when the clock started — the
+            # editor-return check needs "became solved", not "is solved",
+            # or re-opening an old solve would stop the clock instantly.
+            known = store.find(slug)
+            self._timer_was_solved = known.solved if known else False
+        if not self._timer_running:
+            self._timer_started = time.monotonic()
+        self._render_status()
+
+    def _timer_submit(self, slug: str, accepted: bool) -> None:
+        """An accepted submit stops the clock — that is what "solved" means.
+        A rejected one keeps it running; the problem is not done."""
+        if not accepted or slug != self._timer_slug or self._timer_done:
+            return
+        self._timer_accum = self._timer_elapsed()
+        self._timer_started = None
+        self._timer_done = True
+        self.notify(f"solved in {clock(self._timer_accum)}", timeout=8)
+        self._render_status()
+
+    def action_timer_pause(self) -> None:
+        if not self._timer_slug or self._timer_done or not self.config.timer_on:
+            return
+        if not self._timer_running:
+            return
+        self._timer_accum = self._timer_elapsed()
+        self._timer_started = None
+        self._render_status()
+
+        def resumed(_: None) -> None:
+            # Dismissing the cover is the resume: a stopped clock next to a
+            # readable statement would be free reading time.
+            if not self._timer_done:
+                self._timer_started = time.monotonic()
+            self._render_status()
+
+        self.push_screen(BreakScreen(self._timer_accum), resumed)
 
     def refresh_list(self) -> None:
         selected = self.current_slug
@@ -924,6 +1059,7 @@ class LeetCodeTUI(App):
                 self.notify(escape(str(exc)), severity="error")
                 return
 
+        self._timer_begin(problem.slug)
         editor = self.config.resolve_editor()
         if editor:
             with self.suspend():
@@ -934,6 +1070,15 @@ class LeetCodeTUI(App):
             self.refresh_list()
             self.refresh_review()
             self.refresh()
+            # ...and if that submit was accepted, the solve is over: stop the
+            # clock here too, not only on the TUI's own `s`.
+            item = review.load().get(problem.slug)
+            if item is not None and item.attempt_today(date.today()) == "passed":
+                self._timer_submit(problem.slug, accepted=True)
+            else:
+                fresh = store.find(problem.slug)
+                if fresh is not None and fresh.solved and not self._timer_was_solved:
+                    self._timer_submit(problem.slug, accepted=True)
         else:
             self.notify(f"solution at {solution.file} (set $EDITOR to auto-open)")
 
@@ -1090,6 +1235,9 @@ class LeetCodeTUI(App):
                     tail = " · press %s in the Review tab" % (
                         "+" if result.accepted else "-")
                 self.call_from_thread(self.notify, f"{note}{tail}", timeout=8)
+            self.call_from_thread(
+                self._timer_submit, problem.slug, result.accepted
+            )
 
         self.call_from_thread(self._show_result, result, cases)
 

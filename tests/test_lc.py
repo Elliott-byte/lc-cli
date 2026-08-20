@@ -2295,3 +2295,90 @@ def test_enter_reopens_the_language_you_started_in(tmp_path, monkeypatch):
     judged = workspace.load(load_config(), problem)
     assert judged.file.name == "solution.go"
     assert judged.code == "// half-finished\n", "r/s must judge the real work"
+
+
+def test_the_solve_timer_clocks_pauses_and_stops(tmp_path, monkeypatch):
+    """The solve timer: opening a problem starts it, space pauses it behind an
+    opaque cover (a stopped clock beside a readable statement would be free
+    reading time), a failed submit leaves it running, an accepted one ends it.
+    """
+    import asyncio
+    import json as _json
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    monkeypatch.delenv("EDITOR", raising=False)
+    monkeypatch.delenv("VISUAL", raising=False)
+    (tmp_path / "config.json").write_text(_json.dumps(
+        {"workspace": str(tmp_path / "ws"), "editor": ""}
+    ))
+    from lc import tui
+
+    async def solve():
+        app = tui.LeetCodeTUI()
+        seen = {}
+        async with app.run_test(size=(140, 40)) as pilot:
+            await pilot.pause()
+            app._show(PROBLEM)
+            await pilot.pause()
+
+            app.action_pick()
+            await pilot.pause()
+            seen["starts"] = app._timer_running
+            seen["on_bar"] = "⏱" in str(app.query_one("#status-bar").render())
+
+            await pilot.press("space")
+            await pilot.pause()
+            seen["covered"] = app.screen.__class__.__name__ == "BreakScreen"
+            frozen = app._timer_elapsed()
+            await asyncio.sleep(0.3)
+            seen["holds"] = app._timer_elapsed() == frozen
+
+            await pilot.press("space")
+            await pilot.pause()
+            seen["resumes"] = (app.screen.__class__.__name__ != "BreakScreen"
+                               and app._timer_running)
+
+            app._timer_submit(PROBLEM.slug, accepted=False)
+            seen["failure_keeps_going"] = app._timer_running
+            app._timer_submit(PROBLEM.slug, accepted=True)
+            await pilot.pause()
+            seen["accept_stops"] = (app._timer_done and not app._timer_running
+                                    and "✔" in str(app.query_one("#status-bar").render()))
+            await pilot.press("space")
+            await pilot.pause()
+            seen["no_cover_after_done"] = app.screen.__class__.__name__ != "BreakScreen"
+        return seen
+
+    assert asyncio.run(solve()) == {
+        "starts": True, "on_bar": True, "covered": True, "holds": True,
+        "resumes": True, "failure_keeps_going": True, "accept_stops": True,
+        "no_cover_after_done": True,
+    }
+
+
+def test_the_solve_timer_can_be_switched_off(tmp_path, monkeypatch):
+    import asyncio
+    import json as _json
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    monkeypatch.delenv("EDITOR", raising=False)
+    monkeypatch.delenv("VISUAL", raising=False)
+    (tmp_path / "config.json").write_text(_json.dumps(
+        {"workspace": str(tmp_path / "ws"), "editor": "", "solve_timer": False}
+    ))
+    from lc import tui
+
+    async def solve():
+        app = tui.LeetCodeTUI()
+        async with app.run_test(size=(140, 40)) as pilot:
+            await pilot.pause()
+            app._show(PROBLEM)
+            await pilot.pause()
+            app.action_pick()
+            await pilot.pause()
+            no_clock = not app._timer_slug
+            await pilot.press("space")
+            await pilot.pause()
+            return no_clock and app.screen.__class__.__name__ != "BreakScreen"
+
+    assert asyncio.run(solve()) is True

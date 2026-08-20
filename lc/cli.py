@@ -1183,6 +1183,8 @@ def config_show() -> None:
                   + ("" if source == "configured" else f" ({source})"))
     table.add_row("autograde", "on — a submit moves the level" if cfg.autograde
                   else Text("off — you grade with + / - / 0", style="dim"))
+    table.add_row("timer", "on — clocks a solve, space pauses" if cfg.timer_on
+                  else Text("off", style="dim"))
     table.add_row("lc home", str(home()))
     console.print(table)
 
@@ -1266,6 +1268,26 @@ def config_author(
     console.print(Text(f"✔ review author: {who} <{addr}>", style="green"))
     console.print(Text("  GitHub credits commits to the account owning this address",
                        style="dim"))
+
+
+@config_app.command("timer")
+def config_timer(
+    state: str = typer.Argument(..., help="on | off"),
+) -> None:
+    """The TUI's solve timer: starts when you open a problem, space pauses it
+    behind a cover, an accepted submit stops it."""
+    want = state.strip().lower()
+    if want not in ("on", "off", "true", "false", "yes", "no"):
+        die(f"could not read {state!r}", "say `lc config timer on` or `off`")
+    cfg = load_config()
+    cfg.solve_timer = want in ("on", "true", "yes")
+    save_config(cfg)
+    if cfg.solve_timer:
+        console.print(Text("✔ timer: on", style="green"))
+        console.print(Text("  the clock starts when you open a problem; space "
+                           "pauses it, an accepted submit stops it", style="dim"))
+    else:
+        console.print(Text("✔ timer: off", style="green"))
 
 
 @config_app.command("autograde")

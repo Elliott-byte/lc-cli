@@ -69,6 +69,10 @@ class Config:
     #: a failure a level down. Off by default: grading is a judgement about
     #: recall, and the judge only knows whether the code passed.
     review_autograde: bool = False
+    #: The solve timer in the TUI: starts when you open a problem, pauses
+    #: behind a cover screen, stops on an accepted submit. On unless switched
+    #: off — `lc config timer off`.
+    solve_timer: bool = True
     #: Keys in config.json this version does not know about — kept so settings
     #: written by a newer lc survive a round-trip through this one.
     extra: dict = field(default_factory=dict, repr=False)
@@ -84,6 +88,16 @@ class Config:
         """(name, email) for deck commits, falling back to lc's own identity."""
         return (self.review_author_name.strip() or DEFAULT_AUTHOR_NAME,
                 self.review_author_email.strip() or DEFAULT_AUTHOR_EMAIL)
+
+    @property
+    def timer_on(self) -> bool:
+        """Whether the TUI shows the solve timer.
+
+        `is not False`: config.json is hand-editable, and the timer is the
+        on-by-default feature here — anything short of an explicit false
+        (a stray string, a missing key) keeps it on.
+        """
+        return self.solve_timer is not False
 
     @property
     def autograde(self) -> bool:
