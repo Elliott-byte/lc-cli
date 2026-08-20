@@ -111,8 +111,9 @@ hides the code and statement (a stopped clock beside a readable problem
 would be free reading time); `space` there resumes. A failed submit leaves
 it running; an accepted one — `s` in the TUI, `lc submit`, or `\s` in Vim —
 stops it and reports your time. `\Z` resets it to zero for a fresh attempt.
-`lc timer` shows it from the shell (with `pause` / `resume` / `reset`), and
-`lc config timer off` turns the whole thing off.
+`lc timer` shows it from the shell (with `start` / `pause` / `resume` /
+`reset`), and `lc config timer off` turns the whole thing off. `space` works
+even in a bare `vim solution.py` session — it conjures the clock itself.
 
 Click the statement's `url` line to open the problem in your browser — or
 press `o`, which does the same from either tab. In Vim's statement pane the

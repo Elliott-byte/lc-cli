@@ -715,7 +715,9 @@ def edit(ref: str = typer.Argument("", help="problem id, slug or title")) -> Non
         if not found:
             die("no problem given and this is not a problem directory")
             return
-        _, _, path = found
+        slug, _, path = found
+        if config.timer_on:
+            solvetimer.begin(slug)   # reopening a solve arms its clock too
         if not workspace.open_in_editor(config, path):
             die("no editor configured", "set $EDITOR or run `lc config editor <cmd>`")
         return
@@ -726,6 +728,8 @@ def edit(ref: str = typer.Argument("", help="problem id, slug or title")) -> Non
     if solution is None:
         die(f"no solution file yet for {problem.title}", f"run `lc pick {ref}` first")
         return
+    if config.timer_on:
+        solvetimer.begin(problem.slug)
     if not workspace.open_in_editor(config, solution.file):
         die("no editor configured", "set $EDITOR or run `lc config editor <cmd>`")
 
@@ -1211,6 +1215,21 @@ def timer_resume() -> None:
     console.print(_timer_line(solvetimer.resume()))
 
 
+@timer_app.command("start")
+def timer_start(
+    slug: str = typer.Argument("", help="problem slug; blank resumes the "
+                                        "existing clock"),
+) -> None:
+    """Start (or resume) the clock — what space in Vim presses."""
+    if slug:
+        solvetimer.begin(slug)
+    timer = solvetimer.load()
+    if timer is None or timer.done:
+        die("no clock to start", "opening a problem arms one")
+        return
+    console.print(_timer_line(solvetimer.resume()))
+
+
 @timer_app.command("reset")
 def timer_reset() -> None:
     """Back to 00:00 and running — a fresh attempt at the same problem."""
@@ -1340,8 +1359,8 @@ def config_author(
 def config_timer(
     state: str = typer.Argument(..., help="on | off"),
 ) -> None:
-    """The TUI's solve timer: starts when you open a problem, space pauses it
-    behind a cover, an accepted submit stops it."""
+    """The solve clock: opening a problem arms it, space in Vim starts it,
+    an accepted submit stops it."""
     want = state.strip().lower()
     if want not in ("on", "off", "true", "false", "yes", "no"):
         die(f"could not read {state!r}", "say `lc config timer on` or `off`")

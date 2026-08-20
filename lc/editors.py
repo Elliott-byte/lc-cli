@@ -377,7 +377,7 @@ function! s:LcTimerToggle() abort
   if get(l:t, 'started') is v:null
     call system('lc timer resume')
     redrawstatus!
-    echo 'lc: clock resumed'
+    echo 'lc: clock running'
     return
   endif
   call system('lc timer pause')
@@ -399,19 +399,21 @@ endfunction
 
 function! s:LcSpaceKey() abort
   " Space starts (or resumes) this problem's clock when it is standing
-  " still; any other time it is vim's own space, untouched.
+  " still — including when there is no clock yet, so a bare `vim
+  " solution.py` works the same as coming in through lc. Once this
+  " problem's clock is running (or clocked out), space is vim's own.
   let l:t = s:LcTimerFile()
-  if !empty(l:t) && get(l:t, 'slug', '') ==# s:LcSlug()
-        \ && get(l:t, 'started') is v:null && !get(l:t, 'done')
-    " expand('<SID>'), not \<SID>: the returned keys are replayed as typed,
-    " where a literal <SID> is just eight characters of nothing.
-    return ':call ' . expand('<SID>') . "LcTimerStart()\<CR>"
+  let l:mine = !empty(l:t) && get(l:t, 'slug', '') ==# s:LcSlug()
+  if l:mine && (get(l:t, 'started') isnot v:null || get(l:t, 'done'))
+    return ' '
   endif
-  return ' '
+  " expand('<SID>'), not \<SID>: the returned keys are replayed as typed,
+  " where a literal <SID> is just eight characters of nothing.
+  return ':call ' . expand('<SID>') . "LcTimerStart()\<CR>"
 endfunction
 
 function! s:LcTimerStart() abort
-  call system('lc timer resume')
+  call system('lc timer start ' . shellescape(s:LcSlug()))
   redrawstatus!
   echo 'lc: clock started'
 endfunction
@@ -510,7 +512,8 @@ function! s:LcSetup() abort
   " One stroke back to whatever launched Vim (the lc TUI resumes on exit).
   nnoremap <buffer> <leader>q :call <SID>LcQuitAll()<CR>
   call s:LcKeyHints([['t', 'test'], ['s', 'submit'], ['z', 'pause'],
-        \ ['q', 'quit'], ['p', 'statement'], ['m', 'deck'], ['o', 'web']])
+        \ ['q', 'quit'], ['p', 'statement'], ['m', 'deck'], ['o', 'web'],
+        \ ['Z', 'reset']])
   " Fresh `lc pick` / `lc edit`: put the statement alongside the solution.
   if get(g:, 'lc_auto_statement', 1) && winnr('$') == 1
         \ && expand('%:t') !=# 'README.md'

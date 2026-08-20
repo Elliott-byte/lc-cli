@@ -381,6 +381,11 @@ def test_vim_quit_never_fights_the_statement_terminal():
     # and once it runs, space must fall through to plain vim space.
     assert "<expr> <Space> <SID>LcSpaceKey()" in text
     assert "space starts the clock" in text
+    # ...and space can conjure the clock from nothing, so a bare
+    # `vim solution.py` session gets one without going through lc.
+    assert "lc timer start" in text
+    # \Z earns a hint slot; last, so narrow windows drop it first.
+    assert "['Z', 'reset']" in text
     assert "return \' \'" in text          # the fall-through: plain space
 
     # Vim owns the mouse in the pane, and its terminal drops the hyperlink
@@ -2507,6 +2512,10 @@ def test_cli_timer_pause_and_resume(tmp_path, monkeypatch):
     # With no clock: an explanation, not a stack trace — and pause says no.
     assert "no clock" in runner.invoke(app, ["timer"]).output
     assert runner.invoke(app, ["timer", "pause"]).exit_code != 0
+
+    # `start <slug>` conjures a clock from nothing — what Vim's space runs.
+    assert "running" in runner.invoke(app, ["timer", "start", "move-zeroes"]).output
+    solvetimer.clear()
 
     solvetimer.begin("two-sum")
     assert "ready" in runner.invoke(app, ["timer"]).output

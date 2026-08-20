@@ -96,7 +96,8 @@ Cookie 以 `0600` 权限写入 `~/.lc/cookies.json`；不想落盘也可以通�
 暂停——弹出遮罩把代码和题面一起盖住，停着表还能读题就等于白嫖时间；在遮罩里按 `space` 继续。
 提交失败计时照走；提交**通过**时计时停止并报告用时——TUI 的 `s`、命令行的 `lc submit`、Vim 里的
 `\s` 都算。`\Z` 把计时归零重来一局。`lc timer` 可以在 shell 里看当前时钟（还有
-`pause` / `resume` / `reset`），`lc config timer off` 整个关掉。
+`start` / `pause` / `resume` / `reset`），`lc config timer off` 整个关掉。就算是直接
+`vim solution.py` 打开的会话，按 `space` 也一样能起表。
 
 点题面里的 `url` 那一行就能在浏览器里打开该题；按 `o` 效果一样，两个 tab 都能用。在 Vim 的题面
 面板里同一行需要**双击**（或者用 `\o`，两个窗口都行）：那里鼠标归 Vim 管，单击根本到不了终端，

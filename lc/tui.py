@@ -534,7 +534,7 @@ class LeetCodeTUI(App):
         Binding("D", "daily", "Jump to today's daily", show=False),
         Binding("ctrl+r", "refresh", "Refresh from the local index", show=False),
         Binding("R", "sync", "Re-download the problem index", show=False),
-        Binding("escape", "focus_list", "", show=False),
+        Binding("escape", "focus_list", "Back to the list", show=False),
     ]
 
     def __init__(self, initial: str | None = None) -> None:
@@ -550,8 +550,8 @@ class LeetCodeTUI(App):
         self.current_slug: str = ""
         self.daily_slug: str | None = None
         self._filter_timer = None
-        # What the problem's solved-state was when its clock began — the
-        # return-from-editor check needs "became solved", not "is solved".
+        # What the problem's solved-state was when the editor opened — the
+        # return check needs "became solved", not "is solved".
         self._timer_was_solved = False
 
     # ----------------------------------------------------------------- layout
@@ -616,13 +616,6 @@ class LeetCodeTUI(App):
     def _timer_begin(self, slug: str) -> None:
         if not self.config.timer_on:
             return
-        before = solvetimer.load()
-        if before is None or before.slug != slug or before.done:
-            # Whether it was already solved when the clock started — the
-            # editor-return check needs "became solved", not "is solved",
-            # or re-opening an old solve would stop the clock instantly.
-            known = store.find(slug)
-            self._timer_was_solved = known.solved if known else False
         solvetimer.begin(slug)
 
     def _timer_submit(self, slug: str, accepted: bool) -> None:
@@ -984,6 +977,13 @@ class LeetCodeTUI(App):
                 return
 
         self._timer_begin(problem.slug)
+        # Snapshot solved-ness at the door, every visit: the editor-return
+        # check needs "became solved while I was in there", and a value
+        # remembered from an earlier visit (or an earlier process — the
+        # clock file outlives the TUI) would stop the clock of a problem
+        # that was already solved years ago.
+        known = store.find(problem.slug)
+        self._timer_was_solved = known.solved if known else False
         editor = self.config.resolve_editor()
         if editor:
             with self.suspend():
