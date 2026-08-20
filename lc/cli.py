@@ -1206,6 +1206,16 @@ def timer_resume() -> None:
     console.print(_timer_line(solvetimer.resume()))
 
 
+@timer_app.command("reset")
+def timer_reset() -> None:
+    """Back to 00:00 and running — a fresh attempt at the same problem."""
+    timer = solvetimer.reset()
+    if timer is None:
+        die("no clock to reset", "opening a problem starts one")
+        return
+    console.print(_timer_line(timer))
+
+
 config_app = typer.Typer(help="Read and change lc settings.", no_args_is_help=True)
 app.add_typer(config_app, name="config")
 

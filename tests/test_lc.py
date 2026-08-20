@@ -367,6 +367,9 @@ def test_vim_quit_never_fights_the_statement_terminal():
     assert "<leader>z :call <SID>LcTimerToggle()" in text
     assert "lc timer pause" in text and "lc timer resume" in text
     assert "tab new" in text and "tabclose" in text
+    # \Z resets — one shifted slip from \z, so it must confirm first.
+    assert "<leader>Z :call <SID>LcTimerReset()" in text
+    assert "confirm('Reset the solve clock" in text and "lc timer reset" in text
 
     # Vim owns the mouse in the pane, and its terminal drops the hyperlink
     # escape, so the URL can only be opened by something Vim itself binds.
@@ -2456,6 +2459,13 @@ def test_the_clock_is_shared_and_stopped_by_a_cli_submit(tmp_path, monkeypatch):
     fresh = solvetimer.begin("two-sum")
     assert fresh.running and not fresh.done and fresh.accum == 0.0
 
+    # reset: back to zero and running, whatever state it was in
+    solvetimer.pause()
+    again = solvetimer.reset()
+    assert again.running and again.accum == 0.0 and again.slug == "two-sum"
+    solvetimer.stop_if("two-sum")
+    assert solvetimer.reset().running        # "go again" works on a done clock
+
     # a torn or hand-mangled file is "no clock", never a crash
     (tmp_path / "timer.json").write_text("{not json")
     assert solvetimer.load() is None
@@ -2482,3 +2492,5 @@ def test_cli_timer_pause_and_resume(tmp_path, monkeypatch):
     assert not solvetimer.load().running
     runner.invoke(app, ["timer", "resume"])
     assert solvetimer.load().running
+    # reset drops the elapsed time and keeps it ticking — Vim's \Z.
+    assert "00:00" in runner.invoke(app, ["timer", "reset"]).output

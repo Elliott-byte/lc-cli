@@ -109,7 +109,8 @@ on **Vim's statusline**, not in the TUI. `\z` pauses it behind a cover that
 hides the code and statement (a stopped clock beside a readable problem
 would be free reading time); `space` there resumes. A failed submit leaves
 it running; an accepted one — `s` in the TUI, `lc submit`, or `\s` in Vim —
-stops it and reports your time. `lc timer` shows it from the shell, and
+stops it and reports your time. `\Z` resets it to zero for a fresh attempt.
+`lc timer` shows it from the shell (with `pause` / `resume` / `reset`), and
 `lc config timer off` turns the whole thing off.
 
 Click the statement's `url` line to open the problem in your browser — or
@@ -276,6 +277,7 @@ In a solution buffer (any file next to a `.lc.json`), normal mode:
 | `\o` | open the problem page in your browser (figures render there) |
 | `\m` | save this problem to the review deck |
 | `\z` | pause the solve clock behind a cover (space there resumes) |
+| `\Z` | reset the clock to 00:00 for a fresh attempt (asks first) |
 | `\q` | save everything, then quit — back to the TUI/shell |
 
 Opening a solution file opens the statement beside it automatically — hide it

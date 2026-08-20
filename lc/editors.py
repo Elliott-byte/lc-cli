@@ -20,6 +20,7 @@ VIM_PLUGIN = r'''" lc.vim — Vim integration for the lc LeetCode CLI.
 "   <leader>o   open the problem page in your browser (for figures/animations)
 "   <leader>m   save this problem to the lc review deck (spaced repetition)
 "   <leader>z   pause the solve clock behind a cover (space there resumes)
+"   <leader>Z   reset the solve clock to 00:00 (asks first)
 "   <leader>q   write everything, then quit Vim (back to the lc TUI/shell)
 " The statement pane shows `lc show` fully rendered in a terminal split when
 " the editor supports it, the raw README.md otherwise; `let
@@ -182,6 +183,7 @@ function! s:LcOpenStatement() abort
   nnoremap <buffer> <leader>o :call <SID>LcOpenWeb()<CR>
   nnoremap <buffer> <leader>m :call <SID>LcReview()<CR>
   nnoremap <buffer> <leader>z :call <SID>LcTimerToggle()<CR>
+  nnoremap <buffer> <leader>Z :call <SID>LcTimerReset()<CR>
   nnoremap <buffer> <leader>q :call <SID>LcQuitAll()<CR>
   nnoremap <buffer> <2-LeftMouse> <LeftMouse>:call <SID>LcClickOpen()<CR>
   call s:LcKeyHints([['', 'q close'], ['t', 'test'], ['s', 'submit'],
@@ -382,6 +384,22 @@ function! s:LcTimerToggle() abort
   silent! file [break]
 endfunction
 
+function! s:LcTimerReset() abort
+  " \Z — back to 00:00 and running: a fresh attempt at this problem. One
+  " shifted slip away from \z, and it erases the elapsed time, so it asks.
+  let l:t = s:LcTimerFile()
+  if empty(l:t) || get(l:t, 'slug', '') !=# s:LcSlug()
+    echo 'lc: no clock running here'
+    return
+  endif
+  if confirm('Reset the solve clock to 00:00?', "&Yes\n&No", 2) != 1
+    return
+  endif
+  call system('lc timer reset')
+  redrawstatus!
+  echo 'lc: clock reset'
+endfunction
+
 function! s:LcBreakResume() abort
   " Closing the cover is the resume, exactly as in the TUI.
   call system('lc timer resume')
@@ -454,6 +472,7 @@ function! s:LcSetup() abort
   nnoremap <buffer> <leader>m :call <SID>LcReview()<CR>
   " Pause the solve clock behind a cover; \z again (or space there) resumes.
   nnoremap <buffer> <leader>z :call <SID>LcTimerToggle()<CR>
+  nnoremap <buffer> <leader>Z :call <SID>LcTimerReset()<CR>
   " One stroke back to whatever launched Vim (the lc TUI resumes on exit).
   nnoremap <buffer> <leader>q :call <SID>LcQuitAll()<CR>
   call s:LcKeyHints([['t', 'test'], ['s', 'submit'], ['z', 'pause'],

@@ -123,6 +123,17 @@ def stop_if(slug: str) -> Timer | None:
     return timer
 
 
+def reset() -> Timer | None:
+    """Restart the active clock from zero, running — same problem, fresh
+    attempt. Works on a stopped clock too: that is "go again"."""
+    timer = load()
+    if timer is None:
+        return None
+    fresh = Timer(slug=timer.slug, started=time.time())
+    save(fresh)
+    return fresh
+
+
 def clock(seconds: float) -> str:
     """mm:ss under an hour, h:mm:ss beyond — a solve clock, not a datetime."""
     total = int(seconds)
