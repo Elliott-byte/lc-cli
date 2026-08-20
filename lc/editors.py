@@ -212,20 +212,18 @@ function! s:LcClockText() abort
   if type(l:t) != v:t_dict || get(l:t, 'slug', '') !=# s:LcSlug()
     return ''
   endif
+  " Plain text, no emoji: the clock symbols are double-width emoji to the
+  " terminal but single-width to Vim, and the disagreement tears the
+  " statusline highlight apart around them.
   let l:sec = float2nr(get(l:t, 'accum', 0.0))
-  let l:mark = '⏸'
+  let l:mark = 'paused '
   if get(l:t, 'done')
-    let l:mark = '✔'
+    let l:mark = 'done '
   elseif get(l:t, 'started') isnot v:null
     let l:sec += max([0, float2nr(localtime() - get(l:t, 'started'))])
-    let l:mark = '⏱'
+    let l:mark = ''
   endif
-  let l:h = l:sec / 3600
-  let l:m = (l:sec % 3600) / 60
-  if l:h > 0
-    return printf('%s %d:%02d:%02d', l:mark, l:h, l:m, l:sec % 60)
-  endif
-  return printf('%s %02d:%02d', l:mark, l:m, l:sec % 60)
+  return l:mark . s:LcFmtClock(l:sec)
 endfunction
 
 function! s:LcHintText() abort
@@ -374,8 +372,8 @@ function! s:LcTimerToggle() abort
   setlocal nonumber norelativenumber statusline=\ 
   let l:pad = repeat([''], max([1, winheight(0) / 2 - 2]))
   let l:mid = repeat(' ', max([0, (winwidth(0) - 12) / 2]))
-  call setline(1, l:pad + [l:mid . '⏸  ' . s:LcFmtClock(l:sec), '',
-        \ l:mid . 'paused — space resumes'])
+  call setline(1, l:pad + [l:mid . 'paused at ' . s:LcFmtClock(l:sec), '',
+        \ l:mid . 'space resumes'])
   setlocal nomodifiable
   nnoremap <buffer> <Space> :call <SID>LcBreakResume()<CR>
   nnoremap <buffer> <CR> :call <SID>LcBreakResume()<CR>
