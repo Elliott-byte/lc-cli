@@ -135,6 +135,19 @@ For the ones you drew a blank on, `0` goes straight back to level 1 and the
 problem returns tomorrow. One step down is not enough for a lapse — a level-9
 problem stepped to 8 still buys itself three months.
 
+**Or let the judge grade.** If you would rather the verdict decide:
+
+```bash
+lc config autograde on
+```
+
+A submit then moves the problem by itself — accepted climbs a level, a
+failure drops one, and the next review is scheduled from today. Only the
+first submit of a day counts, so re-submitting a passing solution cannot
+ratchet a problem up to level 10, and `+` / `-` / `0` still override by hand.
+It is off by default: the judge knows whether the code passed, not whether
+you remembered how.
+
 Submits count from anywhere — the TUI, `lc submit` in a shell, `\s` in Vim —
 so a problem you solved in Vim is already green when you get back to the
 list. The mark describes today: it clears when you grade the problem, and
@@ -292,6 +305,7 @@ lc config editor "code -w"         # otherwise $EDITOR / $VISUAL is used
 lc config curve 1,2,4,7,15,30      # days per review level
 lc config repo https://github.com/you/lc-review.git
 lc config author you@example.com   # who deck commits are authored by
+lc config autograde on             # let a submit verdict move the level
 ```
 
 ## All commands

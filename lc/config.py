@@ -65,6 +65,10 @@ class Config:
     #: to an address your host knows you by and it attributes the deck to you.
     review_author_name: str = ""
     review_author_email: str = ""
+    #: Let a submit verdict grade the problem by itself — accepted a level up,
+    #: a failure a level down. Off by default: grading is a judgement about
+    #: recall, and the judge only knows whether the code passed.
+    review_autograde: bool = False
     #: Keys in config.json this version does not know about — kept so settings
     #: written by a newer lc survive a round-trip through this one.
     extra: dict = field(default_factory=dict, repr=False)
@@ -80,6 +84,16 @@ class Config:
         """(name, email) for deck commits, falling back to lc's own identity."""
         return (self.review_author_name.strip() or DEFAULT_AUTHOR_NAME,
                 self.review_author_email.strip() or DEFAULT_AUTHOR_EMAIL)
+
+    @property
+    def autograde(self) -> bool:
+        """Whether a submit verdict moves the level on its own.
+
+        `is True`, not bool(): config.json is hand-editable, and a stray
+        "false" is a truthy *string* — rescheduling a deck off the back of one
+        is the worse mistake.
+        """
+        return self.review_autograde is True
 
     def resolve_editor(self) -> str | None:
         for candidate in (self.editor, os.environ.get("LC_EDITOR"), os.environ.get("VISUAL"),

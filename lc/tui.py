@@ -197,8 +197,9 @@ class ReviewList(DataTable):
         self._today = today
         self._render_rows()
 
-    #: Row background for a problem submitted today — the cue that it is
-    #: waiting for you to grade it with + or -.
+    #: Row background for a problem submitted today: the cue to grade it with
+    #: + or -, or — under `lc config autograde on` — the record of the grade
+    #: the verdict already applied.
     ATTEMPT_BG = {"passed": "on #14532d", "failed": "on #4c1d24"}
 
     def _render_rows(self) -> None:
@@ -1040,15 +1041,22 @@ class LeetCodeTUI(App):
                 known = store.find(problem.slug)
                 if known is not None and not known.solved:
                     store.update_status(problem.slug, "notac")
-            note = review.record_submit(problem.slug, result.accepted)
+            autograde = self.config.autograde
+            note = review.record_submit(
+                problem.slug, result.accepted,
+                curve=self.curve if autograde else None,
+            )
             self.call_from_thread(self.refresh_list)
             self.call_from_thread(self.refresh_review)
             if note:
-                key = "+" if result.accepted else "-"
-                self.call_from_thread(
-                    self.notify, f"{note} · press {key} in the Review tab",
-                    timeout=8,
-                )
+                # Autograde has already moved the level — prompting for the key
+                # that would move it again is exactly the wrong advice.
+                if autograde:
+                    tail = ""
+                else:
+                    tail = " · press %s in the Review tab" % (
+                        "+" if result.accepted else "-")
+                self.call_from_thread(self.notify, f"{note}{tail}", timeout=8)
 
         self.call_from_thread(self._show_result, result, cases)
 

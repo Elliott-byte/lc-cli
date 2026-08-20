@@ -6,9 +6,11 @@ not cache — ``cache.db`` can be deleted freely, this file is the deck.
 A problem sits at a level from 1 to ``len(curve)``; the curve says how many
 days a pass at each level buys before the next review. The default is
 Ebbinghaus's — 1, 2, 4, 7, 15 days, then out to a year — and ``lc config
-curve`` replaces it. Levels move only when you say so: submitting a deck
-problem marks it as attempted today, and you grade it with + or - — or with
-0, for a problem you did not remember at all.
+curve`` replaces it. By default levels move only when you say so: submitting
+a deck problem marks it as attempted today, and you grade it with + or - — or
+with 0, for a problem you did not remember at all. ``lc config autograde on``
+hands that to the judge instead — accepted climbs a level, a failure drops
+one, once per problem per day.
 """
 
 from __future__ import annotations
@@ -375,14 +377,24 @@ def postpone_due(today: date | None = None) -> int:
 
 @_atomic
 def record_submit(
-    slug: str, accepted: bool, today: date | None = None
+    slug: str,
+    accepted: bool,
+    today: date | None = None,
+    *,
+    curve: list[int] | None = None,
 ) -> str | None:
-    """Note that a deck problem was submitted today, without grading it.
+    """Note that a deck problem was submitted today.
 
-    Levels are the user's to set: lc marks the problem as re-solved and the
-    Review tab colours the row, which is the cue to press + (or -). Deciding
-    the level automatically would silently reschedule a problem you might
-    have solved by luck, or looked up.
+    Without *curve* lc only marks the problem as re-solved and the Review tab
+    colours the row, which is the cue to press + (or -). Levels stay the
+    user's to set, because the judge cannot tell recall from a solution that
+    was looked up — which is why grading yourself is still the default.
+
+    Pass *curve* — `lc config autograde on` — to let the verdict grade it:
+    accepted moves the problem a level up, a failure a level down, and the
+    next review is scheduled from today. Only the first grade of a day counts.
+    Re-submitting a passing solution is one recall, not five, and must not
+    ratchet the level up; a problem already graded by hand today is left alone.
 
     Returns a short human-readable line, or None when the problem is not on
     the deck. Only real submits belong here — passing the samples proves
@@ -394,11 +406,36 @@ def record_submit(
     if item is None or item.removed:
         return None
 
+    verdict = "solved" if accepted else "not solved"
+
+    if curve:
+        # Both halves matter. `graded` alone is too broad — putting a problem
+        # on the deck stamps it too, and adding a problem must not eat its
+        # first grade. The attempt mark alone is too broad the other way: a
+        # submit made earlier today with autograde off would block the first
+        # real grade of the day and report one that never happened. Together
+        # they mean what is actually being asked: has a submit already graded
+        # this problem today?
+        if item.graded == today.isoformat() and item.attempt_today(today):
+            return f"review: {verdict} — already graded today, level {item.level}"
+        before = item.level
+        _schedule(item, before + (1 if accepted else -1), curve, today)
+        # _schedule clears the "solved today" mark. Here that mark is the record
+        # of this submit — it tints the row, and it is what stops the next
+        # submit today from grading the problem a second time.
+        item.attempted = today.isoformat()
+        item.attempt_passed = accepted
+        save(items)
+        # Clamped at both ends: a failure at level 1 has nowhere to fall, and a
+        # pass at the top of the curve nowhere to climb.
+        moved = (f"level {before} → {item.level}" if item.level != before
+                 else f"still at level {item.level}")
+        return f"review: {verdict} — {moved}, next in {item.due_in(today)}d"
+
     item.attempted = today.isoformat()
     item.attempt_passed = accepted
     item.updated = _stamp()
     save(items)
 
     # Just the fact — the TUI can say "press +", a shell cannot.
-    verdict = "solved" if accepted else "not solved"
     return f"review: {verdict} — still at level {item.level}"

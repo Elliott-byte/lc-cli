@@ -834,7 +834,12 @@ def submit(
         store.update_status(problem.slug, "ac")
     elif known is not None and not known.solved:
         store.update_status(problem.slug, "notac")
-    note = review.record_submit(problem.slug, result.accepted)
+    cfg = load_config()
+    autograde = cfg.autograde
+    note = review.record_submit(
+        problem.slug, result.accepted,
+        curve=review.curve_of(cfg) if autograde else None,
+    )
 
     if result.accepted:
         fx.play(console, big=True)
@@ -843,10 +848,11 @@ def submit(
     print_result(result, problem)
     if note:
         console.print(Text(f"  {note}", style="dim"))
-        console.print(
-            Text(f"  grade it: `lc review level {problem.frontend_id} <level>`",
-                 style="dim")
-        )
+        if not autograde:
+            console.print(
+                Text(f"  grade it: `lc review level {problem.frontend_id} <level>`",
+                     style="dim")
+            )
     raise typer.Exit(0 if result.accepted else 1)
 
 
@@ -1173,6 +1179,8 @@ def config_show() -> None:
     who, addr = cfg.review_author
     table.add_row("review author", f"{who} <{addr}>"
                   + ("" if cfg.review_author_email else " (default)"))
+    table.add_row("autograde", "on — a submit moves the level" if cfg.autograde
+                  else Text("off — you grade with + / - / 0", style="dim"))
     table.add_row("lc home", str(home()))
     console.print(table)
 
@@ -1254,6 +1262,30 @@ def config_author(
     console.print(Text(f"✔ review author: {who} <{addr}>", style="green"))
     console.print(Text("  GitHub credits commits to the account owning this address",
                        style="dim"))
+
+
+@config_app.command("autograde")
+def config_autograde(
+    state: str = typer.Argument(..., help="on | off"),
+) -> None:
+    """Let a submit verdict grade the problem: accepted up a level, a fail down."""
+    want = state.strip().lower()
+    if want not in ("on", "off", "true", "false", "yes", "no"):
+        die(f"expected 'on' or 'off', not {state!r}")
+        return
+    cfg = load_config()
+    cfg.review_autograde = want in ("on", "true", "yes")
+    save_config(cfg)
+    if cfg.review_autograde:
+        console.print(Text("✔ autograde: on", style="green"))
+        console.print(Text("  a submit of a deck problem now moves its level — "
+                           "accepted up one, a failure down one", style="dim"))
+        console.print(Text("  only the first grade of a day counts; + / - / 0 "
+                           "still override by hand", style="dim"))
+    else:
+        console.print(Text("✔ autograde: off", style="green"))
+        console.print(Text("  submits only mark the row; grade with + / - / 0",
+                           style="dim"))
 
 
 @config_app.command("curve")

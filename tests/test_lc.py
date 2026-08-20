@@ -1971,3 +1971,114 @@ def test_deck_commits_carry_the_configured_author(tmp_path, monkeypatch):
     review.add("coin-change", title="Coin Change", frontend_id="322", curve=curve)
     gitsync.push(remote)
     assert author() == "Ada <ada@example.com>"
+
+
+
+def test_autograde_moves_the_level_with_the_verdict(tmp_path, monkeypatch):
+    """`lc config autograde on`: accepted climbs a level, a failure drops one."""
+    from datetime import date
+
+    review = _review_env(tmp_path, monkeypatch)
+    curve = [1, 2, 4, 7]
+    d = date(2026, 8, 15)
+    review.add("s", curve=curve, today=d)
+    review.shift_level("s", +1, curve, today=d)      # level 2
+
+    note = review.record_submit("s", True, today=d, curve=curve)
+    item = review.load()["s"]
+    assert item.level == 3
+    assert item.due == "2026-08-19", "rescheduled from today at the new level"
+    assert item.graded == d.isoformat()
+    assert "level 2 → 3" in note
+    # The mark records what this submit did, and tints the row.
+    assert item.attempt_today(d) == "passed"
+
+    # The next day, a failure takes it back down.
+    d2 = date(2026, 8, 16)
+    note = review.record_submit("s", False, today=d2, curve=curve)
+    item = review.load()["s"]
+    assert item.level == 2
+    assert item.due == "2026-08-18"
+    assert "level 3 → 2" in note
+
+
+def test_autograde_grades_only_once_a_day(tmp_path, monkeypatch):
+    """Re-submitting a passing solution is one recall, not five."""
+    from datetime import date
+
+    review = _review_env(tmp_path, monkeypatch)
+    curve = [1, 2, 4, 7]
+    d = date(2026, 8, 15)
+    review.add("s", curve=curve, today=d)
+
+    review.record_submit("s", True, today=d, curve=curve)
+    assert review.load()["s"].level == 2
+    for _ in range(4):
+        note = review.record_submit("s", True, today=d, curve=curve)
+        assert "already graded today" in note
+    assert review.load()["s"].level == 2, "must not ratchet up"
+
+    # The rule is about submits, not about grading generally: a hand grade
+    # clears the mark, so the next submit today is once again the first one.
+    review.shift_level("s", +2, curve, today=d)      # level 4
+    review.record_submit("s", False, today=d, curve=curve)
+    assert review.load()["s"].level == 3
+
+
+def test_autograde_clamps_at_both_ends_of_the_curve(tmp_path, monkeypatch):
+    """A fail at level 1 has nowhere to fall, a pass at the top nowhere to climb."""
+    from datetime import date
+
+    review = _review_env(tmp_path, monkeypatch)
+    curve = [1, 2]
+    d = date(2026, 8, 15)
+    review.add("floor", curve=curve, today=d)
+    note = review.record_submit("floor", False, today=d, curve=curve)
+    assert review.load()["floor"].level == 1
+    assert "still at level 1" in note
+
+    review.add("roof", curve=curve, today=d)
+    review.shift_level("roof", +1, curve, today=d)   # level 2, the top
+    note = review.record_submit("roof", True, today=d, curve=curve)
+    assert review.load()["roof"].level == 2
+    assert "still at level 2" in note
+
+
+def test_autograde_is_off_unless_asked_for(tmp_path, monkeypatch):
+    """Off by default, and a hand-edited "false" is not a yes."""
+    from lc.config import Config
+
+    assert Config().autograde is False
+    assert Config(review_autograde=True).autograde is True
+    # config.json is hand-editable — a truthy *string* must not reschedule a deck.
+    assert Config(review_autograde="false").autograde is False
+    assert Config(review_autograde="true").autograde is False
+
+
+def test_autograde_turned_on_mid_day_still_grades(tmp_path, monkeypatch):
+    """A submit made while autograde was off must not eat the day's first grade.
+
+    The once-a-day guard asks "has a submit already *graded* this today?" —
+    keyed on the attempt mark alone it also caught ungraded marks, blocked the
+    real grade, and reported one that had never happened.
+    """
+    from datetime import date
+
+    review = _review_env(tmp_path, monkeypatch)
+    curve = [1, 2, 4, 7]
+    past, today = date(2026, 8, 15), date(2026, 8, 20)
+    review.add("s", curve=curve, today=past)
+    review.shift_level("s", +2, curve, today=past)     # graded days ago, level 3
+
+    # Morning: autograde off, so the submit only marks the row.
+    assert "still at level 3" in review.record_submit("s", True, today=today)
+    assert review.load()["s"].level == 3
+
+    # Switched on later the same day: this is still the first grade of the day.
+    assert "level 3 → 4" in review.record_submit("s", True, today=today, curve=curve)
+    assert review.load()["s"].level == 4
+
+    # And only the first.
+    note = review.record_submit("s", True, today=today, curve=curve)
+    assert "already graded today" in note
+    assert review.load()["s"].level == 4

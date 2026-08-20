@@ -113,6 +113,16 @@ Cookie 以 `0600` 权限写入 `~/.lc/cookies.json`；不想落盘也可以通�
 完全没想起来的题按 `0`，直接打回 1 级，明天再见。忘掉一道题降一级是不够的——9 级的题降到
 8 级，照样能给自己换来三个月。
 
+**也可以交给判题机打分。** 如果你更愿意让评测结果说了算：
+
+```bash
+lc config autograde on
+```
+
+此后提交一道刷题本里的题就会自己动等级——通过升一级，没过降一级，并从今天起重新排期。
+一天只算第一次提交，所以把通过的代码反复提交也不会把等级一路顶到 10 级；`+` / `-` / `0`
+仍然可以随时手动覆盖。默认关闭：判题机只知道代码过没过，不知道你到底记没记住。
+
 在哪提交都算——TUI 里、shell 里的 `lc submit`、Vim 里的 `\s`——所以你在 Vim 里做完的题，
 回到列表时已经是绿的了。标记只描述“今天”：打完分就消失，没打分的话隔夜也会自动褪去。
 
@@ -247,6 +257,7 @@ lc config editor "code -w"         # 不设则用 $EDITOR / $VISUAL
 lc config curve 1,2,4,7,15,30      # 每个复习等级的间隔天数
 lc config repo https://github.com/you/lc-review.git
 lc config author you@example.com   # 刷题本提交的作者身份
+lc config autograde on             # 让提交结果自己调等级
 ```
 
 ## 全部命令
