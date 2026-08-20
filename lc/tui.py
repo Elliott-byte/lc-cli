@@ -179,6 +179,8 @@ class ReviewList(DataTable):
         self._items: list[review.ReviewItem] = []
         self._today = date.today()
         self._title_width = 0
+        #: Slug the next render should put the cursor on, if it is still here.
+        self._focus = ""
 
     def on_mount(self) -> None:
         self.cursor_type = "row"
@@ -192,9 +194,17 @@ class ReviewList(DataTable):
     def _available(self) -> int:
         return max((self.size.width or 46) - self._CHROME, 14)
 
-    def load_items(self, items: Iterable[review.ReviewItem], today: date) -> None:
+    def load_items(self, items: Iterable[review.ReviewItem], today: date,
+                   focus: str = "") -> None:
+        """Reload the deck. *focus* puts the cursor on that problem.
+
+        Honoured by the one render this triggers and then forgotten — a later
+        resize re-renders too, and must not yank the cursor back off whatever
+        the user has moved to since.
+        """
         self._items = list(items)
         self._today = today
+        self._focus = focus
         self._render_rows()
 
     #: Row background for a problem submitted today: the cue to grade it with
@@ -206,6 +216,9 @@ class ReviewList(DataTable):
         width = self._available()
         self._title_width = width
         selected = self.cursor_row
+        # A focus request outranks where the cursor happens to be: the problem
+        # just submitted is the one + and - are about to be aimed at.
+        wanted, self._focus = self._focus, ""
         here = self._cursor_slug()
         self.clear()
         for item in self._items:
@@ -251,12 +264,14 @@ class ReviewList(DataTable):
         # date, which re-sorts the deck — restoring the old index would leave
         # the cursor on whatever slid into that slot, so the next + or - would
         # grade a problem the user never looked at.
-        if here is not None:
+        for candidate in (wanted, here):
+            if not candidate:
+                continue
             try:
-                self.move_cursor(row=self.get_row_index(here))
+                self.move_cursor(row=self.get_row_index(candidate))
                 return
             except RowDoesNotExist:
-                pass    # taken off the deck: fall back to where it used to be
+                pass    # filtered out or off the deck — try the next fallback
         if 0 <= selected < self.row_count:
             self.move_cursor(row=selected)
 
@@ -591,7 +606,7 @@ class LeetCodeTUI(App):
                 message += "  ·  " + daily_note(store.get_meta("daily_date") or "")
             self.set_status(message)
 
-    def refresh_review(self) -> None:
+    def refresh_review(self, focus: str = "") -> None:
         today = date.today()
         items = review.load()
         rows = review.order(items)
@@ -603,7 +618,7 @@ class LeetCodeTUI(App):
                 or needle in item.slug
                 or item.frontend_id == self.keyword
             ]
-        self.query_one("#review", ReviewList).load_items(rows, today)
+        self.query_one("#review", ReviewList).load_items(rows, today, focus=focus)
         # The tab itself carries the day's workload, visible from either pane.
         due = review.due_count(items, today)
         self.query_one(TabbedContent).get_tab("pane-review").label = (
@@ -732,7 +747,9 @@ class LeetCodeTUI(App):
         self.notify(
             f"saved for review — level 1, first review in {item.due_in(date.today())}d"
         )
-        self.refresh_review()
+        # Same rule: the problem you just put on the deck is the one you are
+        # most likely to want to act on over there.
+        self.refresh_review(slug)
 
     def _review_slug(self) -> str | None:
         table = self.query_one("#review", ReviewList)
@@ -1047,7 +1064,13 @@ class LeetCodeTUI(App):
                 curve=self.curve if autograde else None,
             )
             self.call_from_thread(self.refresh_list)
-            self.call_from_thread(self.refresh_review)
+            # Leave the deck's cursor on the problem just submitted, so tabbing
+            # over lands on it and + / - grade what was actually re-solved
+            # instead of whatever the cursor was parked on beforehand. A note
+            # of None means it is not on the deck, so there is nothing to aim at.
+            self.call_from_thread(
+                self.refresh_review, problem.slug if note else ""
+            )
             if note:
                 # Autograde has already moved the level — prompting for the key
                 # that would move it again is exactly the wrong advice.

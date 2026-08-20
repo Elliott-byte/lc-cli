@@ -129,7 +129,9 @@ Due problems sort to the top and the tab title counts them: `Review (3)`.
 row — green with a `✔` when it passed, red with a `✗` when it did not — and
 leaves the level alone. Press `+` to move it up (or `-` to drop it) and the
 mark clears. Levels stay yours: a problem solved by luck, or after peeking,
-should not quietly buy itself another month.
+should not quietly buy itself another month. Tabbing over after a submit puts
+the cursor on the problem you just solved, so the grade lands on the row you
+mean it to.
 
 For the ones you drew a blank on, `0` goes straight back to level 1 and the
 problem returns tomorrow. One step down is not enough for a lapse — a level-9
