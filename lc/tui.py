@@ -17,6 +17,7 @@ from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import ModalScreen
 from textual.widgets import (
+    Checkbox,
     DataTable,
     Footer,
     Input,
@@ -390,6 +391,12 @@ class ConfigScreen(ModalScreen[bool]):
         height: 1; border: none; padding: 0 1; background: $panel;
     }
     #config-box > Input:focus { background: $boost; color: $text; }
+    /* Toggles, dressed like the inputs: one row each, no button chrome. */
+    #config-box > Checkbox {
+        height: 1; border: none; padding: 0 1; background: $panel;
+        margin-top: 1; width: 100%;
+    }
+    #config-box > Checkbox:focus { background: $boost; }
     #curve-preview { color: $accent; height: auto; }
     #config-error { color: $error; height: auto; }
     #config-hint { color: $text-muted; margin-top: 1; }
@@ -399,6 +406,16 @@ class ConfigScreen(ModalScreen[bool]):
         Binding("escape", "cancel", "Cancel"),
         Binding("ctrl+s", "save", "Save"),
     ]
+
+    #: (config attribute, label) — booleans, rendered as checkboxes. The
+    #: same settings exist as `lc config autograde|timer` for scripts; this
+    #: screen is where a person flips them.
+    TOGGLES = (
+        ("review_autograde",
+         "Autograde — a submit moves the level: accepted up, failed down"),
+        ("solve_timer",
+         "Solve timer — clock each solve; space pauses it behind a cover"),
+    )
 
     #: (config attribute, label, placeholder)
     FIELDS = (
@@ -431,6 +448,12 @@ class ConfigScreen(ModalScreen[bool]):
                 id="cfg-curve",
             )
             yield Static("", id="curve-preview")
+            # The properties, not the raw fields: they carry each toggle's
+            # hand-edited-json tolerance and its own default.
+            current = {"review_autograde": self.config.autograde,
+                       "solve_timer": self.config.timer_on}
+            for name, label in self.TOGGLES:
+                yield Checkbox(label, value=current[name], id=f"cfg-{name}")
             yield Static("", id="config-error")
             yield Static(
                 Text("ctrl+s save · esc cancel · blank curve restores the default",
@@ -503,6 +526,8 @@ class ConfigScreen(ModalScreen[bool]):
             return
         for name, _label, _placeholder in self.FIELDS:
             setattr(self.config, name, self.query_one(f"#cfg-{name}", Input).value.strip())
+        for name, _label in self.TOGGLES:
+            setattr(self.config, name, self.query_one(f"#cfg-{name}", Checkbox).value)
         self.config.review_curve = days
         save_config(self.config)
         self.dismiss(True)
@@ -600,9 +625,10 @@ class LeetCodeTUI(App):
 
     def on_mount(self) -> None:
         self.title = "LeetCode"
-        if self.config.timer_on:
-            # Redraws only the status line: cheap enough to run every second.
-            self.set_interval(1.0, self._render_status)
+        # Redraws only the status line: cheap enough to run every second,
+        # and unconditional so flipping the timer on in settings works
+        # without a restart.
+        self.set_interval(1.0, self._render_status)
         self.refresh_list()
         self.refresh_review()
         if store.index_size() == 0:
@@ -1003,7 +1029,13 @@ class LeetCodeTUI(App):
             # pick up a curve change everywhere at once.
             self.config = load_config()
             self.curve = review.curve_of(self.config)
+            if not self.config.timer_on:
+                # Switched off mid-solve: take the clock down with it.
+                self._timer_slug = ""
+                self._timer_started = None
+                self._timer_done = False
             self.refresh_review()
+            self._render_status()
             self.notify("settings saved")
 
         self.push_screen(ConfigScreen(load_config(), self.curve), saved)

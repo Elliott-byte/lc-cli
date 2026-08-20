@@ -305,8 +305,9 @@ lc, re-run `lc setup vim --force`; for Neovim, copy the file to
 ## Settings
 
 Press `c` in the TUI for the settings screen: workspace, default language,
-editor, review repo and the memory curve — with a live preview of what the
-curve you are typing means. `ctrl+s` saves, `esc` cancels.
+editor, review repo, the memory curve — with a live preview of what the
+curve you are typing means — and the autograde and solve-timer toggles.
+`ctrl+s` saves, `esc` cancels.
 
 ![the settings screen](docs/config.svg)
 

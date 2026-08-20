@@ -186,7 +186,7 @@ async def shot_tui() -> None:
 
     app = tuimod.LeetCodeTUI()
     app.client = FakeClient()
-    async with app.run_test(size=(96, 32)) as pilot:
+    async with app.run_test(size=(96, 36)) as pilot:
         for _ in range(40):
             await pilot.pause(0.1)
             if app.daily_slug:

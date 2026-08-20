@@ -2382,3 +2382,44 @@ def test_the_solve_timer_can_be_switched_off(tmp_path, monkeypatch):
             return no_clock and app.screen.__class__.__name__ != "BreakScreen"
 
     assert asyncio.run(solve()) is True
+
+
+def test_settings_screen_edits_the_toggles_too(tmp_path, monkeypatch):
+    """Autograde and the solve timer were CLI-only switches; the settings
+    screen is where a person expects to flip them."""
+    import asyncio
+    import json as _json
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    (tmp_path / "config.json").write_text(_json.dumps(
+        {"workspace": str(tmp_path / "ws"), "editor": ""}
+    ))
+    from textual.widgets import Checkbox
+
+    from lc import tui
+
+    async def flip():
+        app = tui.LeetCodeTUI()
+        async with app.run_test(size=(120, 45)) as pilot:
+            await pilot.pause()
+            app.action_settings()
+            await pilot.pause()
+            before = {c.id: c.value for c in app.screen.query(Checkbox)}
+            for box in app.screen.query(Checkbox):
+                box.toggle()
+            app.screen.action_save()
+            await pilot.pause()
+            saved = _json.loads((tmp_path / "config.json").read_text())
+            # Turning the timer off mid-session also takes the clock down.
+            live = (app.config.autograde, app.config.timer_on, app._timer_slug)
+            # Reopening shows what was saved, not what the screen started with.
+            app.action_settings()
+            await pilot.pause()
+            after = {c.id: c.value for c in app.screen.query(Checkbox)}
+            return before, saved, live, after
+
+    before, saved, live, after = asyncio.run(flip())
+    assert before == {"cfg-review_autograde": False, "cfg-solve_timer": True}
+    assert saved["review_autograde"] is True and saved["solve_timer"] is False
+    assert live == (True, False, "")
+    assert after == {"cfg-review_autograde": True, "cfg-solve_timer": False}
