@@ -852,7 +852,8 @@ def submit(
     print_result(result, problem)
     if result.accepted and cfg.timer_on:
         stopped = solvetimer.stop_if(problem.slug)
-        if stopped is not None:
+        # A clock never started has no time worth reporting.
+        if stopped is not None and stopped.accum > 0:
             console.print(Text(f"  ⏱ solved in {solvetimer.clock(stopped.accum)}",
                                style="dim"))
     if note:
@@ -1169,9 +1170,13 @@ app.add_typer(timer_app, name="timer")
 
 
 def _timer_line(timer) -> Text:
-    state = ("done" if timer.done else "running" if timer.running else "paused")
-    mark = {"done": "✔", "running": "⏱", "paused": "⏸"}[state]
-    return Text(f"{mark} {timer.slug} — {state} at {solvetimer.clock(timer.elapsed())}")
+    state = ("done" if timer.done else "running" if timer.running
+             else "ready" if timer.armed else "paused")
+    mark = {"done": "✔", "running": "⏱", "paused": "⏸", "ready": "○"}[state]
+    line = f"{mark} {timer.slug} — {state} at {solvetimer.clock(timer.elapsed())}"
+    if state == "ready":
+        line += "  (space in Vim starts it)"
+    return Text(line)
 
 
 @timer_app.callback(invoke_without_command=True)

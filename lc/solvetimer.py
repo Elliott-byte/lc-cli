@@ -36,6 +36,11 @@ class Timer:
     def running(self) -> bool:
         return self.started is not None
 
+    @property
+    def armed(self) -> bool:
+        """Created but never started — waiting for the deliberate go."""
+        return not self.done and not self.running and self.accum == 0.0
+
     def elapsed(self, now: float | None = None) -> float:
         run = (now or time.time()) - self.started if self.running else 0.0
         return self.accum + max(0.0, run)
@@ -77,17 +82,17 @@ def clear() -> None:
 
 
 def begin(slug: str) -> Timer:
-    """Opening a problem starts (or resumes) its clock.
+    """Opening a problem arms its clock at 00:00 — it does not start it.
 
-    A different problem — or one already clocked out by a submit — starts
-    from zero; reopening the one being solved just keeps counting.
+    Starting is deliberate: space in Vim (or `lc timer resume`). Opening a
+    different problem — or one already clocked out by a submit — re-arms
+    from zero; reopening the one being solved leaves its clock exactly as
+    it was, running or paused.
     """
     timer = load()
     if timer is None or timer.slug != slug or timer.done:
         timer = Timer(slug=slug)
-    if not timer.running:
-        timer.started = time.time()
-    save(timer)
+        save(timer)
     return timer
 
 

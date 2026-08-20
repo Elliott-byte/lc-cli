@@ -377,6 +377,11 @@ def test_vim_quit_never_fights_the_statement_terminal():
     # \Z resets — one shifted slip from \z, so it must confirm first.
     assert "<leader>Z :call <SID>LcTimerReset()" in text
     assert "confirm('Reset the solve clock" in text and "lc timer reset" in text
+    # Opening a problem only arms the clock; space is the deliberate start —
+    # and once it runs, space must fall through to plain vim space.
+    assert "<expr> <Space> <SID>LcSpaceKey()" in text
+    assert "space starts the clock" in text
+    assert "return \' \'" in text          # the fall-through: plain space
 
     # Vim owns the mouse in the pane, and its terminal drops the hyperlink
     # escape, so the URL can only be opened by something Vim itself binds.
@@ -2343,11 +2348,13 @@ def test_opening_a_problem_clocks_it_and_an_accept_stops_it(tmp_path, monkeypatc
             app.action_pick()
             await pilot.pause()
             timer = solvetimer.load()
-            seen["starts"] = timer is not None and timer.running
+            # Armed, not running: the start is space in Vim, not walking in.
+            seen["armed"] = timer is not None and timer.armed
             seen["slug"] = timer.slug if timer else ""
             # No timer chrome in the TUI: the clock belongs to the editor.
             seen["no_bar_clock"] = "⏱" not in str(app.query_one("#status-bar").render())
 
+            solvetimer.resume()          # what space in Vim runs
             app._timer_submit(PROBLEM.slug, accepted=False)
             seen["failure_keeps_going"] = solvetimer.load().running
             app._timer_submit(PROBLEM.slug, accepted=True)
@@ -2357,7 +2364,7 @@ def test_opening_a_problem_clocks_it_and_an_accept_stops_it(tmp_path, monkeypatc
         return seen
 
     assert asyncio.run(solve()) == {
-        "starts": True, "slug": PROBLEM.slug, "no_bar_clock": True,
+        "armed": True, "slug": PROBLEM.slug, "no_bar_clock": True,
         "failure_keeps_going": True, "accept_stops": True,
     }
 
@@ -2441,8 +2448,13 @@ def test_the_clock_is_shared_and_stopped_by_a_cli_submit(tmp_path, monkeypatch):
     monkeypatch.setenv("LC_HOME", str(tmp_path))
     from lc import solvetimer
 
+    # Opening a problem arms the clock; starting it is a deliberate act
+    # (space in Vim, `lc timer resume` anywhere else).
     timer = solvetimer.begin("two-sum")
-    assert timer.running and (tmp_path / "timer.json").exists()
+    assert timer.armed and not timer.running
+    assert (tmp_path / "timer.json").exists()
+    solvetimer.resume()
+    assert solvetimer.load().running
 
     # pause banks the elapsed time; resume picks it back up
     solvetimer.pause()
@@ -2462,9 +2474,12 @@ def test_the_clock_is_shared_and_stopped_by_a_cli_submit(tmp_path, monkeypatch):
     assert stopped is not None and solvetimer.load().done
     assert solvetimer.stop_if("two-sum") is None   # already done: no double stop
 
-    # reopening the solved problem starts a fresh clock
+    # reopening the solved problem re-arms a fresh clock
     fresh = solvetimer.begin("two-sum")
-    assert fresh.running and not fresh.done and fresh.accum == 0.0
+    assert fresh.armed and not fresh.done and fresh.accum == 0.0
+    # ...and reopening one being solved leaves its clock alone
+    solvetimer.resume()
+    assert solvetimer.begin("two-sum").running
 
     # reset: back to zero and running, whatever state it was in
     solvetimer.pause()
@@ -2494,6 +2509,8 @@ def test_cli_timer_pause_and_resume(tmp_path, monkeypatch):
     assert runner.invoke(app, ["timer", "pause"]).exit_code != 0
 
     solvetimer.begin("two-sum")
+    assert "ready" in runner.invoke(app, ["timer"]).output
+    runner.invoke(app, ["timer", "resume"])
     assert "running" in runner.invoke(app, ["timer"]).output
     runner.invoke(app, ["timer", "pause"])
     assert not solvetimer.load().running

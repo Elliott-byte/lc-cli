@@ -631,7 +631,8 @@ class LeetCodeTUI(App):
         if not accepted or not self.config.timer_on:
             return
         stopped = solvetimer.stop_if(slug)
-        if stopped is not None:
+        # A clock never started has no time worth reporting.
+        if stopped is not None and stopped.accum > 0:
             self.notify(f"solved in {solvetimer.clock(stopped.accum)}", timeout=8)
 
     def refresh_list(self) -> None:

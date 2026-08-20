@@ -104,7 +104,8 @@ re-downloads the whole index.
 Drag the divider between the two panes to give either side more room; it
 stops when one of them is down to 24 columns.
 
-Opening a problem starts a solve clock. It lives where the solving does —
+Opening a problem arms a solve clock; **`space` in Vim starts it** — the
+statusline says so until you do. The clock lives where the solving does —
 on **Vim's statusline**, not in the TUI. `\z` pauses it behind a cover that
 hides the code and statement (a stopped clock beside a readable problem
 would be free reading time); `space` there resumes. A failed submit leaves
@@ -276,6 +277,7 @@ In a solution buffer (any file next to a `.lc.json`), normal mode:
 | `\p` | show/hide the problem statement in a left split |
 | `\o` | open the problem page in your browser (figures render there) |
 | `\m` | save this problem to the review deck |
+| `space` | start the armed solve clock (once running, space is space) |
 | `\z` | pause the solve clock behind a cover (space there resumes) |
 | `\Z` | reset the clock to 00:00 for a fresh attempt (asks first) |
 | `\q` | save everything, then quit — back to the TUI/shell |

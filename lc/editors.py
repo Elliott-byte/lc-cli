@@ -19,6 +19,7 @@ VIM_PLUGIN = r'''" lc.vim — Vim integration for the lc LeetCode CLI.
 "   <leader>p   show/hide the problem statement in a left split
 "   <leader>o   open the problem page in your browser (for figures/animations)
 "   <leader>m   save this problem to the lc review deck (spaced repetition)
+"   space       start the solve clock (opening a problem only arms it)
 "   <leader>z   pause the solve clock behind a cover (space there resumes)
 "   <leader>Z   reset the solve clock to 00:00 (asks first)
 "   <leader>q   write everything, then quit Vim (back to the lc TUI/shell)
@@ -182,6 +183,7 @@ function! s:LcOpenStatement() abort
   nnoremap <buffer> <leader>p :call <SID>LcCloseStatement()<CR>
   nnoremap <buffer> <leader>o :call <SID>LcOpenWeb()<CR>
   nnoremap <buffer> <leader>m :call <SID>LcReview()<CR>
+  nnoremap <buffer> <expr> <Space> <SID>LcSpaceKey()
   nnoremap <buffer> <leader>z :call <SID>LcTimerToggle()<CR>
   nnoremap <buffer> <leader>Z :call <SID>LcTimerReset()<CR>
   nnoremap <buffer> <leader>q :call <SID>LcQuitAll()<CR>
@@ -222,6 +224,10 @@ function! s:LcClockText() abort
   elseif get(l:t, 'started') isnot v:null
     let l:sec += max([0, float2nr(localtime() - get(l:t, 'started'))])
     let l:mark = ''
+  elseif get(l:t, 'accum', 0.0) == 0.0
+    " Armed, never started: opening a problem readies the clock, space
+    " starts it — deliberately, not as a side effect of walking in.
+    return 'space starts the clock'
   endif
   return l:mark . s:LcFmtClock(l:sec)
 endfunction
@@ -391,6 +397,25 @@ function! s:LcTimerToggle() abort
   silent! file [break]
 endfunction
 
+function! s:LcSpaceKey() abort
+  " Space starts (or resumes) this problem's clock when it is standing
+  " still; any other time it is vim's own space, untouched.
+  let l:t = s:LcTimerFile()
+  if !empty(l:t) && get(l:t, 'slug', '') ==# s:LcSlug()
+        \ && get(l:t, 'started') is v:null && !get(l:t, 'done')
+    " expand('<SID>'), not \<SID>: the returned keys are replayed as typed,
+    " where a literal <SID> is just eight characters of nothing.
+    return ':call ' . expand('<SID>') . "LcTimerStart()\<CR>"
+  endif
+  return ' '
+endfunction
+
+function! s:LcTimerStart() abort
+  call system('lc timer resume')
+  redrawstatus!
+  echo 'lc: clock started'
+endfunction
+
 function! s:LcTimerReset() abort
   " \Z — back to 00:00 and running: a fresh attempt at this problem. One
   " shifted slip away from \z, and it erases the elapsed time, so it asks.
@@ -477,6 +502,8 @@ function! s:LcSetup() abort
   nnoremap <buffer> <leader>o :call <SID>LcOpenWeb()<CR>
   " Mid-solve: "I'll want to see this one again."
   nnoremap <buffer> <leader>m :call <SID>LcReview()<CR>
+  " Space starts the armed clock; once it runs, space is space again.
+  nnoremap <buffer> <expr> <Space> <SID>LcSpaceKey()
   " Pause the solve clock behind a cover; \z again (or space there) resumes.
   nnoremap <buffer> <leader>z :call <SID>LcTimerToggle()<CR>
   nnoremap <buffer> <leader>Z :call <SID>LcTimerReset()<CR>
