@@ -1849,3 +1849,88 @@ def test_a_narrow_pane_shows_the_whole_url():
     # line holding nothing but the trailing slash.
     long_lines = url_lines(replace(PROBLEM, slug="a" * 60))
     assert len(long_lines) == 2 and len(long_lines[1].strip()) > 1
+
+
+def test_switching_repos_publishes_to_the_new_one(tmp_path, monkeypatch):
+    """Re-pointing `lc config repo` has to actually publish to the new repo.
+
+    Re-using the old clone did not. A fetch does not prune, so origin/<branch>
+    still named the *previous* repo's commit: the sync reset onto it, found the
+    deck already identical, committed nothing and recorded success — leaving
+    the newly configured repo empty while lc reported "✔ synced just now".
+    """
+    import subprocess
+    import sys
+
+    def bare(name: str) -> str:
+        path = tmp_path / name
+        subprocess.run(["git", "init", "--quiet", "--bare", "-b", "main", str(path)],
+                       check=True)
+        return str(path)
+
+    def commits(repo: str) -> list[str]:
+        out = subprocess.run(["git", "--git-dir", repo, "log", "--oneline"],
+                             capture_output=True, text=True).stdout.strip()
+        return out.splitlines()
+
+    old, new = bare("old.git"), bare("new.git")
+    monkeypatch.setenv("LC_HOME", str(tmp_path / "machine"))
+    for mod in [m for m in sys.modules if m.startswith("lc.")]:
+        del sys.modules[mod]
+    from lc import gitsync, review
+
+    curve = [1, 2, 4, 7]
+    review.add("two-sum", title="Two Sum", frontend_id="1", curve=curve)
+    gitsync.sync(old)
+    review.add("coin-change", title="Coin Change", frontend_id="322", curve=curve)
+    gitsync.sync(old)
+    assert len(commits(old)) == 2
+
+    # Same machine, same clone on disk, now pointed somewhere else.
+    gitsync.sync(new)
+    published = subprocess.run(["git", "--git-dir", new, "show", "main:review.json"],
+                               capture_output=True, text=True).stdout
+    assert "coin-change" in published and "two-sum" in published
+    # Started over rather than dragging the old repo's history across with it.
+    assert len(commits(new)) == 1
+
+
+def test_a_tombstone_for_an_unknown_problem_still_settles(tmp_path, monkeypatch):
+    """A removal for a problem this machine never had must not sit unpushable.
+
+    merge() counts such a tombstone as neither added nor updated, so guarding
+    the save on those counters dropped it from review.json — while status()
+    went on counting it, reporting a change to push that pushing never cleared.
+    """
+    import sys
+
+    remote = _bare_repo(tmp_path)
+    curve = [1, 2, 4, 7]
+
+    def on(machine: str):
+        monkeypatch.setenv("LC_HOME", str(tmp_path / machine))
+        for mod in [m for m in sys.modules if m.startswith("lc.")]:
+            del sys.modules[mod]
+        from lc import gitsync, review
+        from lc.config import Config
+        return gitsync, review, Config(review_repo=remote)
+
+    g, r, cfg = on("mac")
+    r.add("two-sum", title="Two Sum", frontend_id="1", curve=curve)
+    g.sync(remote)
+
+    g, r, cfg = on("wsl")
+    g.sync(remote)
+    assert g.status(cfg).state == "clean"
+
+    # mac puts a problem on the deck and takes it straight off again, so the
+    # repo's only new entry is a tombstone for a slug wsl has never seen.
+    g, r, cfg = on("mac")
+    r.add("scratch", title="Scratch", frontend_id="999", curve=curve)
+    r.remove("scratch")
+    g.sync(remote)
+
+    g, r, cfg = on("wsl")
+    g.sync(remote)
+    assert "scratch" in r.load(), "the tombstone has to reach review.json"
+    assert g.status(cfg).state == "clean", "and must not linger as a pending change"

@@ -14,6 +14,7 @@ a divergence is a merge lc controls, never a conflict git asks about.
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import time
 from dataclasses import dataclass
@@ -143,14 +144,19 @@ def _remote_url(path: Path) -> str:
 
 
 def ensure_clone(url: str) -> Path:
-    """A clone of *url* ready to read, cloning or re-pointing it as needed."""
+    """A clone of *url* ready to read, cloning or re-cloning it as needed."""
     path = repo_dir()
     if (path / ".git").is_dir():
-        if _remote_url(path) != url:
-            # The configured repo changed — start over rather than push a deck
-            # into whichever repository happened to be cloned first.
-            _git("remote", "set-url", "origin", url, cwd=path)
-        return path
+        if _remote_url(path) == url:
+            return path
+        # The configured repo changed, so start over. Re-pointing origin is
+        # not enough: a fetch does not prune, so origin/<branch> would still
+        # name the *old* repo's commit. The sync then resets onto it, finds
+        # the deck already identical, commits nothing and reports success —
+        # leaving the newly configured repo empty. Worse, when the old ref is
+        # gone the first push carries the old repo's whole history across.
+        # The clone is disposable; the deck of record is ~/.lc/review.json.
+        shutil.rmtree(path, ignore_errors=True)
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists():
         raise SyncError(f"{path} exists but is not a git clone — remove it")
@@ -344,7 +350,12 @@ def pull(url: str) -> tuple[int, int]:
         _, remote = fetch_remote_deck(url)
         local = review.load()
         merged, added, updated = review.merge(local, remote)
-        if added or updated:
+        # Written whenever the merge changed anything — not when the counters
+        # are non-zero. A tombstone for a problem this machine never had is
+        # counted as neither added nor updated, so guarding on them dropped it
+        # and left `status` reporting a change to push that pushing never
+        # cleared.
+        if merged != local:
             review.save(merged)
     except SyncError as exc:
         record_sync(error=str(exc))
@@ -381,7 +392,7 @@ def _push_once(url: str) -> tuple[int, bool]:
     path, remote = fetch_remote_deck(url)
     local = review.load()
     merged, added, updated = review.merge(local, remote)
-    if added or updated:
+    if merged != local:      # see pull(): the counters do not cover tombstones
         review.save(merged)
     write_deck(path, merged)
     count = len(review.live(merged))
