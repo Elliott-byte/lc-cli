@@ -196,13 +196,18 @@ lc 在 `~/.lc/review-repo` 保留一个私有克隆，往仓库里写两个文�
 刷题本）和 `REVIEW.md`（同一份数据的带链接表格，GitHub 上直接可读）。它**不会**写
 `README.md`，所以指向一个已有 README 的仓库也是安全的。
 
-提交的作者是 `lc <lc@localhost>`——lc 既不依赖也不改动你的全局 git 身份，所以一台没配过
-git 身份的机器照样能同步。想让 GitHub 把这些提交算到你账号头上，就给它一个该账号拥有的邮箱：
+一个刷题本只属于一个人，所以提交的作者就是**你自己的 git 身份**——和你平时写代码用的
+`user.name` / `user.email` 同一个，不需要另外配置。lc 只读它，不会改它。万一某台机器
+git 完全没配身份，才会退回 `lc <lc@localhost>`，免得直接提交失败。
+
+只有当你希望这些提交算到别的邮箱名下时，才需要覆盖：
 
 ```bash
 lc config author you@example.com     # --name 设定提交者名字
-lc config author none                # 回到 lc 自己的身份
+lc config author none                # 回到你的 git 身份
 ```
+
+`lc config show` 会写明它将以谁的身份提交，以及这个身份是哪来的。
 
 ## Vim
 

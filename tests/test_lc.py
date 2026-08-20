@@ -2194,18 +2194,21 @@ def test_a_tombstone_for_an_unknown_problem_still_settles(tmp_path, monkeypatch)
     assert g.status(cfg).state == "clean", "and must not linger as a pending change"
 
 
-def test_deck_commits_carry_the_configured_author(tmp_path, monkeypatch):
-    """`lc config author` decides who the deck commits are authored by.
-
-    The default is lc's own identity, so a machine with no global git identity
-    can still sync; naming an address the host knows you by lets it credit the
-    deck to your account instead.
+def test_deck_commits_are_authored_by_you(tmp_path, monkeypatch):
+    """The deck repo holds one person's records, so its commits should be that
+    person's without being configured again on every machine: git's own
+    identity is the default. lc's name is only the fallback for a machine
+    where git has none, which would otherwise fail to commit at all.
     """
     import json as _json
+    import os
     import subprocess
     import sys
 
     remote = _bare_repo(tmp_path)
+    gitconfig = tmp_path / "gitconfig"
+    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(gitconfig))
+    monkeypatch.setenv("GIT_CONFIG_SYSTEM", os.devnull)
     monkeypatch.setenv("LC_HOME", str(tmp_path / "machine"))
     for mod in [m for m in sys.modules if m.startswith("lc.")]:
         del sys.modules[mod]
@@ -2218,14 +2221,25 @@ def test_deck_commits_carry_the_configured_author(tmp_path, monkeypatch):
         ).stdout.strip()
 
     curve = [1, 2, 4, 7]
+    # 1. Nothing set anywhere: lc's own, so a bare machine can still sync.
     review.add("two-sum", title="Two Sum", frontend_id="1", curve=curve)
     gitsync.push(remote)
-    assert author() == "lc <lc@localhost>", "lc's own identity by default"
+    assert author() == "lc <lc@localhost>"
+    assert gitsync.author()[2] == "lc's own"
 
+    # 2. The machine's git identity — no lc setting involved.
+    gitconfig.write_text("[user]\n\tname = Eliot\n\temail = e@example.com\n")
+    assert gitsync.author() == ("Eliot", "e@example.com", "from git")
+    review.add("coin-change", title="Coin Change", frontend_id="322", curve=curve)
+    gitsync.push(remote)
+    assert author() == "Eliot <e@example.com>"
+
+    # 3. `lc config author` still overrides it.
     (tmp_path / "machine" / "config.json").write_text(_json.dumps(
         {"review_author_name": "Ada", "review_author_email": "ada@example.com"}
     ))
-    review.add("coin-change", title="Coin Change", frontend_id="322", curve=curve)
+    assert gitsync.author()[2] == "configured"
+    review.add("two-sum-ii", title="Two Sum II", frontend_id="167", curve=curve)
     gitsync.push(remote)
     assert author() == "Ada <ada@example.com>"
 

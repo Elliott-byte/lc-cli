@@ -1178,9 +1178,9 @@ def config_show() -> None:
     )
     table.add_row("review repo", cfg.review_repo or Text("— (lc config repo …)",
                                                          style="dim"))
-    who, addr = cfg.review_author
+    who, addr, source = gitsync.author()
     table.add_row("review author", f"{who} <{addr}>"
-                  + ("" if cfg.review_author_email else " (default)"))
+                  + ("" if source == "configured" else f" ({source})"))
     table.add_row("autograde", "on — a submit moves the level" if cfg.autograde
                   else Text("off — you grade with + / - / 0", style="dim"))
     table.add_row("lc home", str(home()))
@@ -1244,18 +1244,20 @@ def config_repo(
 @config_app.command("author")
 def config_author(
     email: str = typer.Argument(
-        ..., help="email for review-deck commits; 'none' restores lc's own"
+        ..., help="email for review-deck commits; 'none' goes back to git's"
     ),
     name: str = typer.Option(
         "", "--name", help="name to commit under (default: the email's local part)"
     ),
 ) -> None:
-    """Set who `lc review sync` commits as, so the host attributes the deck to you."""
+    """Override who `lc review sync` commits as. It is your own git identity
+    otherwise, so most machines never need this."""
     cfg = load_config()
     if email.strip().lower() in ("none", "off", ""):
         cfg.review_author_name = cfg.review_author_email = ""
         save_config(cfg)
-        console.print(Text("✔ review author: lc <lc@localhost> (default)", style="green"))
+        who, addr, source = gitsync.author()
+        console.print(Text(f"✔ review author: {who} <{addr}> ({source})", style="green"))
         return
     cfg.review_author_email = email.strip()
     cfg.review_author_name = name.strip() or email.strip().split("@")[0]

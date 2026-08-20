@@ -234,14 +234,19 @@ lc keeps a private clone in `~/.lc/review-repo` and writes two files there:
 linked table so the repo page is readable on GitHub. It never writes a
 `README.md`, so pointing lc at a repo that has one is safe.
 
-Commits are made as `lc <lc@localhost>` — lc never depends on, or edits, your
-global git identity, so a machine that has none still syncs. To have GitHub
-credit the deck to your account instead, give it an address that account owns:
+The deck holds one person's records, so its commits are authored by **your
+own git identity** — the same `user.name` and `user.email` the rest of your
+work uses, with nothing to configure. lc reads it, never edits it. A machine
+where git has no identity commits as `lc <lc@localhost>` rather than failing.
+
+Override it only if the deck should be attributed to some other address:
 
 ```bash
 lc config author you@example.com     # --name sets the committer name
-lc config author none                # back to lc's own identity
+lc config author none                # back to your git identity
 ```
+
+`lc config show` names who it will commit as, and where that came from.
 
 ## Vim
 

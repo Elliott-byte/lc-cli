@@ -22,7 +22,13 @@ from datetime import date
 from pathlib import Path
 
 from . import review, store
-from .config import Config, home, load_config
+from .config import (
+    DEFAULT_AUTHOR_EMAIL,
+    DEFAULT_AUTHOR_NAME,
+    Config,
+    home,
+    load_config,
+)
 
 #: Where the deck lives inside the repo. Deliberately not README.md — pointing
 #: lc at a repo that already has one must never overwrite it.
@@ -228,14 +234,50 @@ def render_table(items: dict[str, review.ReviewItem]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _git_identity(path: Path) -> tuple[str, str]:
+    """The name and email git already commits as here, empty where unset."""
+    # Before the first sync there is no clone to ask from, and a missing cwd
+    # would look like "git is missing" rather than "no identity set".
+    cwd = path if path.is_dir() else None
+
+    def ask(key: str) -> str:
+        try:
+            return _git("config", "--get", key, cwd=cwd)
+        except SyncError:
+            return ""     # unset is not a failure, it just means "nothing here"
+
+    return ask("user.name"), ask("user.email")
+
+
+def author(path: Path | None = None) -> tuple[str, str, str]:
+    """Who to commit the deck as, and where that came from.
+
+    The deck repo is yours and nobody else's, so the commits should read like
+    the rest of your work without being configured a second time on every
+    machine: your own git identity is the answer unless you say otherwise.
+    lc's own name is the last resort, for a machine where git has no identity
+    at all — there, `git commit` would fail outright without it.
+    """
+    cfg = load_config()
+    name, email = cfg.review_author_name.strip(), cfg.review_author_email.strip()
+    if name and email:
+        return name, email, "configured"
+    git_name, git_email = _git_identity(path or repo_dir())
+    if not name and not email and git_name and git_email:
+        return git_name, git_email, "from git"
+    return (name or git_name or DEFAULT_AUTHOR_NAME,
+            email or git_email or DEFAULT_AUTHOR_EMAIL,
+            "configured" if name or email else "lc's own")
+
+
 def _commit_and_push(path: Path, message: str) -> bool:
     """Commit the deck files and push. False when there was nothing to commit."""
     _git("add", "--", DECK_FILE, TABLE_FILE, cwd=path)
     if not _git("status", "--porcelain", "--", DECK_FILE, TABLE_FILE, cwd=path):
         return False
-    # -c so lc never depends on (or edits) the user's global git identity; who
-    # it commits as is `lc config author`, defaulting to lc's own.
-    name, email = load_config().review_author
+    # -c rather than writing the clone's config: lc states who it commits as
+    # on every call and never edits a git config of yours.
+    name, email, _ = author(path)
     _git("-c", f"user.name={name}", "-c", f"user.email={email}",
          "commit", "--quiet", "-m", message, cwd=path)
     _git("push", "--quiet", "origin", f"HEAD:{_branch(path)}", cwd=path)
