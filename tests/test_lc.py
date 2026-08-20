@@ -362,6 +362,9 @@ def test_vim_quit_never_fights_the_statement_terminal():
     # reads the shared timer file and a ticker keeps it moving.
     assert "LcClockText" in text and "timer.json" in text
     assert "timer_start(1000" in text and "redrawstatus" in text
+    # ...but never while a prompt, the cmdline or a shell command owns the
+    # screen — that repaint splattered clock digits over `lc test`'s report.
+    assert "mode(1) !~# '^[rc!]'" in text
     # Text only on the statusline: ⏱ is a double-width emoji to the terminal
     # and single-width to Vim, and the disagreement tears the highlight.
     for emoji in ("⏱", "⏸", "✔"):

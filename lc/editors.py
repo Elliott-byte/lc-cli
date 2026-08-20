@@ -226,6 +226,16 @@ function! s:LcClockText() abort
   return l:mark . s:LcFmtClock(l:sec)
 endfunction
 
+function! s:LcTick(...) abort
+  " Never while `lc test`'s output, a prompt or the cmdline owns the screen:
+  " r is the hit-enter prompt (and \Z's confirm), c the cmdline, ! a running
+  " shell command. A statusline repainted onto that screen splatters clock
+  " digits over the judge's report.
+  if mode(1) !~# '^[rc!]'
+    silent! redrawstatus!
+  endif
+endfunction
+
 function! s:LcHintText() abort
   " As many hints as the window can show, most useful first — a status line
   " that overflows just loses its right-hand end silently.
@@ -256,8 +266,7 @@ function! s:LcKeyHints(keys) abort
   " A status line only redraws on events, and a clock that moves once per
   " cursor motion is not a clock. One shared ticker, started lazily.
   if !exists('s:lc_ticker') && has('timers')
-    let s:lc_ticker = timer_start(1000,
-          \ {-> execute('silent! redrawstatus!')}, {'repeat': -1})
+    let s:lc_ticker = timer_start(1000, function('s:LcTick'), {'repeat': -1})
   endif
   if &laststatus < 2
     set laststatus=2
