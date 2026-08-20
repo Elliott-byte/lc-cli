@@ -10,7 +10,7 @@ curve`` replaces it. By default levels move only when you say so: submitting
 a deck problem marks it as attempted today, and you grade it with + or - — or
 with 0, for a problem you did not remember at all. ``lc config autograde on``
 hands that to the judge instead — accepted climbs a level, a failure drops
-one, once per problem per day.
+one, once per problem per day and never over a hand grade.
 """
 
 from __future__ import annotations
@@ -390,11 +390,13 @@ def record_submit(
     user's to set, because the judge cannot tell recall from a solution that
     was looked up — which is why grading yourself is still the default.
 
-    Pass *curve* — `lc config autograde on` — to let the verdict grade it:
-    accepted moves the problem a level up, a failure a level down, and the
-    next review is scheduled from today. Only the first grade of a day counts.
-    Re-submitting a passing solution is one recall, not five, and must not
-    ratchet the level up; a problem already graded by hand today is left alone.
+    Pass *curve* — `lc config autograde on` — and the verdict grades it:
+    accepted moves the problem a level up, a failure a level down, with the
+    next review scheduled from today. Whoever grades first that day wins:
+    re-submitting cannot ratchet the level (five green submits are one
+    recall), a + / - / 0 pressed by hand stands against any later submit,
+    and on the day a problem is added its schedule stays at level 1 no
+    matter how the solve went. The attempt is marked either way.
 
     Returns a short human-readable line, or None when the problem is not on
     the deck. Only real submits belong here — passing the samples proves
@@ -408,34 +410,38 @@ def record_submit(
 
     verdict = "solved" if accepted else "not solved"
 
-    if curve:
-        # Both halves matter. `graded` alone is too broad — putting a problem
-        # on the deck stamps it too, and adding a problem must not eat its
-        # first grade. The attempt mark alone is too broad the other way: a
-        # submit made earlier today with autograde off would block the first
-        # real grade of the day and report one that never happened. Together
-        # they mean what is actually being asked: has a submit already graded
-        # this problem today?
-        if item.graded == today.isoformat() and item.attempt_today(today):
-            return f"review: {verdict} — already graded today, level {item.level}"
+    if not curve:
+        # Just the fact — the TUI can say "press +", a shell cannot.
+        note = f"review: {verdict} — still at level {item.level}"
+    elif item.graded == today.isoformat():
+        # One grade a day, from whoever grades first. `graded` is stamped by
+        # every way that happens — an earlier submit, a manual + / - / 0, and
+        # add(), which schedules the problem at level 1 — so a submit can
+        # never stack a second move on any of them. The hand grade above all
+        # must stand: + / - / 0 are the documented override for the judge,
+        # and an override the next submit undoes is no override at all.
+        if item.added == today.isoformat():
+            note = (f"review: {verdict} — added today, "
+                    f"first review in {item.due_in(today)}d")
+        elif item.attempt_today(today):
+            note = f"review: {verdict} — already graded today, level {item.level}"
+        else:
+            note = (f"review: {verdict} — graded by hand today, "
+                    f"level {item.level} stands")
+    else:
         before = item.level
         _schedule(item, before + (1 if accepted else -1), curve, today)
-        # _schedule clears the "solved today" mark. Here that mark is the record
-        # of this submit — it tints the row, and it is what stops the next
-        # submit today from grading the problem a second time.
-        item.attempted = today.isoformat()
-        item.attempt_passed = accepted
-        save(items)
         # Clamped at both ends: a failure at level 1 has nowhere to fall, and a
         # pass at the top of the curve nowhere to climb.
         moved = (f"level {before} → {item.level}" if item.level != before
                  else f"still at level {item.level}")
-        return f"review: {verdict} — {moved}, next in {item.due_in(today)}d"
+        note = f"review: {verdict} — {moved}, next in {item.due_in(today)}d"
 
+    # Whatever the level did, the attempt itself is recorded: the mark tints
+    # the row — the cue to grade by hand when nothing has graded yet, and the
+    # record of what today's code actually did when something already has.
     item.attempted = today.isoformat()
     item.attempt_passed = accepted
     item.updated = _stamp()
     save(items)
-
-    # Just the fact — the TUI can say "press +", a shell cannot.
-    return f"review: {verdict} — still at level {item.level}"
+    return note

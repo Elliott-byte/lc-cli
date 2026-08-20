@@ -840,9 +840,9 @@ def test_autograde_moves_the_level_with_the_verdict(tmp_path, monkeypatch):
 
     review = _review_env(tmp_path, monkeypatch)
     curve = [1, 2, 4, 7]
-    d = date(2026, 8, 15)
-    review.add("s", curve=curve, today=d)
-    review.shift_level("s", +1, curve, today=d)      # level 2
+    past, d = date(2026, 8, 10), date(2026, 8, 15)
+    review.add("s", curve=curve, today=past)
+    review.shift_level("s", +1, curve, today=past)   # level 2, graded days ago
 
     note = review.record_submit("s", True, today=d, curve=curve)
     item = review.load()["s"]
@@ -868,8 +868,8 @@ def test_autograde_grades_only_once_a_day(tmp_path, monkeypatch):
 
     review = _review_env(tmp_path, monkeypatch)
     curve = [1, 2, 4, 7]
-    d = date(2026, 8, 15)
-    review.add("s", curve=curve, today=d)
+    past, d = date(2026, 8, 10), date(2026, 8, 15)
+    review.add("s", curve=curve, today=past)
 
     review.record_submit("s", True, today=d, curve=curve)
     assert review.load()["s"].level == 2
@@ -878,11 +878,69 @@ def test_autograde_grades_only_once_a_day(tmp_path, monkeypatch):
         assert "already graded today" in note
     assert review.load()["s"].level == 2, "must not ratchet up"
 
-    # The rule is about submits, not about grading generally: a hand grade
-    # clears the mark, so the next submit today is once again the first one.
-    review.shift_level("s", +2, curve, today=d)      # level 4
-    review.record_submit("s", False, today=d, curve=curve)
-    assert review.load()["s"].level == 3
+
+def test_autograde_never_overrides_a_hand_grade(tmp_path, monkeypatch):
+    """+ / - / 0 are the override; a later submit must not undo them.
+
+    The guard used to ask "has a *submit* graded this today?", which a hand
+    grade slipped straight past: submit (level up), press - twice ("I
+    peeked"), submit an optimised version — and the demotion was quietly
+    re-promoted. Whoever grades first that day wins, and a hand grade is a
+    grade.
+    """
+    from datetime import date
+
+    review = _review_env(tmp_path, monkeypatch)
+    curve = [1, 2, 4, 7]
+    past, d = date(2026, 8, 10), date(2026, 8, 15)
+    review.add("s", curve=curve, today=past)
+    review.shift_level("s", +2, curve, today=past)   # level 3, graded days ago
+
+    assert "level 3 → 4" in review.record_submit("s", True, today=d, curve=curve)
+    review.shift_level("s", -1, curve, today=d)
+    review.shift_level("s", -1, curve, today=d)      # the user knows better
+    note = review.record_submit("s", True, today=d, curve=curve)
+    assert "level 2 stands" in note
+    item = review.load()["s"]
+    assert item.level == 2
+    # The attempt is still recorded — the row shows what today's code did.
+    assert item.attempt_today(d) == "passed"
+
+    # A hand grade with no earlier submit stands the same way.
+    d2 = date(2026, 8, 16)
+    review.shift_level("s", +1, curve, today=d2)     # level 3, by hand
+    assert "level 3 stands" in review.record_submit("s", False, today=d2, curve=curve)
+    item = review.load()["s"]
+    assert item.level == 3
+    assert item.attempt_today(d2) == "failed"
+
+
+def test_the_day_a_problem_is_added_is_not_a_review(tmp_path, monkeypatch):
+    """Solving a problem the day it joined the deck must not skip level 1.
+
+    add() schedules the first review for tomorrow; an accepted submit hours
+    later is the *initial* solve, not recall, and bumping it would skip the
+    one-day review the curve deliberately starts with. It also makes day
+    zero order-independent: m-then-solve and solve-then-m both end at
+    level 1, due tomorrow.
+    """
+    from datetime import date
+
+    review = _review_env(tmp_path, monkeypatch)
+    curve = [1, 2, 4, 7]
+    d = date(2026, 8, 15)
+    review.add("s", curve=curve, today=d)
+
+    note = review.record_submit("s", True, today=d, curve=curve)
+    item = review.load()["s"]
+    assert "added today" in note
+    assert item.level == 1
+    assert item.due == "2026-08-16"
+    assert item.attempt_today(d) == "passed"
+
+    # Tomorrow it is due, and the first real review grades as usual.
+    d2 = date(2026, 8, 16)
+    assert "level 1 → 2" in review.record_submit("s", True, today=d2, curve=curve)
 
 
 def test_autograde_clamps_at_both_ends_of_the_curve(tmp_path, monkeypatch):
@@ -891,14 +949,14 @@ def test_autograde_clamps_at_both_ends_of_the_curve(tmp_path, monkeypatch):
 
     review = _review_env(tmp_path, monkeypatch)
     curve = [1, 2]
-    d = date(2026, 8, 15)
-    review.add("floor", curve=curve, today=d)
+    past, d = date(2026, 8, 10), date(2026, 8, 15)
+    review.add("floor", curve=curve, today=past)
     note = review.record_submit("floor", False, today=d, curve=curve)
     assert review.load()["floor"].level == 1
     assert "still at level 1" in note
 
-    review.add("roof", curve=curve, today=d)
-    review.shift_level("roof", +1, curve, today=d)   # level 2, the top
+    review.add("roof", curve=curve, today=past)
+    review.shift_level("roof", +1, curve, today=past)  # level 2, the top
     note = review.record_submit("roof", True, today=d, curve=curve)
     assert review.load()["roof"].level == 2
     assert "still at level 2" in note
@@ -1993,9 +2051,10 @@ def test_a_submit_aims_the_deck_cursor_at_the_problem(tmp_path, monkeypatch):
 def test_autograde_turned_on_mid_day_still_grades(tmp_path, monkeypatch):
     """A submit made while autograde was off must not eat the day's first grade.
 
-    The once-a-day guard asks "has a submit already *graded* this today?" —
-    keyed on the attempt mark alone it also caught ungraded marks, blocked the
-    real grade, and reported one that had never happened.
+    The once-a-day guard keys on `graded`, which a non-grading submit never
+    stamps — so flipping autograde on mid-day still grades, while anything
+    that did grade today (a submit, a hand + / - / 0, the add itself) blocks
+    a second move.
     """
     from datetime import date
 

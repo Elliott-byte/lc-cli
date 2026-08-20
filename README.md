@@ -144,11 +144,12 @@ lc config autograde on
 ```
 
 A submit then moves the problem by itself — accepted climbs a level, a
-failure drops one, and the next review is scheduled from today. Only the
-first submit of a day counts, so re-submitting a passing solution cannot
-ratchet a problem up to level 10, and `+` / `-` / `0` still override by hand.
-It is off by default: the judge knows whether the code passed, not whether
-you remembered how.
+failure drops one, and the next review is scheduled from today. Whoever
+grades first that day wins: re-submitting a passing solution cannot ratchet
+a problem up to level 10, a `+` / `-` / `0` pressed by hand stands against
+any later submit, and the day you add a problem its schedule simply starts
+at level 1. It is off by default: the judge knows whether the code passed,
+not whether you remembered how.
 
 Submits count from anywhere — the TUI, `lc submit` in a shell, `\s` in Vim —
 so a problem you solved in Vim is already green when you get back to the
