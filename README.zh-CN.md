@@ -184,6 +184,14 @@ lc 在 `~/.lc/review-repo` 保留一个私有克隆，往仓库里写两个文�
 刷题本）和 `REVIEW.md`（同一份数据的带链接表格，GitHub 上直接可读）。它**不会**写
 `README.md`，所以指向一个已有 README 的仓库也是安全的。
 
+提交的作者是 `lc <lc@localhost>`——lc 既不依赖也不改动你的全局 git 身份，所以一台没配过
+git 身份的机器照样能同步。想让 GitHub 把这些提交算到你账号头上，就给它一个该账号拥有的邮箱：
+
+```bash
+lc config author you@example.com     # --name 设定提交者名字
+lc config author none                # 回到 lc 自己的身份
+```
+
 ## Vim
 
 ```bash
@@ -238,6 +246,7 @@ lc config workspace ~/code/leetcode
 lc config editor "code -w"         # 不设则用 $EDITOR / $VISUAL
 lc config curve 1,2,4,7,15,30      # 每个复习等级的间隔天数
 lc config repo https://github.com/you/lc-review.git
+lc config author you@example.com   # 刷题本提交的作者身份
 ```
 
 ## 全部命令

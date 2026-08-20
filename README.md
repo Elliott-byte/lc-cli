@@ -218,6 +218,15 @@ lc keeps a private clone in `~/.lc/review-repo` and writes two files there:
 linked table so the repo page is readable on GitHub. It never writes a
 `README.md`, so pointing lc at a repo that has one is safe.
 
+Commits are made as `lc <lc@localhost>` — lc never depends on, or edits, your
+global git identity, so a machine that has none still syncs. To have GitHub
+credit the deck to your account instead, give it an address that account owns:
+
+```bash
+lc config author you@example.com     # --name sets the committer name
+lc config author none                # back to lc's own identity
+```
+
 ## Vim
 
 ```bash
@@ -282,6 +291,7 @@ lc config workspace ~/code/leetcode
 lc config editor "code -w"         # otherwise $EDITOR / $VISUAL is used
 lc config curve 1,2,4,7,15,30      # days per review level
 lc config repo https://github.com/you/lc-review.git
+lc config author you@example.com   # who deck commits are authored by
 ```
 
 ## All commands

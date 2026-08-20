@@ -1934,3 +1934,40 @@ def test_a_tombstone_for_an_unknown_problem_still_settles(tmp_path, monkeypatch)
     g.sync(remote)
     assert "scratch" in r.load(), "the tombstone has to reach review.json"
     assert g.status(cfg).state == "clean", "and must not linger as a pending change"
+
+
+
+def test_deck_commits_carry_the_configured_author(tmp_path, monkeypatch):
+    """`lc config author` decides who the deck commits are authored by.
+
+    The default is lc's own identity, so a machine with no global git identity
+    can still sync; naming an address the host knows you by lets it credit the
+    deck to your account instead.
+    """
+    import json as _json
+    import subprocess
+    import sys
+
+    remote = _bare_repo(tmp_path)
+    monkeypatch.setenv("LC_HOME", str(tmp_path / "machine"))
+    for mod in [m for m in sys.modules if m.startswith("lc.")]:
+        del sys.modules[mod]
+    from lc import gitsync, review
+
+    def author() -> str:
+        return subprocess.run(
+            ["git", "--git-dir", remote, "log", "-1", "--format=%an <%ae>"],
+            capture_output=True, text=True,
+        ).stdout.strip()
+
+    curve = [1, 2, 4, 7]
+    review.add("two-sum", title="Two Sum", frontend_id="1", curve=curve)
+    gitsync.push(remote)
+    assert author() == "lc <lc@localhost>", "lc's own identity by default"
+
+    (tmp_path / "machine" / "config.json").write_text(_json.dumps(
+        {"review_author_name": "Ada", "review_author_email": "ada@example.com"}
+    ))
+    review.add("coin-change", title="Coin Change", frontend_id="322", curve=curve)
+    gitsync.push(remote)
+    assert author() == "Ada <ada@example.com>"

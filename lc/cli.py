@@ -1170,6 +1170,9 @@ def config_show() -> None:
     )
     table.add_row("review repo", cfg.review_repo or Text("— (lc config repo …)",
                                                          style="dim"))
+    who, addr = cfg.review_author
+    table.add_row("review author", f"{who} <{addr}>"
+                  + ("" if cfg.review_author_email else " (default)"))
     table.add_row("lc home", str(home()))
     console.print(table)
 
@@ -1225,6 +1228,31 @@ def config_repo(
     save_config(cfg)
     console.print(Text(f"✔ review repo: {cfg.review_repo}", style="green"))
     console.print(Text("  `lc review sync` publishes review.json + REVIEW.md there",
+                       style="dim"))
+
+
+@config_app.command("author")
+def config_author(
+    email: str = typer.Argument(
+        ..., help="email for review-deck commits; 'none' restores lc's own"
+    ),
+    name: str = typer.Option(
+        "", "--name", help="name to commit under (default: the email's local part)"
+    ),
+) -> None:
+    """Set who `lc review sync` commits as, so the host attributes the deck to you."""
+    cfg = load_config()
+    if email.strip().lower() in ("none", "off", ""):
+        cfg.review_author_name = cfg.review_author_email = ""
+        save_config(cfg)
+        console.print(Text("✔ review author: lc <lc@localhost> (default)", style="green"))
+        return
+    cfg.review_author_email = email.strip()
+    cfg.review_author_name = name.strip() or email.strip().split("@")[0]
+    save_config(cfg)
+    who, addr = cfg.review_author
+    console.print(Text(f"✔ review author: {who} <{addr}>", style="green"))
+    console.print(Text("  GitHub credits commits to the account owning this address",
                        style="dim"))
 
 

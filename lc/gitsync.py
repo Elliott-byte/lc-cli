@@ -22,7 +22,7 @@ from datetime import date
 from pathlib import Path
 
 from . import review, store
-from .config import Config, home
+from .config import Config, home, load_config
 
 #: Where the deck lives inside the repo. Deliberately not README.md — pointing
 #: lc at a repo that already has one must never overwrite it.
@@ -233,8 +233,10 @@ def _commit_and_push(path: Path, message: str) -> bool:
     _git("add", "--", DECK_FILE, TABLE_FILE, cwd=path)
     if not _git("status", "--porcelain", "--", DECK_FILE, TABLE_FILE, cwd=path):
         return False
-    # -c so lc never depends on (or edits) the user's global git identity.
-    _git("-c", "user.name=lc", "-c", "user.email=lc@localhost",
+    # -c so lc never depends on (or edits) the user's global git identity; who
+    # it commits as is `lc config author`, defaulting to lc's own.
+    name, email = load_config().review_author
+    _git("-c", f"user.name={name}", "-c", f"user.email={email}",
          "commit", "--quiet", "-m", message, cwd=path)
     _git("push", "--quiet", "origin", f"HEAD:{_branch(path)}", cwd=path)
     return True

@@ -21,6 +21,11 @@ from pathlib import Path
 DEFAULT_HOME = Path.home() / ".lc"
 DEFAULT_WORKSPACE = Path.home() / "leetcode"
 
+#: Who review-deck commits are authored by when the user has not said. Not the
+#: user's global git identity: a machine with none still has to be able to sync.
+DEFAULT_AUTHOR_NAME = "lc"
+DEFAULT_AUTHOR_EMAIL = "lc@localhost"
+
 
 def home() -> Path:
     path = Path(os.environ.get("LC_HOME", DEFAULT_HOME)).expanduser()
@@ -56,6 +61,10 @@ class Config:
     review_curve: list[int] = field(default_factory=list)
     #: Git remote the review deck syncs with, e.g. git@github.com:you/lc-review.git
     review_repo: str = ""
+    #: Who `lc review sync` commits as. Blank means lc's own identity; set them
+    #: to an address your host knows you by and it attributes the deck to you.
+    review_author_name: str = ""
+    review_author_email: str = ""
     #: Keys in config.json this version does not know about — kept so settings
     #: written by a newer lc survive a round-trip through this one.
     extra: dict = field(default_factory=dict, repr=False)
@@ -65,6 +74,12 @@ class Config:
         # Path("") is Path(".") — a blank setting would quietly scatter solution
         # files through whatever directory lc was launched from.
         return Path(self.workspace or DEFAULT_WORKSPACE).expanduser()
+
+    @property
+    def review_author(self) -> tuple[str, str]:
+        """(name, email) for deck commits, falling back to lc's own identity."""
+        return (self.review_author_name.strip() or DEFAULT_AUTHOR_NAME,
+                self.review_author_email.strip() or DEFAULT_AUTHOR_EMAIL)
 
     def resolve_editor(self) -> str | None:
         for candidate in (self.editor, os.environ.get("LC_EDITOR"), os.environ.get("VISUAL"),
