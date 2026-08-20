@@ -346,12 +346,13 @@ def summary(config: Config) -> str:
     return f"{state.icon} synced {when}"
 
 
-def pull(url: str) -> tuple[int, int]:
-    """Merge the repo's deck into the local one. Returns (added, updated)."""
+def pull(url: str) -> tuple[int, int, int]:
+    """Merge the repo's deck into this machine's. Returns (added, updated,
+    removed) — what the pull did to the deck as the user sees it."""
     try:
         _, remote = fetch_remote_deck(url)
         local = review.load()
-        merged, added, updated = review.merge(local, remote)
+        merged, added, updated, removed = review.merge(local, remote)
         # Written whenever the merge changed anything — not when the counters
         # are non-zero. A tombstone for a problem this machine never had is
         # counted as neither added nor updated, so guarding on them dropped it
@@ -363,7 +364,7 @@ def pull(url: str) -> tuple[int, int]:
         record_sync(error=str(exc))
         raise
     record_sync()
-    return added, updated
+    return added, updated, removed
 
 
 def push(url: str) -> tuple[int, bool]:
@@ -393,7 +394,7 @@ def push(url: str) -> tuple[int, bool]:
 def _push_once(url: str) -> tuple[int, bool]:
     path, remote = fetch_remote_deck(url)
     local = review.load()
-    merged, added, updated = review.merge(local, remote)
+    merged, added, updated, removed = review.merge(local, remote)
     if merged != local:      # see pull(): the counters do not cover tombstones
         review.save(merged)
     write_deck(path, merged)
@@ -401,8 +402,8 @@ def _push_once(url: str) -> tuple[int, bool]:
     return count, _commit_and_push(path, f"review: {count} problem(s)")
 
 
-def sync(url: str) -> tuple[int, int, bool]:
-    """Pull then push. Returns (added, updated, whether the remote changed)."""
-    added, updated = pull(url)
+def sync(url: str) -> tuple[int, int, int, bool]:
+    """Pull then push. Returns (added, updated, removed, remote changed)."""
+    added, updated, removed = pull(url)
     _, changed = push(url)
-    return added, updated, changed
+    return added, updated, removed, changed

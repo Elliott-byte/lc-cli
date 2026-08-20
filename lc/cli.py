@@ -1096,12 +1096,14 @@ def _repo_url() -> str:
     return url
 
 
-def _merge_report(added: int, updated: int) -> None:
-    if added or updated:
-        console.print(
-            Text("✔ ", style="green")
-            + Text(f"pulled {added} new, {updated} updated", style="")
-        )
+def _merge_report(added: int, updated: int, removed: int) -> None:
+    if added or updated or removed:
+        line = f"pulled {added} new, {updated} updated"
+        if removed:
+            # A problem vanishing from the deck deserves its own word — this
+            # line is the only warning that another machine's removal landed.
+            line += f", {removed} removed"
+        console.print(Text("✔ ", style="green") + Text(line, style=""))
     else:
         console.print(Text("already up to date", style="dim"))
 
@@ -1112,11 +1114,11 @@ def review_pull() -> None:
     url = _repo_url()
     with console.status("pulling the review deck…", spinner="dots"):
         try:
-            added, updated = gitsync.pull(url)
+            added, updated, removed = gitsync.pull(url)
         except gitsync.SyncError as exc:
             die(str(exc), exc.hint)
             raise
-    _merge_report(added, updated)
+    _merge_report(added, updated, removed)
 
 
 @review_app.command("push")
@@ -1141,11 +1143,11 @@ def review_sync() -> None:
     url = _repo_url()
     with console.status("syncing the review deck…", spinner="dots"):
         try:
-            added, updated, changed = gitsync.sync(url)
+            added, updated, removed, changed = gitsync.sync(url)
         except gitsync.SyncError as exc:
             die(str(exc), exc.hint)
             raise
-    _merge_report(added, updated)
+    _merge_report(added, updated, removed)
     console.print(
         Text("✔ pushed" if changed else "✔ repo already matches", style="green")
     )

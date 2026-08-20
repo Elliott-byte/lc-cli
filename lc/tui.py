@@ -821,7 +821,7 @@ class LeetCodeTUI(App):
     @work(thread=True, exclusive=True, group="review-sync")
     def _review_sync_worker(self, url: str) -> None:
         try:
-            added, updated, changed = gitsync.sync(url)
+            added, updated, removed, changed = gitsync.sync(url)
         except gitsync.SyncError as exc:
             message = str(exc) + (f"\n{exc.hint}" if exc.hint else "")
             self.call_from_thread(self.notify, escape(message), severity="error",
@@ -829,8 +829,11 @@ class LeetCodeTUI(App):
             self.call_from_thread(self.refresh_sync_bar)
             return
         parts = []
-        if added or updated:
-            parts.append(f"pulled {added} new, {updated} updated")
+        if added or updated or removed:
+            pulled = f"pulled {added} new, {updated} updated"
+            if removed:
+                pulled += f", {removed} removed"
+            parts.append(pulled)
         parts.append("pushed" if changed else "repo already matched")
         # The strip says *where you stand*; this says *what just happened*.
         self.call_from_thread(self.refresh_review)

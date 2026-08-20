@@ -1293,14 +1293,15 @@ def test_two_machines_converge_over_repeated_syncs(tmp_path, monkeypatch):
     g.sync(remote)
     assert deck(r) == ["coin-change"], "a sync must not undo your own removal"
     g, r = on("wsl")
-    g.sync(remote)
+    assert g.sync(remote)[:3] == (0, 0, 1), "the report must say a removal landed"
     assert deck(r) == ["coin-change"], "the removal must propagate"
 
-    # Re-adding revives it everywhere.
+    # Re-adding revives it everywhere — and the other machine's report calls
+    # a problem re-appearing in its deck what it is: added, not "updated".
     r.add("two-sum", title="Two Sum", frontend_id="1", curve=curve)
     g.sync(remote)
     g, r = on("mac")
-    g.sync(remote)
+    assert g.sync(remote)[:3] == (1, 0, 0)
     assert "two-sum" in deck(r)
 
     # Same-day edits: the later one wins, whichever level it happens to be.
@@ -1375,15 +1376,45 @@ def test_merge_prefers_the_most_recently_graded_side():
 
     local = {"a": it("a", 2, "2026-08-01"), "b": it("b", 1, "2026-08-10")}
     remote = {"a": it("a", 5, "2026-08-09"), "c": it("c", 3, "2026-08-05")}
-    merged, added, updated = review.merge(local, remote)
+    merged, added, updated, removed = review.merge(local, remote)
 
-    assert (added, updated) == (1, 1)
+    assert (added, updated, removed) == (1, 1, 0)
     assert merged["a"].level == 5      # remote graded later
     assert merged["b"].level == 1      # local only, untouched
     assert merged["c"].level == 3      # arrived from the remote
     # A stale remote entry must not win.
-    back, added, updated = review.merge(merged, {"b": it("b", 9, "2026-07-01")})
-    assert (added, updated) == (0, 0) and back["b"].level == 1
+    back, added, updated, removed = review.merge(merged, {"b": it("b", 9, "2026-07-01")})
+    assert (added, updated, removed) == (0, 0, 0) and back["b"].level == 1
+
+
+def test_merge_counts_what_the_deck_view_actually_did():
+    """A problem vanishing from the deck must not be reported as "updated".
+
+    The counts feed the sync report, which is the only warning the user gets
+    that a removal made on another machine just landed here. A tombstone
+    hiding a live problem is removed, a live copy beating a tombstone is
+    added (the deck grew), and tombstone-on-tombstone traffic counts as
+    nothing, because nothing visible moved.
+    """
+    from lc import review
+
+    def it(slug, graded, dead=""):
+        return review.ReviewItem(slug=slug, level=1, graded=graded, due=graded,
+                                 removed=dead)
+
+    local = {"gone": it("gone", "2026-08-01"),
+             "back": it("back", "2026-08-01", dead="2026-08-01"),
+             "quiet": it("quiet", "2026-08-01", dead="2026-08-01")}
+    remote = {"gone": it("gone", "2026-08-09", dead="2026-08-09"),
+              "back": it("back", "2026-08-09"),
+              "quiet": it("quiet", "2026-08-09", dead="2026-08-09"),
+              "ghost": it("ghost", "2026-08-09", dead="2026-08-09")}
+    merged, added, updated, removed = review.merge(local, remote)
+    assert (added, updated, removed) == (1, 0, 1)
+    assert sorted(review.live(merged)) == ["back"]
+    # The invisible traffic still merged — only the counting ignored it.
+    assert merged["quiet"].removed == "2026-08-09"
+    assert "ghost" in merged
 
 
 def test_git_sync_roundtrips_a_deck_between_two_homes(tmp_path, monkeypatch):
@@ -1403,14 +1434,14 @@ def test_git_sync_roundtrips_a_deck_between_two_homes(tmp_path, monkeypatch):
     # A second machine starts empty and pulls the deck down.
     monkeypatch.setenv("LC_HOME", str(tmp_path / "b"))
     assert review.load() == {}
-    assert gitsync.pull(remote) == (1, 0)
+    assert gitsync.pull(remote) == (1, 0, 0)
     assert review.load()["coin-change"].title == "Coin Change"
 
     # It grades the problem and syncs; the first machine picks that up.
     review.shift_level("coin-change", +1, [2, 4], today=date(2026, 8, 17))
     gitsync.sync(remote)
     monkeypatch.setenv("LC_HOME", str(tmp_path / "a"))
-    assert gitsync.pull(remote) == (0, 1)
+    assert gitsync.pull(remote) == (0, 1, 0)
     assert review.load()["coin-change"].level == 2
 
 

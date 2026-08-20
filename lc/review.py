@@ -186,17 +186,25 @@ def save(items: dict[str, ReviewItem]) -> None:
 
 def merge(
     local: dict[str, ReviewItem], remote: dict[str, ReviewItem]
-) -> tuple[dict[str, ReviewItem], int, int]:
-    """Combine two decks. Returns (merged, added, updated).
+) -> tuple[dict[str, ReviewItem], int, int, int]:
+    """Combine two decks. Returns (merged, added, updated, removed).
 
     The union of both sides, so nothing is lost by syncing. Where both know a
     problem, the copy edited most recently wins — that is the machine you
     were actually working on. Removals travel too: `remove` leaves a tombstone
     behind, and a tombstone is just another edit, so it beats an older copy on
     the other machine instead of that machine handing the problem back.
+
+    The counts describe what happened to the deck as the user sees it — the
+    live problems. One appearing (new, or revived from a tombstone) is added,
+    one a tombstone just hid is removed, and a live problem that changed
+    hands is updated. Tombstone-on-tombstone traffic counts as nothing,
+    because nothing visible moved — the sync report is the only warning that
+    a removal made on another machine just landed here, so it must not hide
+    behind "updated".
     """
     merged = dict(local)
-    added = updated = 0
+    added = updated = removed = 0
     for slug, incoming in remote.items():
         current = merged.get(slug)
         if current is None:
@@ -205,8 +213,14 @@ def merge(
                 added += 1
         elif _edit_key(incoming) > _edit_key(current):
             merged[slug] = incoming
-            updated += 1
-    return merged, added, updated
+            if current.removed:
+                if not incoming.removed:
+                    added += 1       # revived on the other machine
+            elif incoming.removed:
+                removed += 1         # taken off over there
+            else:
+                updated += 1
+    return merged, added, updated, removed
 
 
 def _edit_key(item: ReviewItem) -> tuple[str, str, int, str]:
