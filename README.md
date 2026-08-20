@@ -98,19 +98,18 @@ re-downloads the whole index.
 | `d` / `t` | Cycle the difficulty / status filter |
 | `o` | Open the problem on leetcode.com |
 | `D` | Jump to today's daily challenge |
-| `space` | Pause/resume the solve clock (covers the statement) |
 | `?` | Every key, including the ones kept off the footer |
 | `q` | Quit |
 
 Drag the divider between the two panes to give either side more room; it
 stops when one of them is down to 24 columns.
 
-Opening a problem starts a solve clock — on the TUI's status bar **and on
-Vim's statusline**, since Vim is where the solving actually happens. `space`
-in the TUI — or `\z` in Vim — pauses it behind a cover that hides the statement — a stopped
-clock beside a readable problem would be free reading time — and `space`
-again resumes. A failed submit leaves it running; an accepted one, whether
-`s` in the TUI, `lc submit`, or `\s` in Vim, stops it and reports your time.
+Opening a problem starts a solve clock. It lives where the solving does —
+on **Vim's statusline**, not in the TUI. `\z` pauses it behind a cover that
+hides the code and statement (a stopped clock beside a readable problem
+would be free reading time); `space` there resumes. A failed submit leaves
+it running; an accepted one — `s` in the TUI, `lc submit`, or `\s` in Vim —
+stops it and reports your time. `lc timer` shows it from the shell, and
 `lc config timer off` turns the whole thing off.
 
 Click the statement's `url` line to open the problem in your browser — or

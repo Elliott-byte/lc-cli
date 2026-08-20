@@ -1234,7 +1234,7 @@ def config_show() -> None:
                   + ("" if source == "configured" else f" ({source})"))
     table.add_row("autograde", "on — a submit moves the level" if cfg.autograde
                   else Text("off — you grade with + / - / 0", style="dim"))
-    table.add_row("timer", "on — clocks a solve, space pauses" if cfg.timer_on
+    table.add_row("timer", "on — clocks a solve in Vim, \\z pauses" if cfg.timer_on
                   else Text("off", style="dim"))
     table.add_row("lc home", str(home()))
     console.print(table)
@@ -1337,8 +1337,9 @@ def config_timer(
         solvetimer.clear()
     if cfg.solve_timer:
         console.print(Text("✔ timer: on", style="green"))
-        console.print(Text("  the clock starts when you open a problem; space "
-                           "pauses it, an accepted submit stops it", style="dim"))
+        console.print(Text("  the clock starts when you open a problem and shows "
+                           "in Vim; \\z pauses it, an accepted submit stops it",
+                           style="dim"))
     else:
         console.print(Text("✔ timer: off", style="green"))
 

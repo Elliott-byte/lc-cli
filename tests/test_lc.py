@@ -2307,11 +2307,10 @@ def test_enter_reopens_the_language_you_started_in(tmp_path, monkeypatch):
     assert judged.code == "// half-finished\n", "r/s must judge the real work"
 
 
-def test_the_solve_timer_clocks_pauses_and_stops(tmp_path, monkeypatch):
-    """The solve timer: opening a problem starts it, space pauses it behind an
-    opaque cover (a stopped clock beside a readable statement would be free
-    reading time), a failed submit leaves it running, an accepted one ends it.
-    """
+def test_opening_a_problem_clocks_it_and_an_accept_stops_it(tmp_path, monkeypatch):
+    """The clock is an editing-session thing — the TUI only starts it when a
+    problem is opened and stops it when a submit comes back accepted. The
+    display and the pause live in Vim, where the solving happens."""
     import asyncio
     import json as _json
 
@@ -2321,7 +2320,7 @@ def test_the_solve_timer_clocks_pauses_and_stops(tmp_path, monkeypatch):
     (tmp_path / "config.json").write_text(_json.dumps(
         {"workspace": str(tmp_path / "ws"), "editor": ""}
     ))
-    from lc import tui
+    from lc import solvetimer, tui
 
     async def solve():
         app = tui.LeetCodeTUI()
@@ -2333,36 +2332,23 @@ def test_the_solve_timer_clocks_pauses_and_stops(tmp_path, monkeypatch):
 
             app.action_pick()
             await pilot.pause()
-            seen["starts"] = app._timer_running
-            seen["on_bar"] = "⏱" in str(app.query_one("#status-bar").render())
-
-            await pilot.press("space")
-            await pilot.pause()
-            seen["covered"] = app.screen.__class__.__name__ == "BreakScreen"
-            frozen = app._timer_elapsed()
-            await asyncio.sleep(0.3)
-            seen["holds"] = app._timer_elapsed() == frozen
-
-            await pilot.press("space")
-            await pilot.pause()
-            seen["resumes"] = (app.screen.__class__.__name__ != "BreakScreen"
-                               and app._timer_running)
+            timer = solvetimer.load()
+            seen["starts"] = timer is not None and timer.running
+            seen["slug"] = timer.slug if timer else ""
+            # No timer chrome in the TUI: the clock belongs to the editor.
+            seen["no_bar_clock"] = "⏱" not in str(app.query_one("#status-bar").render())
 
             app._timer_submit(PROBLEM.slug, accepted=False)
-            seen["failure_keeps_going"] = app._timer_running
+            seen["failure_keeps_going"] = solvetimer.load().running
             app._timer_submit(PROBLEM.slug, accepted=True)
             await pilot.pause()
-            seen["accept_stops"] = (app._timer_done and not app._timer_running
-                                    and "✔" in str(app.query_one("#status-bar").render()))
-            await pilot.press("space")
-            await pilot.pause()
-            seen["no_cover_after_done"] = app.screen.__class__.__name__ != "BreakScreen"
+            done = solvetimer.load()
+            seen["accept_stops"] = done.done and not done.running
         return seen
 
     assert asyncio.run(solve()) == {
-        "starts": True, "on_bar": True, "covered": True, "holds": True,
-        "resumes": True, "failure_keeps_going": True, "accept_stops": True,
-        "no_cover_after_done": True,
+        "starts": True, "slug": PROBLEM.slug, "no_bar_clock": True,
+        "failure_keeps_going": True, "accept_stops": True,
     }
 
 
@@ -2386,10 +2372,8 @@ def test_the_solve_timer_can_be_switched_off(tmp_path, monkeypatch):
             await pilot.pause()
             app.action_pick()
             await pilot.pause()
-            no_clock = not app._timer_slug
-            await pilot.press("space")
-            await pilot.pause()
-            return no_clock and app.screen.__class__.__name__ != "BreakScreen"
+            from lc import solvetimer
+            return solvetimer.load() is None
 
     assert asyncio.run(solve()) is True
 
@@ -2421,7 +2405,10 @@ def test_settings_screen_edits_the_toggles_too(tmp_path, monkeypatch):
             await pilot.pause()
             saved = _json.loads((tmp_path / "config.json").read_text())
             # Turning the timer off mid-session also takes the clock down.
-            live = (app.config.autograde, app.config.timer_on, app._timer_slug)
+            from lc import solvetimer
+            timer = solvetimer.load()
+            live = (app.config.autograde, app.config.timer_on,
+                    timer.slug if timer else "")
             # Reopening shows what was saved, not what the screen started with.
             app.action_settings()
             await pilot.pause()
