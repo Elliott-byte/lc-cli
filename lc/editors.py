@@ -195,12 +195,45 @@ function! s:LcOpenStatement() abort
   endif
 endfunction
 
+function! s:LcClockText() abort
+  " The lc solve clock, read from $LC_HOME/timer.json — written by the TUI
+  " and `lc pick`, stopped by an accepted `lc submit` (\s included). Vim is
+  " where the solving happens, so this is where the clock has to be visible.
+  let l:home = empty($LC_HOME) ? expand('~/.lc') : $LC_HOME
+  try
+    let l:t = json_decode(join(readfile(l:home . '/timer.json'), ''))
+  catch
+    return ''
+  endtry
+  if type(l:t) != v:t_dict || get(l:t, 'slug', '') !=# s:LcSlug()
+    return ''
+  endif
+  let l:sec = float2nr(get(l:t, 'accum', 0.0))
+  let l:mark = '⏸'
+  if get(l:t, 'done')
+    let l:mark = '✔'
+  elseif get(l:t, 'started') isnot v:null
+    let l:sec += max([0, float2nr(localtime() - get(l:t, 'started'))])
+    let l:mark = '⏱'
+  endif
+  let l:h = l:sec / 3600
+  let l:m = (l:sec % 3600) / 60
+  if l:h > 0
+    return printf('%s %d:%02d:%02d', l:mark, l:h, l:m, l:sec % 60)
+  endif
+  return printf('%s %02d:%02d', l:mark, l:m, l:sec % 60)
+endfunction
+
 function! s:LcHintText() abort
   " As many hints as the window can show, most useful first — a status line
   " that overflows just loses its right-hand end silently.
   let l:lead = get(g:, 'mapleader', '\')
   let l:parts = map(copy(get(b:, 'lc_hints', [])),
         \ 'v:val[0] ==# "" ? v:val[1] : l:lead . v:val[0] . " " . v:val[1]')
+  let l:clock = s:LcClockText()
+  if l:clock !=# ''
+    call insert(l:parts, l:clock)
+  endif
   let l:room = winwidth(0) - 16
   while len(l:parts) > 1 && strwidth(join(l:parts, '  ')) > l:room
     call remove(l:parts, -1)
@@ -218,6 +251,12 @@ function! s:LcKeyHints(keys) abort
   let b:lc_hints = a:keys
   " %< truncates the name first, so the keys survive a narrow window.
   let &l:statusline = '%<%f %m%= %{' . expand('<SID>') . 'LcHintText()} '
+  " A status line only redraws on events, and a clock that moves once per
+  " cursor motion is not a clock. One shared ticker, started lazily.
+  if !exists('s:lc_ticker') && has('timers')
+    let s:lc_ticker = timer_start(1000,
+          \ {-> execute('silent! redrawstatus!')}, {'repeat': -1})
+  endif
   if &laststatus < 2
     set laststatus=2
   endif

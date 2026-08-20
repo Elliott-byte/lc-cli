@@ -19,7 +19,7 @@ from rich.text import Text
 
 from datetime import date
 
-from . import __version__, browser, editors, fx, gitsync, review, store
+from . import __version__, browser, editors, fx, gitsync, review, solvetimer, store
 from .api import (
     AuthError,
     JudgeResult,
@@ -681,6 +681,10 @@ def _pick(
     )
     console.print(Text(f"  {solution.file}", style="dim"))
 
+    if config.timer_on:
+        # The clock starts with the solve, wherever the solve starts — Vim's
+        # statusline draws it from the same file.
+        solvetimer.begin(problem.slug)
     if open_editor and not workspace.open_in_editor(config, solution.file):
         console.print(
             Text("  (set $EDITOR or `lc config editor <cmd>` to auto-open)", style="dim")
@@ -846,6 +850,11 @@ def submit(
     else:
         fx.defeat(console, big=True)
     print_result(result, problem)
+    if result.accepted and cfg.timer_on:
+        stopped = solvetimer.stop_if(problem.slug)
+        if stopped is not None:
+            console.print(Text(f"  ⏱ solved in {solvetimer.clock(stopped.accum)}",
+                               style="dim"))
     if note:
         console.print(Text(f"  {note}", style="dim"))
         if not autograde:
@@ -1282,6 +1291,8 @@ def config_timer(
     cfg = load_config()
     cfg.solve_timer = want in ("on", "true", "yes")
     save_config(cfg)
+    if not cfg.solve_timer:
+        solvetimer.clear()
     if cfg.solve_timer:
         console.print(Text("✔ timer: on", style="green"))
         console.print(Text("  the clock starts when you open a problem; space "

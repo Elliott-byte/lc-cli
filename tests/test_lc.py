@@ -358,6 +358,11 @@ def test_vim_quit_never_fights_the_statement_terminal():
     # write the statement instead.
     assert "getbufvar(l:b, 'lc_statement_for', '') ==# ''" in text
 
+    # The solve clock is drawn where the solving happens: Vim's statusline
+    # reads the shared timer file and a ticker keeps it moving.
+    assert "LcClockText" in text and "timer.json" in text
+    assert "timer_start(1000" in text and "redrawstatus" in text
+
     # Vim owns the mouse in the pane, and its terminal drops the hyperlink
     # escape, so the URL can only be opened by something Vim itself binds.
     assert "<2-LeftMouse>" in pane and "LcClickOpen" in text
@@ -2423,3 +2428,44 @@ def test_settings_screen_edits_the_toggles_too(tmp_path, monkeypatch):
     assert saved["review_autograde"] is True and saved["solve_timer"] is False
     assert live == (True, False, "")
     assert after == {"cfg-review_autograde": True, "cfg-solve_timer": False}
+
+
+def test_the_clock_is_shared_and_stopped_by_a_cli_submit(tmp_path, monkeypatch):
+    """The clock lives in a file precisely because the solve happens outside
+    the TUI: `lc pick` starts it, Vim reads it, an accepted `lc submit`
+    (a `\\s` included) stops it."""
+    import time as _time
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    from lc import solvetimer
+
+    timer = solvetimer.begin("two-sum")
+    assert timer.running and (tmp_path / "timer.json").exists()
+
+    # pause banks the elapsed time; resume picks it back up
+    solvetimer.pause()
+    banked = solvetimer.load()
+    assert not banked.running and banked.accum > 0 or banked.accum >= 0
+    _time.sleep(0.05)
+    frozen = solvetimer.load().elapsed()
+    assert solvetimer.load().elapsed() == frozen
+    solvetimer.resume()
+    assert solvetimer.load().running
+
+    # a submit of some other problem is not ours to stop
+    assert solvetimer.stop_if("coin-change") is None
+    assert not solvetimer.load().done
+    # ...but of this one is final
+    stopped = solvetimer.stop_if("two-sum")
+    assert stopped is not None and solvetimer.load().done
+    assert solvetimer.stop_if("two-sum") is None   # already done: no double stop
+
+    # reopening the solved problem starts a fresh clock
+    fresh = solvetimer.begin("two-sum")
+    assert fresh.running and not fresh.done and fresh.accum == 0.0
+
+    # a torn or hand-mangled file is "no clock", never a crash
+    (tmp_path / "timer.json").write_text("{not json")
+    assert solvetimer.load() is None
+    (tmp_path / "timer.json").write_text('{"slug": 3}')
+    assert solvetimer.load() is None

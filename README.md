@@ -105,10 +105,12 @@ re-downloads the whole index.
 Drag the divider between the two panes to give either side more room; it
 stops when one of them is down to 24 columns.
 
-Opening a problem starts a solve clock in the status bar. `space` pauses it
-behind a cover that hides the statement — a stopped clock beside a readable
-problem would be free reading time — and `space` again resumes. A failed
-submit leaves it running; an accepted one stops it and reports your time.
+Opening a problem starts a solve clock — on the TUI's status bar **and on
+Vim's statusline**, since Vim is where the solving actually happens. `space`
+(in the TUI) pauses it behind a cover that hides the statement — a stopped
+clock beside a readable problem would be free reading time — and `space`
+again resumes. A failed submit leaves it running; an accepted one, whether
+`s` in the TUI, `lc submit`, or `\s` in Vim, stops it and reports your time.
 `lc config timer off` turns the whole thing off.
 
 Click the statement's `url` line to open the problem in your browser — or
