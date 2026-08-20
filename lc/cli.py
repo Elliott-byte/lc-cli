@@ -1164,6 +1164,48 @@ def review_sync() -> None:
 
 # --------------------------------------------------------------------------- config
 
+timer_app = typer.Typer(help="The solve clock — see also `lc config timer`.")
+app.add_typer(timer_app, name="timer")
+
+
+def _timer_line(timer) -> Text:
+    state = ("done" if timer.done else "running" if timer.running else "paused")
+    mark = {"done": "✔", "running": "⏱", "paused": "⏸"}[state]
+    return Text(f"{mark} {timer.slug} — {state} at {solvetimer.clock(timer.elapsed())}")
+
+
+@timer_app.callback(invoke_without_command=True)
+def timer_status(ctx: typer.Context) -> None:
+    r"""Show the clock. `pause` and `resume` control it — Vim's \z runs these."""
+    if ctx.invoked_subcommand is not None:
+        return
+    timer = solvetimer.load()
+    if timer is None:
+        console.print(Text("no clock — opening a problem starts one", style="dim"))
+        return
+    console.print(_timer_line(timer))
+
+
+@timer_app.command("pause")
+def timer_pause() -> None:
+    """Stop the clock ticking; `lc timer resume` picks it back up."""
+    timer = solvetimer.load()
+    if timer is None or timer.done:
+        die("no clock is running", "opening a problem starts one")
+        return
+    console.print(_timer_line(solvetimer.pause()))
+
+
+@timer_app.command("resume")
+def timer_resume() -> None:
+    """Set a paused clock ticking again."""
+    timer = solvetimer.load()
+    if timer is None or timer.done:
+        die("no clock to resume", "opening a problem starts one")
+        return
+    console.print(_timer_line(solvetimer.resume()))
+
+
 config_app = typer.Typer(help="Read and change lc settings.", no_args_is_help=True)
 app.add_typer(config_app, name="config")
 

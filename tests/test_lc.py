@@ -362,6 +362,11 @@ def test_vim_quit_never_fights_the_statement_terminal():
     # reads the shared timer file and a ticker keeps it moving.
     assert "LcClockText" in text and "timer.json" in text
     assert "timer_start(1000" in text and "redrawstatus" in text
+    # ...and paused there too: \z covers code and statement with a fresh tab
+    # page, and closing the cover is the resume.
+    assert "<leader>z :call <SID>LcTimerToggle()" in text
+    assert "lc timer pause" in text and "lc timer resume" in text
+    assert "tab new" in text and "tabclose" in text
 
     # Vim owns the mouse in the pane, and its terminal drops the hyperlink
     # escape, so the URL can only be opened by something Vim itself binds.
@@ -2469,3 +2474,24 @@ def test_the_clock_is_shared_and_stopped_by_a_cli_submit(tmp_path, monkeypatch):
     assert solvetimer.load() is None
     (tmp_path / "timer.json").write_text('{"slug": 3}')
     assert solvetimer.load() is None
+
+
+def test_cli_timer_pause_and_resume(tmp_path, monkeypatch):
+    """`lc timer pause|resume` — what Vim's \\z runs under the hood."""
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    from typer.testing import CliRunner
+
+    from lc import solvetimer
+    from lc.cli import app
+
+    runner = CliRunner()
+    # With no clock: an explanation, not a stack trace — and pause says no.
+    assert "no clock" in runner.invoke(app, ["timer"]).output
+    assert runner.invoke(app, ["timer", "pause"]).exit_code != 0
+
+    solvetimer.begin("two-sum")
+    assert "running" in runner.invoke(app, ["timer"]).output
+    runner.invoke(app, ["timer", "pause"])
+    assert not solvetimer.load().running
+    runner.invoke(app, ["timer", "resume"])
+    assert solvetimer.load().running

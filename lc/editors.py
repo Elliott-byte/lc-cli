@@ -19,6 +19,7 @@ VIM_PLUGIN = r'''" lc.vim — Vim integration for the lc LeetCode CLI.
 "   <leader>p   show/hide the problem statement in a left split
 "   <leader>o   open the problem page in your browser (for figures/animations)
 "   <leader>m   save this problem to the lc review deck (spaced repetition)
+"   <leader>z   pause the solve clock behind a cover (space there resumes)
 "   <leader>q   write everything, then quit Vim (back to the lc TUI/shell)
 " The statement pane shows `lc show` fully rendered in a terminal split when
 " the editor supports it, the raw README.md otherwise; `let
@@ -180,10 +181,11 @@ function! s:LcOpenStatement() abort
   nnoremap <buffer> <leader>p :call <SID>LcCloseStatement()<CR>
   nnoremap <buffer> <leader>o :call <SID>LcOpenWeb()<CR>
   nnoremap <buffer> <leader>m :call <SID>LcReview()<CR>
+  nnoremap <buffer> <leader>z :call <SID>LcTimerToggle()<CR>
   nnoremap <buffer> <leader>q :call <SID>LcQuitAll()<CR>
   nnoremap <buffer> <2-LeftMouse> <LeftMouse>:call <SID>LcClickOpen()<CR>
   call s:LcKeyHints([['', 'q close'], ['t', 'test'], ['s', 'submit'],
-        \ ['q', 'quit']])
+        \ ['z', 'pause'], ['q', 'quit']])
   " Back to the code — that is what you are here to type in.
   call s:LcFocusSolution(l:dir)
   " Once more after startup finishes: Vim re-enters the first window when it
@@ -330,6 +332,63 @@ function! s:LcQuitAll() abort
   qall!
 endfunction
 
+function! s:LcTimerFile() abort
+  let l:home = empty($LC_HOME) ? expand('~/.lc') : $LC_HOME
+  try
+    let l:t = json_decode(join(readfile(l:home . '/timer.json'), ''))
+  catch
+    return {}
+  endtry
+  return type(l:t) == v:t_dict ? l:t : {}
+endfunction
+
+function! s:LcFmtClock(sec) abort
+  let l:h = a:sec / 3600
+  if l:h > 0
+    return printf('%d:%02d:%02d', l:h, (a:sec % 3600) / 60, a:sec % 60)
+  endif
+  return printf('%02d:%02d', a:sec / 60, a:sec % 60)
+endfunction
+
+function! s:LcTimerToggle() abort
+  " \z — pause behind a cover, like the TUI's space. The cover is a fresh
+  " tab page: it hides the statement and the code both, and closing it
+  " restores the exact window layout underneath.
+  let l:t = s:LcTimerFile()
+  if empty(l:t) || get(l:t, 'slug', '') !=# s:LcSlug() || get(l:t, 'done')
+    echo 'lc: no clock running here'
+    return
+  endif
+  if get(l:t, 'started') is v:null
+    call system('lc timer resume')
+    redrawstatus!
+    echo 'lc: clock resumed'
+    return
+  endif
+  call system('lc timer pause')
+  let l:sec = float2nr(get(s:LcTimerFile(), 'accum', 0.0))
+  tab new
+  setlocal buftype=nofile bufhidden=wipe nobuflisted noswapfile
+  setlocal nonumber norelativenumber statusline=\ 
+  let l:pad = repeat([''], max([1, winheight(0) / 2 - 2]))
+  let l:mid = repeat(' ', max([0, (winwidth(0) - 12) / 2]))
+  call setline(1, l:pad + [l:mid . '⏸  ' . s:LcFmtClock(l:sec), '',
+        \ l:mid . 'paused — space resumes'])
+  setlocal nomodifiable
+  nnoremap <buffer> <Space> :call <SID>LcBreakResume()<CR>
+  nnoremap <buffer> <CR> :call <SID>LcBreakResume()<CR>
+  nnoremap <buffer> q :call <SID>LcBreakResume()<CR>
+  nnoremap <buffer> <leader>z :call <SID>LcBreakResume()<CR>
+  silent! file [break]
+endfunction
+
+function! s:LcBreakResume() abort
+  " Closing the cover is the resume, exactly as in the TUI.
+  call system('lc timer resume')
+  tabclose
+  redrawstatus!
+endfunction
+
 function! s:LcOpenWeb() abort
   let l:slug = s:LcSlug()
   if l:slug !=# ''
@@ -393,10 +452,12 @@ function! s:LcSetup() abort
   nnoremap <buffer> <leader>o :call <SID>LcOpenWeb()<CR>
   " Mid-solve: "I'll want to see this one again."
   nnoremap <buffer> <leader>m :call <SID>LcReview()<CR>
+  " Pause the solve clock behind a cover; \z again (or space there) resumes.
+  nnoremap <buffer> <leader>z :call <SID>LcTimerToggle()<CR>
   " One stroke back to whatever launched Vim (the lc TUI resumes on exit).
   nnoremap <buffer> <leader>q :call <SID>LcQuitAll()<CR>
-  call s:LcKeyHints([['t', 'test'], ['s', 'submit'], ['q', 'quit'],
-        \ ['p', 'statement'], ['m', 'deck'], ['o', 'web']])
+  call s:LcKeyHints([['t', 'test'], ['s', 'submit'], ['z', 'pause'],
+        \ ['q', 'quit'], ['p', 'statement'], ['m', 'deck'], ['o', 'web']])
   " Fresh `lc pick` / `lc edit`: put the statement alongside the solution.
   if get(g:, 'lc_auto_statement', 1) && winnr('$') == 1
         \ && expand('%:t') !=# 'README.md'

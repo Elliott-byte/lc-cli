@@ -107,7 +107,7 @@ stops when one of them is down to 24 columns.
 
 Opening a problem starts a solve clock — on the TUI's status bar **and on
 Vim's statusline**, since Vim is where the solving actually happens. `space`
-(in the TUI) pauses it behind a cover that hides the statement — a stopped
+in the TUI — or `\z` in Vim — pauses it behind a cover that hides the statement — a stopped
 clock beside a readable problem would be free reading time — and `space`
 again resumes. A failed submit leaves it running; an accepted one, whether
 `s` in the TUI, `lc submit`, or `\s` in Vim, stops it and reports your time.
@@ -276,6 +276,7 @@ In a solution buffer (any file next to a `.lc.json`), normal mode:
 | `\p` | show/hide the problem statement in a left split |
 | `\o` | open the problem page in your browser (figures render there) |
 | `\m` | save this problem to the review deck |
+| `\z` | pause the solve clock behind a cover (space there resumes) |
 | `\q` | save everything, then quit — back to the TUI/shell |
 
 Opening a solution file opens the statement beside it automatically — hide it
