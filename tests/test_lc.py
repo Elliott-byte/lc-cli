@@ -2228,3 +2228,56 @@ def test_deck_commits_carry_the_configured_author(tmp_path, monkeypatch):
     review.add("coin-change", title="Coin Change", frontend_id="322", curve=curve)
     gitsync.push(remote)
     assert author() == "Ada <ada@example.com>"
+
+
+def test_enter_reopens_the_language_you_started_in(tmp_path, monkeypatch):
+    """`enter` on a started problem must reopen that file, not pick again.
+
+    Re-picking chose the config-default language: a problem started in Go
+    grew a solution.py beside the half-written solution.go, .lc.json was
+    repointed at the new file, and r / s then judged fresh starter code
+    while the real work sat stranded. The README's contract is "reopens
+    your existing file".
+    """
+    import asyncio
+    import sys
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    for var in ("LC_EDITOR", "VISUAL", "EDITOR"):
+        monkeypatch.delenv(var, raising=False)
+    (tmp_path / "config.json").write_text(json.dumps(
+        {"workspace": str(tmp_path / "ws"), "lang": "python3"}))
+    for mod in [m for m in sys.modules if m.startswith("lc.")]:
+        del sys.modules[mod]
+    from lc import tui, workspace
+    from lc.api import Problem
+    from lc.config import load_config
+    from lc.langs import resolve
+
+    problem = Problem(
+        question_id="322", frontend_id="322", title="Coin Change",
+        slug="coin-change", difficulty="Medium", content="", paid_only=False,
+        likes=0, dislikes=0, ac_rate=40.0, total_accepted="",
+        total_submission="", sample_testcase="", example_testcases="",
+        hints=[], tags=[],
+        snippets={"python3": "class Solution: ...", "golang": "func stub() {}"},
+        meta={},
+    )
+    started = workspace.create(load_config(), problem, resolve("golang"))
+    started.file.write_text("// half-finished\n")
+
+    async def press_enter():
+        app = tui.LeetCodeTUI()
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.current, app.current_slug = problem, problem.slug
+            app.action_pick()
+            await pilot.pause()
+
+    asyncio.run(press_enter())
+    meta = json.loads((started.directory / ".lc.json").read_text())
+    assert (meta["lang"], meta["file"]) == ("golang", "solution.go")
+    assert not (started.directory / "solution.py").exists(), "no second pick"
+    judged = workspace.load(load_config(), problem)
+    assert judged.file.name == "solution.go"
+    assert judged.code == "// half-finished\n", "r/s must judge the real work"

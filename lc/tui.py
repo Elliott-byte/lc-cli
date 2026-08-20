@@ -902,20 +902,27 @@ class LeetCodeTUI(App):
         if not self.current:
             return
         problem = self.current
-        if problem.paid_only and not problem.snippets:
-            self.notify("premium problem — your account cannot open it",
-                        severity="error")
-            return
-        lang = choose(self.config.lang, self.config.favorite_langs, problem.snippets)
-        if lang is None:
-            self.notify("this problem has no starter code lc understands",
-                        severity="error")
-            return
-        try:
-            solution = workspace.create(self.config, problem, lang)
-        except (ValueError, OSError) as exc:
-            self.notify(escape(str(exc)), severity="error")
-            return
+        # A problem you already started reopens as-is, whatever language it
+        # was picked in. Choosing a language again here would create a second
+        # file in the config default and repoint .lc.json at it — stranding
+        # the half-written one and aiming r/s at fresh starter code.
+        solution = workspace.load(self.config, problem)
+        if solution is None:
+            if problem.paid_only and not problem.snippets:
+                self.notify("premium problem — your account cannot open it",
+                            severity="error")
+                return
+            lang = choose(self.config.lang, self.config.favorite_langs,
+                          problem.snippets)
+            if lang is None:
+                self.notify("this problem has no starter code lc understands",
+                            severity="error")
+                return
+            try:
+                solution = workspace.create(self.config, problem, lang)
+            except (ValueError, OSError) as exc:
+                self.notify(escape(str(exc)), severity="error")
+                return
 
         editor = self.config.resolve_editor()
         if editor:
@@ -928,7 +935,7 @@ class LeetCodeTUI(App):
             self.refresh_review()
             self.refresh()
         else:
-            self.notify(f"created {solution.file} (set $EDITOR to auto-open)")
+            self.notify(f"solution at {solution.file} (set $EDITOR to auto-open)")
 
     def action_run(self) -> None:
         self._judge(submit=False)
