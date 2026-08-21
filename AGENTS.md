@@ -162,6 +162,9 @@ never submitted by accident.
   rebuild re-highlights its cursor row.
 - Workers are `@work(thread=True, exclusive=True)` per group; UI mutations
   from workers go through `call_from_thread`.
+- `_day_rollover` (a 60s interval) re-dates everything day-shaped when a
+  local or UTC midnight passes — due counts, mark tints, the daily pin.
+  Anything new that renders "today" should be refreshed from there too.
 
 ### `lc/cli.py`
 - `die(msg, hint)` prints and raises `typer.Exit(1)`. `main()` catches

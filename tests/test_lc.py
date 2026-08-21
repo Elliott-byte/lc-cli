@@ -2793,3 +2793,53 @@ def test_an_expired_session_refresh_keeps_the_solved_marks(tmp_path, monkeypatch
     # A signed-in refresh still updates marks — fresh data always wins.
     store.replace_index([entry("two-sum", "ac"), entry("coin-change", "ac")])
     assert store.find("coin-change").status == "ac"
+
+
+def test_the_tui_rolls_the_day_over_without_a_keypress(tmp_path, monkeypatch):
+    """A TUI left open overnight must not keep describing yesterday.
+
+    Due counts and the ✔/✗ tints follow the local date, the daily pin the
+    UTC one — and all of them only moved when the user next pressed
+    something, though the README promises the marks fade overnight.
+    """
+    import asyncio
+    import sys
+    from datetime import date as _date, timedelta
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    for mod in [m for m in sys.modules if m.startswith("lc.")]:
+        del sys.modules[mod]
+    from lc import store, tui
+    from lc.api import ProblemSummary
+
+    store.replace_index([ProblemSummary(
+        frontend_id="1", title="Two Sum", slug="two-sum", difficulty="Easy",
+        ac_rate=50.0, paid_only=False, status=None, tags=[])])
+    today = _date.today()
+    (tmp_path / "review.json").write_text(json.dumps({"two-sum": {
+        "title": "Two Sum", "frontend_id": "1", "difficulty": "Easy",
+        "level": 1, "added": "2026-01-01", "graded": "2026-01-01",
+        "due": today.isoformat(), "updated": "2026-01-01T00:00:00.000000Z"}}))
+
+    async def overnight():
+        app = tui.LeetCodeTUI()
+        async with app.run_test(size=(120, 40)) as pilot:
+            await pilot.pause()
+            table = app.query_one("#review")
+            # Pretend the app has sat here since yesterday.
+            app._seen_day = (today - timedelta(days=1), "2000-01-01")
+            table._today = today - timedelta(days=1)
+            app._day_rollover()
+            await pilot.pause()
+            rolled = (table._today, app._seen_day[0])
+
+            # Same day again: the check is a no-op and must not churn.
+            table._today = _date(2000, 1, 1)      # sentinel a refresh would fix
+            app._day_rollover()
+            await pilot.pause()
+            return rolled, table._today
+
+    (rolled_today, seen), untouched = asyncio.run(overnight())
+    assert rolled_today == today, "the deck must be re-dated after midnight"
+    assert seen == today
+    assert untouched == _date(2000, 1, 1), "no rollover, no refresh"

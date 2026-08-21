@@ -557,6 +557,9 @@ class LeetCodeTUI(App):
         # return check needs "became solved", not "is solved".
         self._timer_was_solved = False
         self._timer_was_passed = False
+        #: (local date, UTC date) at the last look — the deck follows the
+        #: first, the daily challenge rotates on the second.
+        self._seen_day = (date.today(), time.strftime("%Y-%m-%d", time.gmtime()))
 
     # ----------------------------------------------------------------- layout
 
@@ -583,12 +586,32 @@ class LeetCodeTUI(App):
         if store.index_size() == 0:
             self.action_sync()
         self._daily_worker()
+        # A TUI left open overnight: due counts, yesterday's ✔/✗ tints and
+        # the daily pin all describe a day that has ended. The README
+        # promises the marks fade overnight — keep that true without a
+        # keypress.
+        self.set_interval(60.0, self._day_rollover)
         table = self.query_one("#list", ProblemList)
         if self.initial:
             summary = store.find(self.initial)
             if summary:
                 self.select_slug(summary.slug)
         table.focus()
+
+    def _day_rollover(self) -> None:
+        """Refresh everything day-shaped when a midnight has passed.
+
+        Cheap when nothing changed (two clock reads); on a change the
+        refreshes are local, and the daily worker only reaches the network
+        when the UTC day actually moved.
+        """
+        now = (date.today(), time.strftime("%Y-%m-%d", time.gmtime()))
+        if now == self._seen_day:
+            return
+        self._seen_day = now
+        self._daily_worker()
+        self.refresh_list()
+        self.refresh_review()
 
     def select_slug(self, slug: str) -> bool:
         """Move the cursor onto a problem. Highlighting it loads the statement."""

@@ -11,8 +11,11 @@ every commit bumps the version (early tags grouped a few commits); tags
 the top section for the current day — or start a new one. Say what changed
 and, when behaviour reversed, what it used to do.
 
-## 0.7.38–0.7.46 — 2026-08-21 · counting, polish, docs
+## 0.7.38–0.7.47 — 2026-08-21 · counting, polish, docs
 
+- **0.7.47** A TUI left open overnight rolls the day over by itself: due
+  counts, yesterday's ✔/✗ tints and the daily pin refresh on a one-minute
+  check instead of waiting for the next keypress.
 - **0.7.46** An index refresh with an expired session keeps the ✔/✗ marks
   it cannot see. An unauthenticated fetch returns no statuses, and
   replacing the index with it used to blank every mark until the next
