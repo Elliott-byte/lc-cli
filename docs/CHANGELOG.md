@@ -11,6 +11,12 @@ every commit bumps the version (early tags grouped a few commits); tags
 the top section for the current day — or start a new one. Say what changed
 and, when behaviour reversed, what it used to do.
 
+## 0.7.48 — 2026-08-21 · the clock stays in the editor
+
+- Quitting Vim pauses a running solve clock (it used to keep counting while
+  you browsed the TUI or the shell); space resumes it on the next visit.
+  Quitting a Vim session that never edited that problem touches nothing.
+
 ## 0.7.38–0.7.47 — 2026-08-21 · counting, polish, docs
 
 - **0.7.47** A TUI left open overnight rolls the day over by itself: due

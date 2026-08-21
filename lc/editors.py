@@ -22,6 +22,7 @@ VIM_PLUGIN = r'''" lc.vim — Vim integration for the lc LeetCode CLI.
 "   space       start the solve clock (opening a problem only arms it)
 "   <leader>z   pause the solve clock behind a cover (space there resumes)
 "   <leader>Z   reset the solve clock to 00:00 (asks first)
+" Quitting Vim pauses a running clock; space resumes it on the next visit.
 "   <leader>q   write everything, then quit Vim (back to the lc TUI/shell)
 " The statement pane shows `lc show` fully rendered in a terminal split when
 " the editor supports it, the raw README.md otherwise; `let
@@ -292,6 +293,7 @@ function! s:LcCloseStatement() abort
   " the last window :close would be E444 anyway; leaving Vim is what closing
   " the last thing on screen means. Real unsaved work still gets a veto.
   if winnr('$') == 1 && tabpagenr('$') == 1
+    call s:LcTimerAutoPause()   " closing the last window is leaving Vim
     if empty(s:LcUnsaved())
       quit!
     else
@@ -312,6 +314,9 @@ function! s:LcPaneQuit() abort
     return          " something real is unsaved: let :q behave like plain Vim
   endif
   if exists('b:lc_statement_for')
+    " Commands run inside an autocmd fire no further autocmds, so the
+    " VimLeavePre hook never sees these exits — pause the clock by hand.
+    call s:LcTimerAutoPause()
     qall!           " :q from the pane means leave
     return
   endif
@@ -319,6 +324,7 @@ function! s:LcPaneQuit() abort
   " beside it — nobody quits the code to sit in the statement. Splits you
   " opened yourself are none of our business, so require exactly the two.
   if winnr('$') == 2 && tabpagenr('$') == 1 && s:LcStatementWin() != -1
+    call s:LcTimerAutoPause()
     qall!
   endif
 endfunction
@@ -344,6 +350,7 @@ function! s:LcQuitAll() abort
     return
   endif
   " Everything real is on disk; the ! is only for the statement terminal.
+  call s:LcTimerAutoPause()
   qall!
 endfunction
 
@@ -395,6 +402,27 @@ function! s:LcTimerToggle() abort
   nnoremap <buffer> q :call <SID>LcBreakResume()<CR>
   nnoremap <buffer> <leader>z :call <SID>LcBreakResume()<CR>
   silent! file [break]
+endfunction
+
+" The problems this Vim session actually edited — so quitting some other,
+" unrelated Vim cannot pause a solve running elsewhere.
+let s:lc_slugs = {}
+
+function! s:LcTimerAutoPause() abort
+  " Leaving the editor is leaving the solve: the clock must not keep
+  " charging for time spent back in the TUI or the shell. Space (or \z)
+  " picks it back up on the next visit. Written directly rather than via
+  " `lc timer pause` — a python spawn on every quit would make :q lag.
+  let l:t = s:LcTimerFile()
+  if empty(l:t) || get(l:t, 'started') is v:null || get(l:t, 'done')
+        \ || !has_key(s:lc_slugs, get(l:t, 'slug', ''))
+    return
+  endif
+  let l:t.accum = get(l:t, 'accum', 0.0)
+        \ + max([0, localtime() - float2nr(get(l:t, 'started'))])
+  let l:t.started = v:null
+  let l:home = empty($LC_HOME) ? expand('~/.lc') : $LC_HOME
+  call writefile([json_encode(l:t)], l:home . '/timer.json')
 endfunction
 
 function! s:LcSpaceKey() abort
@@ -504,6 +532,7 @@ function! s:LcSetup() abort
   nnoremap <buffer> <leader>o :call <SID>LcOpenWeb()<CR>
   " Mid-solve: "I'll want to see this one again."
   nnoremap <buffer> <leader>m :call <SID>LcReview()<CR>
+  let s:lc_slugs[s:LcSlug(expand('%:p:h'))] = 1
   " Space starts the armed clock; once it runs, space is space again.
   nnoremap <buffer> <expr> <Space> <SID>LcSpaceKey()
   " Pause the solve clock behind a cover; \z again (or space there) resumes.
@@ -527,6 +556,9 @@ augroup lc_cli
   " QuitPre fires before :q decides which window to close, which is where the
   " statement pane gets to say "that means leave".
   autocmd QuitPre * call s:LcPaneQuit()
+  " Quitting Vim pauses this session's running clock — editor time is the
+  " solve time, and the TUI has no clock to warn that one is still burning.
+  autocmd VimLeavePre * call s:LcTimerAutoPause()
   " :q in the solution closes only that window, dropping the user into the
   " statement pane with no obvious way on. A pane left as the last window
   " means everything else was quit — follow along. (Plain :quit, so a hidden

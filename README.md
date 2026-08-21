@@ -115,6 +115,8 @@ stops it and reports your time. `\Z` resets it to zero for a fresh attempt.
 `lc timer` shows it from the shell (with `start` / `pause` / `resume` /
 `reset`), and `lc config timer off` turns the whole thing off. `space` works
 even in a bare `vim solution.py` session — it conjures the clock itself.
+Quitting Vim pauses a running clock — editor time is the solve time — and
+`space` picks it back up on your next visit.
 
 Click the statement's `url` line to open the problem in your browser — or
 press `o`, which does the same from either tab. In Vim's statement pane the

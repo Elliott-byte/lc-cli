@@ -386,6 +386,13 @@ def test_vim_quit_never_fights_the_statement_terminal():
     assert "lc timer start" in text
     # \Z earns a hint slot; last, so narrow windows drop it first.
     assert "['Z', 'reset']" in text
+    # Quitting Vim pauses this session's running clock — and because
+    # commands inside an autocmd fire no further autocmds, the VimLeavePre
+    # hook alone cannot cover the plugin's own qall! exits: each calls the
+    # pause by hand. (Proven to fail on 0.7.47, which had none of these.)
+    assert "autocmd VimLeavePre * call s:LcTimerAutoPause()" in text
+    assert text.count("call s:LcTimerAutoPause()") >= 5
+    assert "has_key(s:lc_slugs" in text     # unrelated Vims touch nothing
     assert "return \' \'" in text          # the fall-through: plain space
 
     # Vim owns the mouse in the pane, and its terminal drops the hyperlink

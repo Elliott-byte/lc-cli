@@ -217,6 +217,12 @@ never submitted by accident.
 - The clock is drawn on the statusline from `timer.json` by a 1s ticker that
   holds its repaint while a prompt owns the screen; space starts/resumes via
   `lc timer start <slug>` and falls through to plain space once running.
+- Quitting Vim pauses this session's running clock — but **commands run
+  inside an autocmd fire no further autocmds**, so the `VimLeavePre` hook
+  never sees an exit performed by the plugin's own `qall!` (QuitPre's
+  pane logic, `\q`, the last-window close). Every self-initiated exit must
+  call `s:LcTimerAutoPause()` by hand; it is idempotent, so firing it twice
+  on a plain `:q` costs nothing.
 - After changing the plugin string, `lc setup vim --force` must be re-run —
   the installed copy is compared byte-for-byte and refuses to overwrite what
   differs.

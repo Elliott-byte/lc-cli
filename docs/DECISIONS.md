@@ -103,6 +103,12 @@ not solving. Space (in Vim; `lc timer start` underneath) is the deliberate
 go; it can conjure a clock from nothing so a bare `vim solution.py`
 session counts too.
 
+**Leaving Vim pauses the clock.** — *standing.* Editor time is the solve
+time: quitting back to the TUI or the shell must not keep the meter
+running while you browse. Space (or `\z`) picks it back up on the next
+visit — deliberately, like the start. Only a session that actually edited
+that problem pauses it, so quitting an unrelated Vim touches nothing.
+
 **Only an accepted submit stops it — and only a *fresh* one.** — *standing.*
 A failed submit keeps the clock running (the problem is not done). The
 editor-return inference in the TUI snapshots both the store's solved flag
