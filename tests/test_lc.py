@@ -2618,3 +2618,25 @@ def test_the_review_tab_counts_its_deck_on_the_status_bar(tmp_path, monkeypatch)
     assert "1 of 3 on the deck" in filtered
     assert "on the deck" in stolen, "a list refresh must not steal the review bar"
     assert "1 problems" in back
+
+
+def test_a_folded_url_underlines_its_text_and_not_the_padding():
+    """The underline must stop where the address does.
+
+    The style sat on the Text as its base style, and a folded line is padded
+    out to the column edge with that style — so the wrapped remainder carried
+    an underline (and the OSC 8 link) across a stretch of blank cells.
+    """
+    from dataclasses import replace
+
+    from rich.console import Console
+
+    from lc.render import problem_header
+
+    console = Console(width=60, force_terminal=True)
+    header = problem_header(replace(PROBLEM, slug="determine-if-two-strings-are-close"))
+    for line in console.render_lines(header, console.options, pad=True):
+        for seg in line:
+            if seg.text.strip() == "" and seg.style is not None:
+                assert not seg.style.underline, f"underlined padding: {seg!r}"
+                assert not seg.style.link, f"linked padding: {seg!r}"

@@ -400,7 +400,12 @@ def problem_header(problem) -> RenderableType:
     # ugly, and its worst case is a lone "/" on a line of its own. The link
     # still points at the full URL.
     shown = problem.url.removeprefix("https://").rstrip("/")
-    url = Text(shown, style=f"blue underline link {problem.url}")
+    # Styled as a span over the characters, never as the Text's base style: a
+    # folded line is padded out to the column edge, and padding inherits the
+    # base style — underlining (and OSC 8-linking) a stretch of blank cells
+    # after the address.
+    url = Text(shown)
+    url.stylize(f"blue underline link {problem.url}")
     # OSC 8 only helps where the terminal sees the click. It does not inside
     # the TUI, which captures the mouse, nor inside Vim's terminal, which
     # swallows the escape entirely. So hand Textual its own handle on the
