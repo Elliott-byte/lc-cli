@@ -79,6 +79,14 @@ _KNOWN = (
     ("host key verification failed",
      "the SSH host key was not accepted",
      "connect once with `ssh -T git@github.com` to record it", False),
+    # Before the push-refs rule below: GitHub's refusal ends with the same
+    # "failed to push some refs" line, and reading it as the race would keep
+    # advising "run it again" — a retry into the same wall, forever.
+    ("email privacy",
+     "GitHub refused to publish the commit author's private email (GH007)",
+     "commit the deck as your GitHub noreply address — `lc config author "
+     "<id>+<user>@users.noreply.github.com` — or allow the address at "
+     "github.com/settings/emails", False),
     # The other machine landed a push inside our fetch-to-push window.
     ("failed to push some refs",
      "the other machine pushed while this sync was running",

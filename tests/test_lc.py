@@ -1668,6 +1668,29 @@ def test_git_errors_name_the_real_problem_not_the_last_line():
     # And never crash on empty output.
     assert "failed" in str(gitsync._explain("push", "  \n \n"))
 
+    # GH007's output ends with the push-race rule's needle, and calling it the
+    # race told the user to retry — into the same wall, as many times as they
+    # obeyed. The email-privacy rule has to win, and has to not be retryable.
+    gh007 = (
+        "remote: error: GH007: Your push would publish a private email address.\n"
+        "remote: You can make your email public or disable this protection by visiting:\n"
+        "remote: https://github.com/settings/emails\n"
+        "To github.com:you/lc-review.git\n"
+        " ! [remote rejected] HEAD -> main (push declined due to email privacy restrictions)\n"
+        "error: failed to push some refs to 'github.com:you/lc-review.git'\n"
+    )
+    exc = gitsync._explain("push", gh007)
+    assert "private email" in str(exc)
+    assert "noreply" in exc.hint
+    assert exc.retryable is False, "retrying cannot fix an identity"
+    # A plain rejection with no GH007 in sight is still read as the race.
+    race = (
+        "To github.com:you/lc-review.git\n"
+        " ! [rejected]        main -> main (fetch first)\n"
+        "error: failed to push some refs to 'github.com:you/lc-review.git'\n"
+    )
+    assert gitsync._explain("push", race).retryable is True
+
     # `git -c user.name=lc commit` must be reported as "commit", not "-c".
     assert gitsync._command_name(("-c", "user.name=lc", "commit", "-m", "x")) == "commit"
     assert gitsync._command_name(("--quiet", "push")) == "push"
