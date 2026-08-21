@@ -11,8 +11,13 @@ every commit bumps the version (early tags grouped a few commits); tags
 the top section for the current day — or start a new one. Say what changed
 and, when behaviour reversed, what it used to do.
 
-## 0.7.38–0.7.45 — 2026-08-21 · counting, polish, docs
+## 0.7.38–0.7.46 — 2026-08-21 · counting, polish, docs
 
+- **0.7.46** An index refresh with an expired session keeps the ✔/✗ marks
+  it cannot see. An unauthenticated fetch returns no statuses, and
+  replacing the index with it used to blank every mark until the next
+  signed-in sync — LeetCode has no "unsolve", so the old mark stands
+  wherever the fresh index says nothing.
 - **0.7.45** The docs became rules: AGENTS.md gained "Doc rules" (every
   change names the docs it must update, same commit), a symptom→file
   routing table, and self-maintenance hooks in the shipping checklist.

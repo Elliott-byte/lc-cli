@@ -83,7 +83,8 @@ of the morning.
 The ✔/✗ marks stay fresh by themselves: coming back from the editor re-reads
 the local index, so a `\s` submit made inside Vim shows up immediately.
 `ctrl+r` refreshes on demand — instant and local, unlike `R`, which
-re-downloads the whole index.
+re-downloads the whole index. A refresh with an expired session keeps the
+marks it cannot see — signing out of LeetCode is not unsolving.
 
 | Key | Action |
 | --- | --- |

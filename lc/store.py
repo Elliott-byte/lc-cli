@@ -56,14 +56,22 @@ def connect() -> sqlite3.Connection:
 # --------------------------------------------------------------------------- index
 
 def replace_index(problems: Iterable[ProblemSummary]) -> int:
-    rows = [
-        (
-            p.slug, p.frontend_id, p.title, p.difficulty, p.ac_rate,
-            int(p.paid_only), p.status or "", json.dumps(p.tags),
-        )
-        for p in problems
-    ]
     with closing(connect()) as conn, conn:
+        # An unauthenticated fetch does not know what you have solved — the
+        # session expires every couple of weeks, and one R while it is stale
+        # used to blank every ✔/✗ until the next signed-in sync. A status can
+        # only be wrong the other way (LeetCode has no "unsolve"), so where
+        # the fresh index says nothing, the old mark stands.
+        kept = dict(conn.execute("SELECT slug, status FROM problems "
+                                 "WHERE status IS NOT NULL AND status != ''"))
+        rows = [
+            (
+                p.slug, p.frontend_id, p.title, p.difficulty, p.ac_rate,
+                int(p.paid_only), p.status or kept.get(p.slug, ""),
+                json.dumps(p.tags),
+            )
+            for p in problems
+        ]
         conn.execute("DELETE FROM problems")
         conn.executemany(
             "INSERT INTO problems "

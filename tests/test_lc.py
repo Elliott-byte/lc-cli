@@ -1587,7 +1587,9 @@ def test_pushing_an_unchanged_deck_is_a_no_op_on_a_later_day(tmp_path, monkeypat
         def today(cls):
             return real.today() + datetime.timedelta(days=400)
 
-    monkeypatch.setattr(gitsync, "date", Tomorrow)
+    # raising=False: gitsync imports no date today — the patch is a tripwire
+    # for the future one that would make the table day-dependent again.
+    monkeypatch.setattr(gitsync, "date", Tomorrow, raising=False)
     assert gitsync.push(remote)[1] is False
     # ...and the rendered table still carries the facts, just absolute ones.
     table = (gitsync.repo_dir() / gitsync.TABLE_FILE).read_text()
@@ -2755,3 +2757,39 @@ def test_timer_start_resolves_ids_like_every_other_command(tmp_path, monkeypatch
     # slug has to work with no index at all.
     runner.invoke(app, ["timer", "start", "not-indexed-anywhere"])
     assert solvetimer.load().slug == "not-indexed-anywhere"
+
+
+def test_an_expired_session_refresh_keeps_the_solved_marks(tmp_path, monkeypatch):
+    """One R with stale cookies must not blank every ✔/✗.
+
+    The session dies every couple of weeks; an unauthenticated problemset
+    fetch returns no statuses at all, and replacing the index with it erased
+    what you had solved until the next signed-in sync. A status can only be
+    wrong the other way — LeetCode has no "unsolve" — so where the fresh
+    index says nothing, the old mark stands.
+    """
+    import sys
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    for mod in [m for m in sys.modules if m.startswith("lc.")]:
+        del sys.modules[mod]
+    from lc import store
+    from lc.api import ProblemSummary
+
+    def entry(slug, status):
+        return ProblemSummary(frontend_id="1", title=slug, slug=slug,
+                              difficulty="Easy", ac_rate=50.0, paid_only=False,
+                              status=status, tags=[])
+
+    store.replace_index([entry("two-sum", "ac"), entry("coin-change", "notac")])
+
+    # Session expired: the same problems come back with no status at all.
+    store.replace_index([entry("two-sum", None), entry("coin-change", None),
+                         entry("brand-new", None)])
+    assert store.find("two-sum").status == "ac"
+    assert store.find("coin-change").status == "notac"
+    assert store.find("brand-new").status is None
+
+    # A signed-in refresh still updates marks — fresh data always wins.
+    store.replace_index([entry("two-sum", "ac"), entry("coin-change", "ac")])
+    assert store.find("coin-change").status == "ac"

@@ -221,6 +221,9 @@ never submitted by accident.
 ### `lc/store.py`, `lc/config.py`, `lc/browser.py`, `lc/langs.py`, `lc/fx.py`
 - `store`: sqlite; LIKE needles escaped (`_escape_like` + `ESCAPE '\'`);
   statements expire after 7 days; `meta` holds sync stamps and the daily.
+  `replace_index` keeps an existing ✔/✗ status wherever the fresh index has
+  none — an unauthenticated fetch (expired session) knows nothing about
+  what you solved, and LeetCode has no "unsolve".
 - `config`: dataclass; unknown json keys preserved through `extra`; the
   boolean properties (`autograde`, `timer_on`) deliberately use `is True` /
   `is not False` so hand-edited strings fail safe in each field's direction.
