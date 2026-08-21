@@ -132,7 +132,9 @@ Some problems deserve a second — and a fifth — meeting. Press `m` and the
 problem joins the **Review** tab, where it climbs Ebbinghaus's forgetting
 curve: level 1 comes back after 1 day, then 2, 4, 7, 15, out to a year at
 level 10.
-Due problems sort to the top and the tab title counts them: `Review (3)`.
+Due problems sort to the top and the tab title counts them: `Review (3)`;
+the status bar counts the whole deck — `69 on the deck · 3 due` — and
+narrows with the `/` filter.
 
 ![the review deck](docs/review.svg)
 

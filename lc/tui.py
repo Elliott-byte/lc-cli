@@ -550,6 +550,9 @@ class LeetCodeTUI(App):
         self.current_slug: str = ""
         self.daily_slug: str | None = None
         self._filter_timer = None
+        #: The last durable status line per tab, so switching tabs can restore
+        #: the one that describes what is now on screen.
+        self._tab_status: dict[str, tuple[str, str]] = {}
         # What the problem's solved-state was when the editor opened — the
         # return check needs "became solved", not "is solved".
         self._timer_was_solved = False
@@ -601,12 +604,22 @@ class LeetCodeTUI(App):
     def set_status(self, message: str, style: str = "") -> None:
         bar = self.query_one("#status-bar", Static)
         filters = []
-        if self.difficulty:
-            filters.append(self.difficulty)
-        if self.status_filter:
-            filters.append(self.status_filter)
+        # The d/t filters shape the problem list only — prefixed onto the
+        # Review tab's line they would claim the deck was filtered too.
+        if self.query_one(TabbedContent).active != "pane-review":
+            if self.difficulty:
+                filters.append(self.difficulty)
+            if self.status_filter:
+                filters.append(self.status_filter)
         prefix = f"[{' · '.join(filters)}] " if filters else ""
         bar.update(Text(prefix + message, style=style or "dim"))
+
+    def _remember_status(self, pane: str, message: str, style: str = "") -> None:
+        """A tab's own status line: shown now if that tab is up, and again
+        whenever the user switches back to it."""
+        self._tab_status[pane] = (message, style)
+        if self.query_one(TabbedContent).active == pane:
+            self.set_status(message, style)
 
     # ------------------------------------------------------------ solve timer
     # The clock is an editing-session thing: Vim's statusline shows it and \z
@@ -645,14 +658,15 @@ class LeetCodeTUI(App):
         if selected:
             self.select_slug(selected)
         if not rows and store.index_size() == 0:
-            self.set_status("no local index yet — press R to sync", "yellow")
+            self._remember_status("pane-problems",
+                                  "no local index yet — press R to sync", "yellow")
         else:
             message = f"{len(rows)} problems"
             if pinned:
                 # Recomputed on every refresh — which is exactly when someone
                 # is wondering why the daily has not changed.
                 message += "  ·  " + daily_note(store.get_meta("daily_date") or "")
-            self.set_status(message)
+            self._remember_status("pane-problems", message)
 
     def refresh_review(self, focus: str = "") -> None:
         today = date.today()
@@ -672,6 +686,14 @@ class LeetCodeTUI(App):
         self.query_one(TabbedContent).get_tab("pane-review").label = (
             f"Review ({due})" if due else "Review"
         )
+        # And the bottom bar counts the deck, the way the Problems tab counts
+        # its list — narrowed by the filter when one is typed.
+        live = len(review.live(items))
+        message = (f"{len(rows)} of {live} on the deck" if self.keyword
+                   else f"{live} on the deck")
+        if due:
+            message += f"  ·  {due} due"
+        self._remember_status("pane-review", message)
         self.refresh_sync_bar()
 
     #: Style per sync state, so the strip reads at a glance.
@@ -762,6 +784,10 @@ class LeetCodeTUI(App):
         # the statement pane at whatever its cursor is on.
         table = self._active_table()
         table.focus()
+        # The bar describes what is on screen — bring the new tab's line back.
+        remembered = self._tab_status.get(self.query_one(TabbedContent).active)
+        if remembered:
+            self.set_status(*remembered)
         if table.row_count:
             key = table.coordinate_to_cell_key(table.cursor_coordinate).row_key
             if key is not None and key.value:

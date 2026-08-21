@@ -2550,3 +2550,71 @@ def test_cli_timer_pause_and_resume(tmp_path, monkeypatch):
     assert solvetimer.load().running
     # reset drops the elapsed time and keeps it ticking — Vim's \Z.
     assert "00:00" in runner.invoke(app, ["timer", "reset"]).output
+
+
+def test_the_review_tab_counts_its_deck_on_the_status_bar(tmp_path, monkeypatch):
+    """The bottom bar must describe the tab on screen, deck included.
+
+    It only ever said "N problems" — the Problems tab's line — so on the
+    Review tab the bar talked about a list you could not see.
+    """
+    import asyncio
+    import sys
+    from datetime import date, timedelta
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    for mod in [m for m in sys.modules if m.startswith("lc.")]:
+        del sys.modules[mod]
+    from lc import store, tui
+    from lc.api import ProblemSummary
+
+    # A non-empty index, so on_mount does not kick off a network sync whose
+    # failure would race this test for the status bar.
+    store.replace_index([ProblemSummary(
+        frontend_id="1", title="Two Sum", slug="two-sum", difficulty="Easy",
+        ac_rate=50.0, paid_only=False, status=None, tags=[])])
+
+    today = date.today()
+    def item(slug, fid, due):
+        return {"title": slug, "frontend_id": fid, "difficulty": "Easy",
+                "level": 1, "added": "2026-01-01", "graded": "2026-01-01",
+                "due": due, "updated": "2026-01-01T00:00:00.000000Z"}
+    (tmp_path / "review.json").write_text(json.dumps({
+        "two-sum": item("two-sum", "1", (today - timedelta(days=1)).isoformat()),
+        "coin-change": item("coin-change", "322", (today + timedelta(days=3)).isoformat()),
+        "move-zeroes": item("move-zeroes", "283", (today + timedelta(days=5)).isoformat()),
+    }))
+
+    async def run():
+        app = tui.LeetCodeTUI()
+        seen = []
+        async with app.run_test() as pilot:
+            from textual.widgets import Static
+
+            def bar() -> str:
+                return str(app.query_one("#status-bar", Static).render())
+
+            await pilot.pause()
+            seen.append(bar())               # problems tab
+            await pilot.press("tab")
+            await pilot.pause()
+            seen.append(bar())               # review tab
+            app.keyword = "coin"
+            app.refresh_review()
+            await pilot.pause()
+            seen.append(bar())               # review tab, filtered
+            app.keyword = ""
+            app.refresh_list()               # a background list refresh...
+            await pilot.pause()
+            seen.append(bar())               # ...must not steal the review bar
+            await pilot.press("tab")
+            await pilot.pause()
+            seen.append(bar())               # back on problems
+        return seen
+
+    problems, deck, filtered, stolen, back = asyncio.run(run())
+    assert "1 problems" in problems
+    assert "3 on the deck" in deck and "1 due" in deck
+    assert "1 of 3 on the deck" in filtered
+    assert "on the deck" in stolen, "a list refresh must not steal the review bar"
+    assert "1 problems" in back
