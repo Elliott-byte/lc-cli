@@ -2640,3 +2640,118 @@ def test_a_folded_url_underlines_its_text_and_not_the_padding():
             if seg.text.strip() == "" and seg.style is not None:
                 assert not seg.style.underline, f"underlined padding: {seg!r}"
                 assert not seg.style.link, f"linked padding: {seg!r}"
+
+
+def test_a_mornings_solve_does_not_clock_out_evening_practice(tmp_path, monkeypatch):
+    """The deck's ✔ mark says "passed today", not "passed while I was in there".
+
+    Reopening a problem already solved and submitted earlier today re-arms its
+    clock for practice — but stepping out of the editor read the standing mark
+    as a fresh solve and clocked the practice session out: silently on the
+    armed clock (space then refused to start it), with a phantom "solved in …"
+    once it was running. Snapshot the mark at the door, like solved-ness.
+    """
+    import asyncio
+    import contextlib
+    from datetime import date as _date
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    monkeypatch.delenv("EDITOR", raising=False)
+    monkeypatch.delenv("VISUAL", raising=False)
+    (tmp_path / "config.json").write_text(json.dumps(
+        {"workspace": str(tmp_path / "ws"), "editor": "true"}))
+    import sys
+    for mod in [m for m in sys.modules if m.startswith("lc.")]:
+        del sys.modules[mod]
+    from lc import review, solvetimer, store, tui
+    from lc.api import ProblemSummary
+
+    today = _date.today().isoformat()
+    # Solved and submitted this morning: store says ac, the deck row is green.
+    store.replace_index([ProblemSummary(
+        frontend_id="322", title="Coin Change", slug="coin-change",
+        difficulty="Medium", ac_rate=48.9, paid_only=False, status="ac", tags=[])])
+    (tmp_path / "review.json").write_text(json.dumps({"coin-change": {
+        "title": "Coin Change", "frontend_id": "322", "difficulty": "Medium",
+        "level": 2, "added": "2026-01-01", "graded": "2026-01-01",
+        "due": today, "updated": "2026-01-01T00:00:00.000000Z",
+        "attempted": today, "attempt_passed": True}}))
+    # Cached, as a viewed problem's statement always is — without it the row
+    # highlight that follows each pick clears app.current while the fetch
+    # worker fails offline, and the later picks would silently no-op.
+    store.put_statement(PROBLEM)
+
+    editor_calls = []
+    monkeypatch.setattr(tui.workspace, "open_in_editor",
+                        lambda config, target: editor_calls.append(target) or True)
+    monkeypatch.setattr(tui.LeetCodeTUI, "suspend",
+                        lambda self: contextlib.nullcontext())
+
+    async def practice():
+        app = tui.LeetCodeTUI()
+        seen = {}
+        async with app.run_test(size=(140, 40)) as pilot:
+            await pilot.pause()
+            app._show(PROBLEM)
+            await pilot.pause()
+
+            app.action_pick()            # reopen, read, quit — no submit
+            await pilot.pause()
+            timer = solvetimer.load()
+            seen["armed_survives"] = timer is not None and timer.armed
+
+            solvetimer.resume()          # space in Vim: practice for real
+            app.current = app.current or PROBLEM
+            app.action_pick()            # another visit, still no submit
+            await pilot.pause()
+            timer = solvetimer.load()
+            seen["still_running"] = timer is not None and timer.running
+
+            # A solve that actually lands inside the editor still stops it:
+            # grading cleared the mark, and the editor's submit re-marks it.
+            review.shift_level("coin-change", +1, [1, 2, 4, 7])
+            def editor_submits(config, target):
+                review.record_submit("coin-change", True)
+                return True
+            monkeypatch.setattr(tui.workspace, "open_in_editor", editor_submits)
+            app.current = app.current or PROBLEM
+            app.action_pick()
+            await pilot.pause()
+            timer = solvetimer.load()
+            seen["real_solve_stops"] = timer is not None and timer.done
+        return seen
+
+    assert asyncio.run(practice()) == {
+        "armed_survives": True, "still_running": True, "real_solve_stops": True,
+    }
+    assert editor_calls, "the fake editor must actually have been entered"
+
+
+def test_timer_start_resolves_ids_like_every_other_command(tmp_path, monkeypatch):
+    """`lc timer start 322` must clock coin-change, not a problem called "322".
+
+    A literal id armed a clock no submit's slug ever matched — it ticked
+    forever and never showed in Vim, whose statusline compares slugs.
+    """
+    import sys
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    for mod in [m for m in sys.modules if m.startswith("lc.")]:
+        del sys.modules[mod]
+    from typer.testing import CliRunner
+    from lc import solvetimer, store
+    from lc.api import ProblemSummary
+    from lc.cli import app
+
+    store.replace_index([ProblemSummary(
+        frontend_id="322", title="Coin Change", slug="coin-change",
+        difficulty="Medium", ac_rate=48.9, paid_only=False, status=None, tags=[])])
+
+    runner = CliRunner()
+    assert "running" in runner.invoke(app, ["timer", "start", "322"]).output
+    assert solvetimer.load().slug == "coin-change"
+
+    # An unknown ref still passes through literally — a bare `vim` session's
+    # slug has to work with no index at all.
+    runner.invoke(app, ["timer", "start", "not-indexed-anywhere"])
+    assert solvetimer.load().slug == "not-indexed-anywhere"

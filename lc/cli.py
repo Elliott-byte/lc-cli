@@ -1222,7 +1222,12 @@ def timer_start(
 ) -> None:
     """Start (or resume) the clock — what space in Vim presses."""
     if slug:
-        solvetimer.begin(slug)
+        # Ids and titles resolve like everywhere else. Taken literally, a
+        # "322" would arm a clock no submit's slug ever matches — one that
+        # ticks forever and never shows in Vim. An unknown ref still passes
+        # through untouched, so a bare `vim` session's slug works offline.
+        summary = store.find(slug)
+        solvetimer.begin(summary.slug if summary else slug)
     timer = solvetimer.load()
     if timer is None or timer.done:
         die("no clock to start", "opening a problem arms one")

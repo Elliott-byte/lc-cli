@@ -556,6 +556,7 @@ class LeetCodeTUI(App):
         # What the problem's solved-state was when the editor opened — the
         # return check needs "became solved", not "is solved".
         self._timer_was_solved = False
+        self._timer_was_passed = False
 
     # ----------------------------------------------------------------- layout
 
@@ -1007,9 +1008,15 @@ class LeetCodeTUI(App):
         # check needs "became solved while I was in there", and a value
         # remembered from an earlier visit (or an earlier process — the
         # clock file outlives the TUI) would stop the clock of a problem
-        # that was already solved years ago.
+        # that was already solved years ago. The deck's ✔ mark gets the same
+        # treatment — it says "passed today", and a morning's submit must not
+        # clock out an evening's re-practice the moment you step back out.
         known = store.find(problem.slug)
         self._timer_was_solved = known.solved if known else False
+        marked = review.load().get(problem.slug)
+        self._timer_was_passed = (
+            marked is not None and marked.attempt_today(date.today()) == "passed"
+        )
         editor = self.config.resolve_editor()
         if editor:
             with self.suspend():
@@ -1023,9 +1030,11 @@ class LeetCodeTUI(App):
             # A `\s` submit stops the clock through the CLI itself; these
             # catch a solve finished some other way (an older lc, the web).
             item = review.load().get(problem.slug)
-            if item is not None and item.attempt_today(date.today()) == "passed":
+            passed = (item is not None
+                      and item.attempt_today(date.today()) == "passed")
+            if passed and not self._timer_was_passed:
                 self._timer_submit(problem.slug, accepted=True)
-            else:
+            elif not passed:
                 fresh = store.find(problem.slug)
                 if fresh is not None and fresh.solved and not self._timer_was_solved:
                     self._timer_submit(problem.slug, accepted=True)
