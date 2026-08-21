@@ -5,6 +5,20 @@ plugin, and a spaced-repetition deck that syncs through a git repo the user
 owns. Read this before changing anything — most bugs fixed here were in code
 that looked obviously correct from inside one file.
 
+## Hard rules — even if you read nothing else
+
+- `~/.lc/review.json` is **user data**: never regenerate, reset or overwrite
+  the deck wholesale. The sync clone (`~/.lc/review-repo/`) and `cache.db`
+  are the disposable ones.
+- **Every commit bumps the version** in `pyproject.toml` **and**
+  `lc/__init__.py`. Never reuse a version number — releases are tags pushed
+  from the maintainer's machine and feed a brew tap.
+- **Two machines push to this repo** — `git fetch` before pushing.
+- Commit with the **repo-local identity** (`Eliot <105957288+Elliott-byte@
+  users.noreply.github.com>`), never the global one (it carries a private
+  work email; GitHub also rejects private addresses with GH007).
+- A bug fix ships with a regression test **proven to fail on the old code**.
+
 ## Working on it
 
 ```bash
@@ -17,26 +31,23 @@ uv tool install --force --reinstall .     # install the real `lc` from this chec
 builds unless the version was bumped (every commit bumps it, see below) or
 `uv cache clean lc-cli` is run first.
 
-## Conventions that are easy to violate
+## Conventions
 
-- **Every commit bumps the version** in both `pyproject.toml` and
-  `lc/__init__.py`, by one patch level. Releases are tags (`vX.Y.Z`) pushed
-  from the maintainer's machine and feed a brew tap — **never reuse a version
-  number**; `git fetch --tags` and check before pushing after a gap.
 - **Commit messages are narrative**: a one-line summary, then a paragraph or
   two explaining the failure mode and why this shape of fix. Look at
   `git log` and match it. Commits end with a `Co-Authored-By:` line when an
   agent wrote them.
-- **This repo's git identity is repo-local** (`Eliot <105957288+Elliott-byte@
-  users.noreply.github.com>`) — the global config carries a work email that
-  must not appear in public history.
-- Two machines push to this repo. Fetch before pushing; a rejected push may
-  need a rebase that renumbers your versions on top of theirs.
-- `README.md` and `README.zh-CN.md` are kept in parity — a user-visible change
-  documents itself in both.
-- Every bug fix lands with a regression test **proven to fail on the old
-  code** (revert the fix in the working tree, run the test, restore). Each
-  commit passes its own suite in isolation, so the history bisects.
+- A rejected push usually means the other machine landed commits — rebase on
+  top and **renumber your versions** during the conflict resolution (each
+  side bumps independently; the pushed/tagged numbers win).
+- `README.md` and `README.zh-CN.md` are kept in parity — a user-visible
+  change documents itself in both.
+- Proving a regression test: revert the fix in the working tree (the fix
+  only, not the test), run the test, restore. Each commit passes its own
+  suite in isolation, so the history bisects.
+- Code style: comments and docstrings explain the *failure mode being
+  prevented*, not what the line does; behaviour-shaped test names; plain
+  `assert` messages that say what broke. Match the surrounding voice.
 
 ## Data files and who owns what
 
@@ -199,6 +210,32 @@ never submitted by accident.
   Firefox cookie reading (snapshot db + WAL sidecars before sqlite-reading).
 - `langs`: registry + aliases; `choose()` walks default → favourites →
   whatever the problem offers.
+
+## Common tasks — the full checklist each one implies
+
+**Add a config setting** — field on `Config` (lc/config.py; hand-edited-json
+tolerance goes in a property, `is True` / `is not False` chosen per the safe
+direction), row in `lc config show`, a `lc config <name>` command, and — if a
+user would toggle it mid-session — `FIELDS`/`TOGGLES` on the TUI's
+`ConfigScreen`. Unknown json keys already survive via `Config.extra`.
+
+**Add a TUI key** — widget-level `BINDINGS` when it must only fire (and show
+in the footer) while that pane has focus; app-level otherwise. The footer
+carries only the solving loop; everything else is `show=False` and lives in
+`?`. Bind both halves of a shifted pair (`plus,equals_sign`) or the shifted
+press silently does nothing.
+
+**Change the Vim plugin** — it is one string in `lc/editors.py`; after
+installing, `lc setup vim --force` (the installed copy is compared
+byte-for-byte and refuses to overwrite what differs). Terminal-pane quirks
+are commented in place — read them before touching pane logic.
+
+**Touch sync** — test against local bare repos (`_bare_repo`), one `LC_HOME`
+per simulated machine, purging `lc.*` from `sys.modules` between switches.
+Remember `status()` must stay network-free.
+
+**Add a language** — one `Language(...)` row in `lc/langs.py`, plus an alias
+if people type something shorter. Everything else follows from the registry.
 
 ## Testing
 
