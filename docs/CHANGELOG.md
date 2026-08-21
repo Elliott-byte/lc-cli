@@ -3,11 +3,19 @@
 The development log, newest first — what changed and, where it matters, what
 it *used to do*. Commit messages carry the full reasoning (`git log` is
 narrative in this repo); this file is the condensed view an agent or a human
-can skim to learn how the current behaviour came to be. Versions map 1:1 to
-commits; tags (`vX.Y.Z`) are the releases the brew tap ships.
+can skim to learn how the current behaviour came to be. In recent history
+every commit bumps the version (early tags grouped a few commits); tags
+(`vX.Y.Z`) are the releases the brew tap ships.
 
-## 0.7.38–0.7.44 — 2026-08-21 · counting, polish, docs
+**Maintenance rule:** prepend a line per shipped user-visible change, into
+the top section for the current day — or start a new one. Say what changed
+and, when behaviour reversed, what it used to do.
 
+## 0.7.38–0.7.45 — 2026-08-21 · counting, polish, docs
+
+- **0.7.45** The docs became rules: AGENTS.md gained "Doc rules" (every
+  change names the docs it must update, same commit), a symptom→file
+  routing table, and self-maintenance hooks in the shipping checklist.
 - **0.7.44** docs/: this changelog and DECISIONS.md.
 - **0.7.43** CLAUDE.md reduced to one redirect line (it loads into agent
   context every session); AGENTS.md gained the hard rules and task recipes.

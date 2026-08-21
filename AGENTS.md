@@ -14,10 +14,28 @@ that looked obviously correct from inside one file.
   `lc/__init__.py`. Never reuse a version number — releases are tags pushed
   from the maintainer's machine and feed a brew tap.
 - **Two machines push to this repo** — `git fetch` before pushing.
-- Commit with the **repo-local identity** (`Eliot <105957288+Elliott-byte@
-  users.noreply.github.com>`), never the global one (it carries a private
-  work email; GitHub also rejects private addresses with GH007).
+- Commit with the **repo-local identity**, never the global one (it carries
+  a private work email; GitHub also rejects private addresses with GH007):
+  `Eliot <105957288+Elliott-byte@users.noreply.github.com>`
 - A bug fix ships with a regression test **proven to fail on the old code**.
+
+## Doc rules — every change updates the docs that describe it, same commit
+
+- **Changed a behaviour this file documents** (module map, invariants,
+  recipes) → edit that entry here so AGENTS.md never lies.
+- **User-visible change** → one prepended line in `docs/CHANGELOG.md`
+  (into the current day's section, or start one), and both `README.md` and
+  `README.zh-CN.md`.
+- **Reversed or reshaped a documented design decision** → update its entry
+  in `docs/DECISIONS.md`: mark the old one *superseded* (never delete it)
+  and record what replaced it and why.
+- **Learned a non-obvious invariant the hard way** (a bug that looked
+  correct from inside one file) → add it to the module map here, phrased as
+  the failure it prevents.
+- **Changed the Vim plugin string** → reinstall with `lc setup vim --force`
+  and say so in the commit message; users need the same step.
+- **CLAUDE.md stays one line.** It is loaded into context every session;
+  anything worth saying belongs here or in `docs/`.
 
 ## Working on it
 
@@ -211,6 +229,21 @@ never submitted by accident.
 - `langs`: registry + aliases; `choose()` walks default → favourites →
   whatever the problem offers.
 
+## Where to look when…
+
+| Symptom | Start at |
+| --- | --- |
+| sync error message wrong or unhelpful | `gitsync._KNOWN` / `_explain` — ordering is by specificity |
+| "N changes to push" that pushing never clears | the save guards in `gitsync.pull`/`_push_once` (`merged != local`) and `status()` |
+| deck cursor lands on the wrong problem | `ReviewList._render_rows` restore chain; `load_items(focus=…)` is one-shot |
+| wrong file or language opened / judged | `workspace.load` + `.lc.json`; the TUI's reopen-first `action_pick` |
+| a level moved when it should not have (or refused to) | `review.record_submit` — the graded-today guard and its docstring |
+| clock stops, starts or re-arms by itself | `solvetimer.begin`/`stop_if` + the door snapshots in `tui.action_pick` |
+| statement renders oddly / styling bleeds into padding | `render._StatementParser`; use spans, never base styles, where text wraps |
+| status bar shows the wrong tab's line | the `_remember_status` / `set_status` split in `lc/tui.py` |
+| judge verdict displayed wrongly | `api._to_result`; rerun with `LC_DEBUG=1` to see the raw payload |
+| Vim keys do nothing | mappings are buffer-local and need `.lc.json` in the dir; a changed plugin needs `lc setup vim --force` |
+
 ## Common tasks — the full checklist each one implies
 
 **Add a config setting** — field on `Config` (lc/config.py; hand-edited-json
@@ -239,8 +272,8 @@ if people type something shorter. Everything else follows from the registry.
 
 ## Testing
 
-- One file: `tests/test_lc.py` (~2800 lines). `conftest.py` only puts the
-  repo on `sys.path`.
+- One file: `tests/test_lc.py`. `conftest.py` only puts the repo on
+  `sys.path`. One test: `.venv/bin/python -m pytest -q -k "<part of name>"`.
 - House patterns: `monkeypatch.setenv("LC_HOME", tmp_path)` **then purge**
   `sys.modules` of `lc.*` and re-import; bare git remotes via `_bare_repo`;
   the network mocked with `httpx.MockTransport` (`judge_client`); TUI tests
@@ -256,15 +289,19 @@ if people type something shorter. Everything else follows from the registry.
 
 - `docs/DECISIONS.md` — the *why* behind these shapes, with the alternatives
   rejected and which decisions superseded which. Read it before proposing to
-  change a behaviour this file states as an invariant.
+  change a behaviour this file states as an invariant; when a decision does
+  change, mark it superseded there rather than deleting it.
 - `docs/CHANGELOG.md` — the development log: what changed per version and
-  what it used to do. `git log` carries the full narrative per commit.
+  what it used to do. Prepend a line per shipped change; `git log` carries
+  the full narrative per commit.
 - `docs/screenshots.py` regenerates the READMEs' SVG screenshots.
 
 ## Shipping a change
 
 1. Code + regression test; prove the test fails on the old code.
-2. Full suite green. Update both READMEs if user-visible.
+2. Full suite green. If user-visible: update both READMEs and prepend a line
+   to `docs/CHANGELOG.md`. If a documented decision changed shape: update
+   its status in `docs/DECISIONS.md` (mark it superseded — never delete).
 3. Bump the version in `pyproject.toml` **and** `lc/__init__.py`.
 4. Narrative commit message; push (fetch first — the other machine also
    pushes); `uv tool install --force --reinstall .` to use it locally.

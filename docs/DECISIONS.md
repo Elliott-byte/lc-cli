@@ -6,6 +6,10 @@ relitigate them without new evidence. Statuses: **standing** (in force),
 **amended** (still true, with a documented exception), **superseded**
 (replaced — kept because the reasoning explains the current shape).
 
+**Maintenance rule:** never delete a decision. When one changes, mark it
+superseded (or amended) in place and say what replaced it and why — the
+graveyard is half of this file's value.
+
 ## Deck & grading
 
 **You grade, lc remembers.** — *standing, amended by opt-in autograde.*
