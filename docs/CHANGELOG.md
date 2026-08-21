@@ -1,0 +1,121 @@
+# Changelog
+
+The development log, newest first — what changed and, where it matters, what
+it *used to do*. Commit messages carry the full reasoning (`git log` is
+narrative in this repo); this file is the condensed view an agent or a human
+can skim to learn how the current behaviour came to be. Versions map 1:1 to
+commits; tags (`vX.Y.Z`) are the releases the brew tap ships.
+
+## 0.7.38–0.7.44 — 2026-08-21 · counting, polish, docs
+
+- **0.7.44** docs/: this changelog and DECISIONS.md.
+- **0.7.43** CLAUDE.md reduced to one redirect line (it loads into agent
+  context every session); AGENTS.md gained the hard rules and task recipes.
+- **0.7.42** AGENTS.md: the module map and invariants written down.
+- **0.7.41** Timer fixes: the editor-return check now snapshots the deck's
+  ✔ mark at the door (a morning's solve no longer clocks out evening
+  practice with a phantom "solved in …"), and `lc timer start` resolves
+  ids/titles like every other command (a literal "322" armed a clock no
+  submit's slug could ever stop).
+- **0.7.40** A folded statement URL no longer underlines (or OSC 8-links)
+  the padding after it — style moved from the Text's base style to a span.
+- **0.7.39** The bottom status bar describes the tab on screen: the Review
+  tab counts its deck (`69 on the deck · 3 due`, narrowing under `/`), each
+  tab's line is restored on switch, and a background refresh of the hidden
+  tab can no longer steal the bar.
+- **0.7.38** GH007 (GitHub email-privacy rejection) is recognised for what
+  it is. Its output ends with the same "failed to push some refs" line as a
+  lost push race, so the classifier used to advise "run the sync again" —
+  a retry into the same wall. Non-retryable, with a noreply-address hint.
+
+## 0.7.28–0.7.37 — 2026-08-20 · the solve clock
+
+- **0.7.37** Space starts the clock from anywhere (`lc timer start <slug>`
+  can conjure one, so a bare `vim solution.py` session counts); the
+  became-solved snapshot is taken at the door on *every* visit.
+- **0.7.36** Opening a problem **arms** the clock at 00:00; starting it is
+  deliberate (space). Walking in is not a start.
+- **0.7.33–0.7.35** `\Z` resets for a fresh attempt (asks first); the clock
+  is drawn in text, not emoji (width disagreements tear the statusline);
+  repaint held while a prompt owns the screen.
+- **0.7.30–0.7.32** The clock moved to where the solving happens: Vim's
+  statusline shows it, `\z` pauses behind a cover tab, the TUI keeps only
+  the bookkeeping (arm on open, stop on accepted submit). `lc timer`
+  (`start`/`pause`/`resume`/`reset`) is the shared control surface.
+- **0.7.29** Settings screen gained the autograde and timer toggles.
+- **0.7.28** First version of the clock, TUI-side (superseded within the
+  day by 0.7.30–0.7.32).
+
+## 0.7.20–0.7.27 — 2026-08-20 · sync correctness, autograde, identity
+
+- **0.7.27** Deck commits default to **your own git identity**, no
+  configuration needed; `lc config author` still overrides; lc's own name
+  (`lc <lc@localhost>`) remains the fallback where git has none.
+- **0.7.26** `enter` on a started problem reopens the existing file in the
+  language it was started in. It used to re-pick in the config default:
+  a Go workspace grew a `solution.py`, `.lc.json` was repointed, and
+  `r`/`s` judged fresh starter code while the real work sat stranded.
+- **0.7.25** A pull that removes problems says so (`… 2 removed`).
+  merge() counts what the live deck view did: revival = added, tombstone
+  hiding a live problem = removed, tombstone-on-tombstone = nothing.
+- **0.7.24** **A hand grade stands against later submits.** The autograde
+  guard now keys on `graded` alone: whoever grades first that day wins —
+  an earlier submit, a hand `+`/`-`/`0`, or the add itself. This reversed
+  0.7.22's guard, which a hand grade slipped past (submit, demote by hand,
+  re-submit → demotion silently re-promoted), and made day zero
+  order-independent (an added problem stays level 1 until tomorrow).
+- **0.7.23** After a submit, the Review tab's cursor sits on the problem
+  just submitted, so `+`/`-` grade what was actually re-solved.
+- **0.7.22** Autograde, opt-in (`lc config autograde on`): accepted climbs
+  a level, a failure drops one, once a day. Off by default — the judge
+  knows whether the code passed, not whether you remembered how.
+- **0.7.21** `lc config author`: deck commits attributable to you
+  (previously hardcoded `lc <lc@localhost>`; superseded as the *default*
+  by 0.7.27, kept as the override).
+- **0.7.20** Two silent sync bugs: re-pointing `lc config repo` at a new
+  repository published nothing (fetch does not prune, so the sync reset
+  onto the *old* repo's ref and reported success — now re-clones), and a
+  tombstone for a never-seen slug was dropped by the save guard while
+  status() counted it forever ("1 change to push" that pushing never
+  cleared — now saves whenever the merge changed anything).
+
+## 0.7.11–0.7.19 — 2026-08-17→19 · review keys, URL, panes
+
+- **0.7.16–0.7.19** `esc`/`q` close the `?` key list instead of quitting;
+  the pane divider is draggable (24-column floor per side); the statement
+  URL opens on double-click in Vim and is shown scheme-less so it fits.
+- **0.7.14–0.7.15** The statement URL became a real hyperlink (OSC 8) and
+  clickable in the TUI (Textual `@click` meta — each channel drops one of
+  the two mechanisms, so both are attached).
+- **0.7.11–0.7.13** Grading keys rounded out: cursor follows the problem
+  you graded (restore by slug — grading re-sorts the deck), `_` grades
+  down like `+` grades up, `0` = "drew a blank" → straight back to level 1
+  (one step down is not a lapse's worth).
+
+## 0.7.0–0.7.10 — 2026-08-15→16 · grading model, Vim pane, daily
+
+- **0.7.5–0.7.10** Vim statement pane hardening: keys on the statusline,
+  cursor starts in the code, pane read-only, `:q` from either window means
+  leave, slug passed as an argument. Daily challenge names its day and
+  when the next lands (UTC rollover).
+- **0.7.0–0.7.1** The grading contract: **you set the level, lc marks what
+  you re-solved.** Submits tint the row (✔/✗) without touching the level;
+  `+`/`-` grade and clear the mark. (Amended, opt-in, by 0.7.22/0.7.24.)
+
+## 0.5.x–0.6.x — 2026-08-15 · the deck and its sync
+
+- **0.6.0–0.6.1** Two machines actually converge: union merge with
+  last-edit-wins (`updated` UTC stamp), tombstones for removals, metadata
+  refreshes stamped.
+- **0.5.0–0.5.5** The review deck (spaced repetition, Ebbinghaus curve by
+  default), settings screen, git-synced deck, sync status strip
+  (computed network-free), sync errors that say what failed and what to
+  try next.
+
+## 0.1.0–0.4.0 — 2026-08-13→14 · foundations
+
+- CLI + TUI browser, judge integration (`test`/`submit` against the real
+  judge), workspace layout (`~/leetcode/NNNN-slug/`), Vim plugin
+  (`\t`/`\s`/`\p`/`\o`), WSL support (explorer.exe URLs, Windows Firefox
+  cookies), fireworks on accept / orz on failure, reproducible SVG
+  screenshots, Chinese README.

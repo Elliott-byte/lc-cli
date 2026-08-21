@@ -252,6 +252,15 @@ if people type something shorter. Everything else follows from the registry.
 - Test names are sentences about behaviour, docstrings explain the failure
   mode being pinned. No classes, no fixtures beyond tmp_path/monkeypatch.
 
+## Further reading
+
+- `docs/DECISIONS.md` — the *why* behind these shapes, with the alternatives
+  rejected and which decisions superseded which. Read it before proposing to
+  change a behaviour this file states as an invariant.
+- `docs/CHANGELOG.md` — the development log: what changed per version and
+  what it used to do. `git log` carries the full narrative per commit.
+- `docs/screenshots.py` regenerates the READMEs' SVG screenshots.
+
 ## Shipping a change
 
 1. Code + regression test; prove the test fails on the old code.
