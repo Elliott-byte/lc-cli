@@ -3630,15 +3630,20 @@ def test_a_judge_that_explodes_does_not_take_the_session(tmp_path, monkeypatch):
 
 
 def test_the_editor_footer_never_advertises_a_dead_key(tmp_path, monkeypatch):
-    """With Vim keys on the editor owns escape, so the footer must not offer
-    `esc Back` — pressing the key a UI promises and getting nothing is how
-    this was reported. The way out (ZZ) is named on the status line, which
-    the footer cannot carry: it is two keystrokes, and Textual keeps single
-    uppercase letters out of the footer regardless."""
+    """The footer must show the editor's real way out: ZZ with Vim keys,
+    escape without them. A displayed command is also a mouse button, so the
+    Vim item must save and leave when clicked without turning one Z into a
+    screen binding that steals it from the editor."""
     import asyncio
     import json as _json
+    import time as _time
 
-    from lc import tui
+    from lc import store, tui
+    from lc.api import ProblemSummary
+
+    summary = ProblemSummary(
+        PROBLEM.frontend_id, PROBLEM.title, PROBLEM.slug, PROBLEM.difficulty,
+        PROBLEM.ac_rate, PROBLEM.paid_only, None, PROBLEM.tags)
 
     def footer_keys(vim: bool):
         monkeypatch.setenv("LC_HOME", str(tmp_path))
@@ -3646,6 +3651,10 @@ def test_the_editor_footer_never_advertises_a_dead_key(tmp_path, monkeypatch):
         ws.mkdir(exist_ok=True)
         (tmp_path / "config.json").write_text(_json.dumps(
             {"workspace": str(ws), "editor": "builtin", "builtin_vim": vim}))
+        store.replace_index([summary])
+        store.put_statement(PROBLEM)
+        store.set_meta("daily_date", _time.strftime("%Y-%m-%d", _time.gmtime()))
+        store.set_meta("daily_slug", PROBLEM.slug)
 
         async def look():
             app = tui.LeetCodeTUI()
@@ -3654,18 +3663,61 @@ def test_the_editor_footer_never_advertises_a_dead_key(tmp_path, monkeypatch):
                 app._show(PROBLEM); app.current_slug = PROBLEM.slug
                 await pilot.pause()
                 app.action_pick(); await pilot.pause()
-                shown = {b.description for _, b, _e, _t
-                         in app.screen.active_bindings.values() if b.show}
+                bindings = [b for _, b, _e, _t
+                            in app.screen.active_bindings.values() if b.show]
+                shown = {b.description for b in bindings}
+                displays = {app.get_key_display(b): b.description
+                            for b in bindings}
                 status = str(app.screen.query_one("#edit-status").render())
-                return shown, status
+                return shown, displays, status
 
         return asyncio.run(look())
 
-    shown, status = footer_keys(vim=True)
-    assert "Back" not in shown, shown          # no dead key advertised
+    shown, displays, status = footer_keys(vim=True)
+    assert displays.get("ZZ") == "Back", displays
     assert {"Run", "Submit", "Note", "Pause", "Reset clock"} <= shown
-    assert "ZZ back" in status                 # the way out is named instead
+    assert "ZZ back" not in status             # the footer owns the command
 
-    shown, status = footer_keys(vim=False)
+    shown, displays, status = footer_keys(vim=False)
     assert "Back" in shown                     # plain editor: esc really works
+    assert displays.get("esc") == "Back", displays
     assert "ZZ back" not in status
+
+
+def test_clicking_zz_in_the_editor_footer_saves_and_goes_back(tmp_path, monkeypatch):
+    """Footer commands are buttons, not a legend; ZZ must work by mouse while
+    the first keyboard Z remains inside Vim waiting for its second Z."""
+    import asyncio
+    import json as _json
+    import time as _time
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    ws = tmp_path / "ws"; ws.mkdir()
+    (tmp_path / "config.json").write_text(_json.dumps(
+        {"workspace": str(ws), "editor": "builtin", "builtin_vim": True}))
+
+    from lc import editscreen, store, tui
+    from lc.api import ProblemSummary
+
+    store.replace_index([ProblemSummary(
+        PROBLEM.frontend_id, PROBLEM.title, PROBLEM.slug, PROBLEM.difficulty,
+        PROBLEM.ac_rate, PROBLEM.paid_only, None, PROBLEM.tags)])
+    store.put_statement(PROBLEM)
+    store.set_meta("daily_date", _time.strftime("%Y-%m-%d", _time.gmtime()))
+    store.set_meta("daily_slug", PROBLEM.slug)
+
+    async def click_back():
+        app = tui.LeetCodeTUI()
+        async with app.run_test(size=(170, 45)) as pilot:
+            await pilot.pause()
+            app._show(PROBLEM); app.current_slug = PROBLEM.slug
+            await pilot.pause()
+            app.action_pick(); await pilot.pause()
+            await pilot.press("Z"); await pilot.pause()
+            assert isinstance(app.screen, editscreen.EditScreen)
+            key = next(k for k in app.screen.query("FooterKey")
+                       if getattr(k, "key_display", "") == "ZZ")
+            await pilot.click(key); await pilot.pause()
+            return isinstance(app.screen, editscreen.EditScreen)
+
+    assert not asyncio.run(click_back())

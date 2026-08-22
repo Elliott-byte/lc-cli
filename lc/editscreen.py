@@ -102,6 +102,10 @@ class EditScreen(Screen):
         Binding("ctrl+n", "notes", "Note", priority=True),
         Binding("ctrl+b", "pause", "Pause", priority=True),
         Binding("ctrl+g", "reset_clock", "Reset clock", priority=True),
+        # FooterKey clicks simulate their binding's key. F24 is an internal,
+        # priority-only handle so the button can invoke Back without making
+        # one real Z steal the first half of Vim's ZZ command.
+        Binding("f24", "vim_back", "Back", key_display="ZZ", priority=True),
         # escape is NOT priority: the vim layer needs it first (insert ->
         # normal), and in vim mode ZZ is the way out. With vim keys off, or
         # focus outside the code (the note split), escape still backs out.
@@ -109,17 +113,13 @@ class EditScreen(Screen):
     ]
 
     def check_action(self, action: str, parameters: tuple) -> bool | None:
-        # Under Vim keys the editor owns escape, so the footer must not
-        # advertise it — pressing the key a UI promises and getting nothing
-        # is how this was reported. The way out is ZZ, which the status line
-        # names: two keystrokes handled inside the text area, which no single
-        # Binding can express (and Textual keeps single uppercase letters out
-        # of the footer regardless). False here hides the row *and* disables
-        # it, which is right: with Vim keys on, escape never reaches the
-        # screen from the code — only from the note split, and that is
-        # handled in `action_notes`.
+        # Vim and plain editing have different honest ways out. Keep escape
+        # out of Vim's footer because the code area owns it, and keep the
+        # synthetic ZZ footer action out of plain mode where escape is real.
         if action == "back":
             return not self.app.config.vim_keys_on
+        if action == "vim_back":
+            return self.app.config.vim_keys_on
         return True
 
     def __init__(self, problem, solution) -> None:
@@ -328,3 +328,7 @@ class EditScreen(Screen):
             if timer and timer.slug == self.problem.slug and timer.running:
                 solvetimer.pause()
         self.dismiss(True)
+
+    def action_vim_back(self) -> None:
+        """The clickable footer entry for Vim's two-keystroke ZZ command."""
+        self.action_back()

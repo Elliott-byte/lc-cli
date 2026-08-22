@@ -140,10 +140,10 @@ typing.
 | `ctrl+n` | Toggle the note split below the code |
 | `ctrl+b` | Pause the clock behind a cover — and start it again from anywhere it is stopped |
 | `ctrl+g` | Reset the clock to 00:00 |
-| `ZZ` | Save and go back — `esc` with Vim keys off, where the footer says so |
+| `ZZ` | Save and go back — shown beside Run in the footer; with Vim keys off it becomes `esc Back` |
 
-The status line carries the mode and the way out (`ZZ back · i insert`),
-because the footer cannot: `ZZ` is two keystrokes.
+The footer shows `ZZ Back` beside the other editor commands and it works as a
+mouse button too. The status line stays with the current Vim mode.
 
 It highlights Python and **speaks a Vim subset** by default: modes,
 `hjkl w b e 0 ^ $ gg G` with counts, `i a I A o O s x r`,

@@ -11,6 +11,13 @@ every commit bumps the version (early tags grouped a few commits); tags
 the top section for the current day — or start a new one. Say what changed
 and, when behaviour reversed, what it used to do.
 
+## 0.7.69 — 2026-08-22 · ZZ joins the editor footer
+
+- With Vim keys on, the built-in editor now shows a clickable `ZZ Back`
+  beside Run and the other footer commands. It used to leave the way out in
+  the status line because ZZ is a two-key Vim command; the footer now has a
+  separate mouse-safe action that does not turn one keyboard Z into Back.
+
 ## 0.7.68 — 2026-08-22 · the editor URL opens
 
 - The built-in editor's statement URL opens in the browser again. Its click
