@@ -2488,10 +2488,13 @@ def test_settings_screen_edits_the_toggles_too(tmp_path, monkeypatch):
             return before, saved, live, after
 
     before, saved, live, after = asyncio.run(flip())
-    assert before == {"cfg-review_autograde": False, "cfg-solve_timer": True}
+    assert before == {"cfg-review_autograde": False, "cfg-solve_timer": True,
+                      "cfg-builtin_vim": True}
     assert saved["review_autograde"] is True and saved["solve_timer"] is False
+    assert saved["builtin_vim"] is False
     assert live == (True, False, "")
-    assert after == {"cfg-review_autograde": True, "cfg-solve_timer": False}
+    assert after == {"cfg-review_autograde": True, "cfg-solve_timer": False,
+                     "cfg-builtin_vim": False}
 
 
 def test_the_clock_is_shared_and_stopped_by_a_cli_submit(tmp_path, monkeypatch):
@@ -3108,8 +3111,10 @@ def test_builtin_editor_solves_inside_the_tui(tmp_path, monkeypatch):
     monkeypatch.setenv("LC_HOME", str(tmp_path))
     ws = tmp_path / "ws"
     ws.mkdir()
+    # Plain-editor mode: esc backs out and tab indents. The vim layer's
+    # own semantics (esc stays, ZZ leaves) are covered by its own test.
     (tmp_path / "config.json").write_text(_json.dumps(
-        {"workspace": str(ws), "editor": "builtin"}))
+        {"workspace": str(ws), "editor": "builtin", "builtin_vim": False}))
     from textual.widgets import TabbedContent, TextArea
 
     from lc import solvetimer, tui
@@ -3182,3 +3187,71 @@ def test_builtin_editor_solves_inside_the_tui(tmp_path, monkeypatch):
         "typing_starts": True, "cover": True, "resume": True, "note": True,
         "tab_indents": True, "accept_stops": True, "back": True, "saved": True,
     }
+
+
+def test_builtin_editor_speaks_vim(tmp_path, monkeypatch):
+    """The vim layer: modes, motions, operators, registers, counts, ZZ.
+    Proven against the real key pipeline, not by calling methods."""
+    import asyncio
+    import json as _json
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    ws = tmp_path / "ws"; ws.mkdir()
+    (tmp_path / "config.json").write_text(_json.dumps(
+        {"workspace": str(ws), "editor": "builtin"}))
+    from lc import tui
+
+    async def drive():
+        app = tui.LeetCodeTUI()
+        ok = {}
+        async with app.run_test(size=(160, 45)) as pilot:
+            await pilot.pause()
+            app._show(PROBLEM); app.current_slug = PROBLEM.slug
+            await pilot.pause()
+            app.action_pick(); await pilot.pause()
+            code = app.screen.query_one("#edit-code")
+            # duck-typed on purpose: earlier tests reload lc.* modules, so an
+            # isinstance against this test's import of the class would see a
+            # twin class and fail for reasons that have nothing to do with vim.
+            ok["vim+syntax"] = (getattr(code, "mode", "") == "normal"
+                                and code.language == "python")
+            code.load_text("alpha beta gamma\nsecond line\nthird line\n")
+            code.move_cursor((0, 0)); await pilot.pause()
+
+            await pilot.press("2", "j")
+            ok["count motion"] = code.cursor_location[0] == 2
+            await pilot.press("g", "g", "dollar_sign")
+            ok["gg $"] = code.cursor_location == (0, 16)
+            await pilot.press("0", "i")
+            ok["insert"] = code.mode == "insert"
+            await pilot.press("z", "escape")
+            ok["esc steps back"] = (code.mode == "normal"
+                                    and code.cursor_location == (0, 0)
+                                    and app.screen.__class__.__name__ == "EditScreen")
+            await pilot.press("x")
+            ok["x"] = code.document.get_line(0) == "alpha beta gamma"
+
+            await pilot.press("d", "d", "p")
+            ok["dd p"] = (code.document.get_line(0) == "second line"
+                          and code.document.get_line(1) == "alpha beta gamma")
+            await pilot.press("g", "g", "c", "w")
+            for ch in "SECOND":
+                await pilot.press(ch)
+            await pilot.press("escape")
+            ok["cw"] = code.document.get_line(0).startswith("SECOND")
+            await pilot.press("g", "g", "v", "l", "l", "y")
+            ok["visual inclusive"] = code._register[0] == "SEC"
+            await pilot.press("u")
+            ok["undo"] = "SECOND" not in code.document.get_line(0)
+            await pilot.press("U")
+            ok["redo"] = "SECOND" in code.document.get_line(0)
+
+            await pilot.press("Z", "Z"); await pilot.pause()
+            ok["ZZ leaves+saves"] = (
+                app.screen.__class__.__name__ == "Screen"
+                and "SECOND" in (ws / "0322-coin-change" /
+                                 "solution.py").read_text())
+        return ok
+
+    result = asyncio.run(drive())
+    assert all(result.values()), {k: v for k, v in result.items() if not v}

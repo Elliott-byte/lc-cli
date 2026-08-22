@@ -11,6 +11,16 @@ every commit bumps the version (early tags grouped a few commits); tags
 the top section for the current day — or start a new one. Say what changed
 and, when behaviour reversed, what it used to do.
 
+## 0.7.58 — 2026-08-22 · the built-in editor grows up
+
+- Syntax highlighting: Python in the code pane, markdown in the notes
+  split (tree-sitter grammars ship as dependencies; other languages fall
+  back to plain text instead of crashing — a Go file found that out).
+- A Vim subset, on by default: modes, hjkl/w/b/e/0/^/$/gg/G with counts,
+  i a I A o O s x r, dd yy cc dw cw D C p P, visual, u undo, U redo
+  (ctrl+r runs the samples), ZZ leaves. esc never exits the screen in vim
+  mode; `lc config vimkeys off` restores the plain editor.
+
 ## 0.7.57 — 2026-08-22 · say builtin when it is
 
 - `lc config show` names the builtin editor instead of showing the editor

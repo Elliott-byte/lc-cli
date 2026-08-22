@@ -1316,6 +1316,8 @@ def config_show() -> None:
                   + ("" if source == "configured" else f" ({source})"))
     table.add_row("autograde", "on — a submit moves the level" if cfg.autograde
                   else Text("off — you grade with + / - / 0", style="dim"))
+    table.add_row("vim keys", "on — the built-in editor speaks Vim"
+                  if cfg.vim_keys_on else Text("off — plain editing", style="dim"))
     table.add_row("timer", "on — clocks a solve in Vim, \\z pauses" if cfg.timer_on
                   else Text("off", style="dim"))
     table.add_row("lc home", str(home()))
@@ -1427,6 +1429,19 @@ def config_timer(
                            style="dim"))
     else:
         console.print(Text("✔ timer: off", style="green"))
+
+
+@config_app.command("vimkeys")
+def config_vimkeys(state: str = typer.Argument(..., help="on | off")) -> None:
+    """Vim keys in the built-in edit screen — modes, hjkl, dd/yy/cw, ZZ."""
+    want = state.strip().lower()
+    if want not in ("on", "off", "true", "false", "yes", "no"):
+        die(f"could not read {state!r}", "say `lc config vimkeys on` or `off`")
+    cfg = load_config()
+    cfg.builtin_vim = want in ("on", "true", "yes")
+    save_config(cfg)
+    console.print(Text(f"✔ vim keys: {'on' if cfg.builtin_vim else 'off'}",
+                       style="green"))
 
 
 @config_app.command("autograde")

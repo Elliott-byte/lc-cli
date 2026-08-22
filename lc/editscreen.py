@@ -23,6 +23,7 @@ from textual.screen import ModalScreen, Screen
 from textual.widgets import Footer, Static, TextArea
 
 from . import notes, solvetimer, store
+from .vimtext import VimTextArea
 from .render import problem_header, render_statement
 
 #: TextArea language ids, where its highlighter knows the language.
@@ -97,7 +98,10 @@ class EditScreen(Screen):
         Binding("ctrl+s", "submit", "Submit", priority=True),
         Binding("ctrl+n", "notes", "Note", priority=True),
         Binding("ctrl+b", "pause", "Pause", priority=True),
-        Binding("escape", "back", "Back", priority=True),
+        # escape is NOT priority: the vim layer needs it first (insert ->
+        # normal), and in vim mode ZZ is the way out. With vim keys off, or
+        # focus outside the code, escape still backs out.
+        Binding("escape", "back", "Back"),
     ]
 
     def __init__(self, problem, solution) -> None:
@@ -113,11 +117,18 @@ class EditScreen(Screen):
             with VerticalScroll(id="edit-left"):
                 yield Static(statement_body(self.problem), id="edit-statement")
             with Vertical(id="edit-right"):
-                yield TextArea.code_editor(
-                    self.solution.code,
-                    language=_TS_LANG.get(self.solution.language.slug),
-                    id="edit-code",
-                )
+                lang = _TS_LANG.get(self.solution.language.slug)
+                area = VimTextArea.code_editor(
+                    self.solution.code, id="edit-code",
+                ).set_vim(self.app.config.vim_keys_on)
+                if lang:
+                    # available_languages lists names textual KNOWS, not
+                    # grammars actually installed — only assignment tells.
+                    try:
+                        area.language = lang
+                    except Exception:
+                        area.language = None  # no grammar: plain, not broken
+                yield area
         yield Static("", id="edit-status")
         yield Footer()
 
@@ -152,6 +163,15 @@ class EditScreen(Screen):
                 else:
                     right = f"paused {solvetimer.clock(timer.elapsed())}"
         text = Text(left, style="dim")
+        try:
+            area = self.query_one("#edit-code", TextArea)
+        except NoMatches:
+            area = None
+        vim = getattr(area, "vim_status", "")
+        if vim:
+            text.append("  ·  ", style="dim")
+            text.append(vim, style="bold yellow" if "INSERT" in vim
+                        or "VISUAL" in vim else "dim")
         if right:
             text.append("  ·  ", style="dim")
             text.append(right, style="bold" if right[0].isdigit() else "dim")

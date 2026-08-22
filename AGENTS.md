@@ -238,6 +238,17 @@ never submitted by accident.
   reach through the editor and flip the hidden Problems/Review tabs when
   the code needed an indent.
 
+### `lc/vimtext.py` — the built-in editor's Vim layer
+- A deliberate subset (docstring lists it), not an emulator; one unnamed
+  register, counts on simple motions. `set_vim(False)` is the plain editor:
+  permanent insert mode, esc → screen Back (a bare TextArea would eat esc
+  as its own focus-next). Vim-inclusive visual ranges: Textual selections
+  are end-exclusive, so y/d/c extend the end by one column.
+- Syntax needs the grammar *installed*, not just known —
+  `available_languages` lists names textual recognises, so the edit screen
+  assigns `language` in a try/except and falls back to plain text (found
+  when a Go file crashed compose).
+
 ### `lc/editors.py` — the Vim plugin (one file, installed by `lc setup vim`)
 - Everything is buffer-local, attached by an autocmd when the buffer's
   directory has `.lc.json`. The statement pane is a terminal running

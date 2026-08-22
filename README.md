@@ -79,8 +79,16 @@ leaves the TUI. `ctrl+r` runs the samples, `ctrl+s` submits, `ctrl+n`
 toggles a note split, `ctrl+b` pauses the clock behind a cover, `esc` saves
 and returns (pausing the clock, exactly like quitting Vim). Typing the
 first character is what starts an armed clock — reading the statement is
-still free. Prefer a real editor? `lc config editor vim` (or any command)
-keeps today's suspend-into-your-editor flow, Vim plugin and all.
+still free.
+
+The built-in editor highlights Python (and the notes split, markdown), and
+**speaks a Vim subset** by default: modes, `hjkl w b e 0 ^ $ gg G` (with
+counts), `i a I A o O s x r`, `dd yy cc dw cw D C p P`, `v` visual, `u`
+undo, `U` redo (`ctrl+r` runs the samples), and `ZZ` to leave — esc never
+exits, exactly so you can lean on it. `lc config vimkeys off` gives a plain
+editor where `esc` backs out. Prefer the real thing? `lc config editor vim`
+(or any command) keeps today's suspend-into-your-editor flow, plugin and
+all.
 
 Today's daily challenge is pinned to the top with a yellow `★` and selected
 when the app opens, so it is always one keypress away; `D` jumps back to it.

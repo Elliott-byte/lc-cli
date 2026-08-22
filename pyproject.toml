@@ -1,6 +1,6 @@
 [project]
 name = "lc-cli"
-version = "0.7.57"
+version = "0.7.58"
 description = "Practice LeetCode from your terminal"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -9,6 +9,12 @@ dependencies = [
     "rich>=13.7",
     "typer>=0.12",
     "textual>=0.79",
+    # Syntax highlighting in the built-in edit screen. Grammars are separate
+    # packages textual imports by name: python for solutions, markdown for
+    # the notes split. Other languages fall back to plain text.
+    "tree-sitter>=0.25",
+    "tree-sitter-python>=0.23",
+    "tree-sitter-markdown>=0.3",
     "browser-cookie3>=0.19",
 ]
 

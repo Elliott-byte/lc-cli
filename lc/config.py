@@ -73,6 +73,9 @@ class Config:
     #: behind a cover screen, stops on an accepted submit. On unless switched
     #: off — `lc config timer off`.
     solve_timer: bool = True
+    #: Vim keys in the built-in edit screen — modes, hjkl, dd/yy/cw, ZZ.
+    #: `lc config vimkeys off` gives a plain editor instead.
+    builtin_vim: bool = True
     #: Keys in config.json this version does not know about — kept so settings
     #: written by a newer lc survive a round-trip through this one.
     extra: dict = field(default_factory=dict, repr=False)
@@ -88,6 +91,11 @@ class Config:
         """(name, email) for deck commits, falling back to lc's own identity."""
         return (self.review_author_name.strip() or DEFAULT_AUTHOR_NAME,
                 self.review_author_email.strip() or DEFAULT_AUTHOR_EMAIL)
+
+    @property
+    def vim_keys_on(self) -> bool:
+        """is not False — hand-edited json, on unless explicitly off."""
+        return self.builtin_vim is not False
 
     @property
     def timer_on(self) -> bool:

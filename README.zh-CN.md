@@ -68,8 +68,13 @@ Cookie 以 `0600` 权限写入 `~/.lc/cookies.json`；不想落盘也可以通�
 `lc config editor builtin`（或者压根没配编辑器）时，`enter` 打开**内置编辑屏**：左边题面、
 右边代码、判题结果弹通知、状态栏带计时——做题全程不离开 TUI。`ctrl+r` 跑样例，`ctrl+s` 提交，
 `ctrl+n` 开关笔记分栏，`ctrl+b` 弹遮罩暂停计时，`esc` 保存返回（同时暂停计时，和退出 Vim
-一个规矩）。备好的表在你敲下第一个字符时才开始走——读题不计时。更想用真编辑器？
-`lc config editor vim`（或任何命令）保持原来的挂起进编辑器流程，Vim 插件照旧。
+一个规矩）。备好的表在你敲下第一个字符时才开始走——读题不计时。
+
+内置编辑器带 Python 代码高亮（笔记分栏是 markdown 高亮），并且**默认说 Vim 话**：模式切换、
+`hjkl w b e 0 ^ $ gg G`（支持数字前缀）、`i a I A o O s x r`、`dd yy cc dw cw D C p P`、
+`v` 可视、`u` 撤销、`U` 重做（`ctrl+r` 留给跑样例）、`ZZ` 离开——esc 永远不会退出屏幕，
+就是为了让你放心连按。`lc config vimkeys off` 换成普通编辑器（esc 返回）。想用真 Vim？
+`lc config editor vim` 保持原来的流程，插件照旧。
 
 今天的每日一题用黄色 `★` 置顶，打开应用时默认选中，永远只差一次按键；任何时候按 `D` 都能跳回去。
 状态栏会写明它属于哪一天、下一道还有多久——`★ daily 08-15, next in 43m`。LeetCode 在

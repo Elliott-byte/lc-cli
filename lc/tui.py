@@ -374,6 +374,8 @@ class ConfigScreen(ModalScreen[bool]):
          "Autograde — a submit moves the level: accepted up, failed down"),
         ("solve_timer",
          "Solve timer — clocks a solve on Vim's statusline; \\z pauses"),
+        ("builtin_vim",
+         "Vim keys in the built-in editor — hjkl, dd/yy/cw, ZZ leaves"),
     )
 
     #: (config attribute, label, placeholder)
@@ -411,7 +413,8 @@ class ConfigScreen(ModalScreen[bool]):
             # The properties, not the raw fields: they carry each toggle's
             # hand-edited-json tolerance and its own default.
             current = {"review_autograde": self.config.autograde,
-                       "solve_timer": self.config.timer_on}
+                       "solve_timer": self.config.timer_on,
+                       "builtin_vim": self.config.vim_keys_on}
             for name, label in self.TOGGLES:
                 yield Checkbox(label, value=current[name], id=f"cfg-{name}")
             yield Static("", id="config-error")
