@@ -11,6 +11,14 @@ every commit bumps the version (early tags grouped a few commits); tags
 the top section for the current day — or start a new one. Say what changed
 and, when behaviour reversed, what it used to do.
 
+## 0.7.66 — 2026-08-22 · the READMEs catch up
+
+- Both READMEs gained **Solving** and **Notes** sections, each with a new
+  screenshot: the built-in editor mid-solve (statement, code, Vim status,
+  running clock) and the note cards. Solving had been a paragraph inside
+  "The browser" despite being the biggest recent feature, and the tail
+  section named "Notes" collided with it — it is "Odds and ends" now.
+
 ## 0.7.65 — 2026-08-22 · the judge cannot take the session
 
 - An unexpected error inside a judge run — or inside the bookkeeping that

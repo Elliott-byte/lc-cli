@@ -23,7 +23,7 @@ os.environ["LC_NO_FX"] = "1"
 from rich.console import Console  # noqa: E402
 from rich.text import Text  # noqa: E402
 
-from lc import store  # noqa: E402
+from lc import notes, store  # noqa: E402
 from lc.api import JudgeResult, Problem, ProblemSummary  # noqa: E402
 from lc.cli import print_result, problems_table  # noqa: E402
 
@@ -54,6 +54,39 @@ after the <code>i<sup>th</sup></code> query is performed.</p>
 <li><code>k == queryCharacters.length == queryIndices.length</code></li>
 </ul>
 """
+
+#: The problem the editor screenshot solves — its statement must match the
+#: code in the pane beside it, or the shot documents a bug that is not there.
+TRAP_PROBLEM = Problem(
+    question_id="42",
+    frontend_id="42",
+    title="Trapping Rain Water",
+    slug="trapping-rain-water",
+    difficulty="Hard",
+    content=(
+        "<p>Given <code>n</code> non-negative integers representing an "
+        "elevation map where the width of each bar is <code>1</code>, "
+        "compute how much water it can trap after raining.</p>"
+        "<p><strong>Example 1:</strong></p>"
+        "<pre>Input: height = [0,1,0,2,1,0,1,3,2,1,2,1]\nOutput: 6</pre>"
+        "<p><strong>Constraints:</strong></p><ul>"
+        "<li><code>n == height.length</code></li>"
+        "<li><code>1 &lt;= n &lt;= 2 * 10<sup>4</sup></code></li>"
+        "<li><code>0 &lt;= height[i] &lt;= 10<sup>5</sup></code></li></ul>"
+    ),
+    paid_only=False,
+    likes=31000,
+    dislikes=380,
+    ac_rate=65.3,
+    total_accepted="2.1M",
+    total_submission="3.2M",
+    sample_testcase="[0,1,0,2,1,0,1,3,2,1,2,1]",
+    example_testcases="[0,1,0,2,1,0,1,3,2,1,2,1]",
+    hints=[],
+    tags=["Array", "Two Pointers", "Dynamic Programming", "Stack"],
+    snippets={"python3": "class Solution:\n    def trap(self, height: List[int]) -> int:\n        "},
+    meta={},
+)
 
 DAILY_PROBLEM = Problem(
     question_id="2213",
@@ -134,6 +167,34 @@ def shot_test() -> None:
                      title="lc test  ·  in ~/leetcode/2213-longest-substring…")
 
 
+#: A solve in progress — enough real code that the syntax colours show.
+SOLUTION_IN_PROGRESS = """\
+# [42] Trapping Rain Water · leetcode.com/problems/trapping-rain-water/
+
+class Solution:
+    def trap(self, height: List[int]) -> int:
+        left, right = 0, len(height) - 1
+        best = water = 0
+        while left < right:
+            low = height[left] if height[left] < height[right] else height[right]
+            best = low if low > best else best
+            water += best - low
+"""
+
+#: Two cards, as `lc note` stamps them.
+NOTE_CARDS = """\
+## 2026-08-21 21:10 · Not accepted · python3
+
+Two passes over prefix maxima works but allocates twice. The two-pointer
+form keeps the same invariant with O(1) space.
+
+## 2026-08-22 09:05 · Accepted · python3
+
+The pointer on the *lower* side is the one that can move: whatever is
+behind it already bounds the water there.
+"""
+
+
 def seed_review() -> None:
     """A little review deck: one overdue, one due today, one scheduled out.
 
@@ -208,6 +269,44 @@ async def shot_tui() -> None:
         )
         await pilot.pause(0.5)
         (DOCS / "config.svg").write_text(app.export_screenshot(title="lc — settings"))
+        await pilot.press("escape")
+        await pilot.pause(0.3)
+
+        # The built-in editor, mid-solve: statement beside the code, the vim
+        # layer in normal mode, the clock counting on the status line.
+        await pilot.press("tab")           # back to the problem list
+        await pilot.pause(0.3)
+        store.put_statement(TRAP_PROBLEM)
+        app.select_slug("trapping-rain-water")
+        await pilot.pause(0.4)
+        app.action_pick()
+        await pilot.pause(0.5)
+        from lc import solvetimer
+        from lc.vimtext import VimTextArea
+
+        code = app.screen.query_one("#edit-code", VimTextArea)
+        code.load_text(SOLUTION_IN_PROGRESS)
+        code.move_cursor((7, 8))
+        # A clock that has been running a few minutes reads better than 00:00.
+        timer = solvetimer.load()
+        if timer is not None:
+            timer.started = time.time() - 227
+            solvetimer.save(timer)
+        app.screen._tick()
+        await pilot.pause(0.4)
+        (DOCS / "edit.svg").write_text(
+            app.export_screenshot(title="lc — solving"))
+
+        # ...and the note cards that an attempt leaves behind.
+        notes.path_in(app.screen.solution.directory).write_text(NOTE_CARDS)
+        # ZZ, not escape: with the vim layer on, escape is the editor's own
+        # (insert -> normal) and leaving is ZZ. Pressing escape here left the
+        # shot on the edit screen — two identical SVGs.
+        await pilot.press("Z", "Z")
+        await pilot.pause(0.5)
+        app.action_view_notes()
+        await pilot.pause(0.4)
+        (DOCS / "notes.svg").write_text(app.export_screenshot(title="lc — notes"))
 
 
 if __name__ == "__main__":
@@ -215,4 +314,5 @@ if __name__ == "__main__":
     shot_test()
     asyncio.run(shot_tui())
     print("wrote", ", ".join(str(DOCS / f) for f in
-                             ("list.svg", "test.svg", "tui.svg", "review.svg", "config.svg")))
+                             ("list.svg", "test.svg", "tui.svg", "review.svg",
+                              "config.svg", "edit.svg", "notes.svg")))

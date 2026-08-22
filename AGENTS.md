@@ -384,7 +384,12 @@ if people type something shorter. Everything else follows from the registry.
 - `docs/CHANGELOG.md` — the development log: what changed per version and
   what it used to do. Prepend a line per shipped change; `git log` carries
   the full narrative per commit.
-- `docs/screenshots.py` regenerates the READMEs' SVG screenshots.
+- `docs/screenshots.py` regenerates the READMEs' seven SVG screenshots,
+  including the built-in editor (`edit.svg`) and the note cards
+  (`notes.svg`). Two traps in there: the code shown must belong to the
+  problem whose statement is beside it (a mismatch documents a bug that
+  does not exist), and leaving the edit screen needs `ZZ` — `esc` belongs
+  to the Vim layer, and pressing it wrote the same shot twice.
 
 ## Shipping a change
 

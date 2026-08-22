@@ -2,10 +2,11 @@
 
 **English** · [简体中文](README.zh-CN.md)
 
-Browse problems, read statements, write solutions in your own editor, and run
-them against LeetCode's real judge — without leaving the shell. Problems worth
-a second look go on a spaced-repetition deck that remembers what you have
-re-solved today and follows you between machines.
+Browse problems, read statements, solve them — in lc's own editor or in your
+own — and run them against LeetCode's real judge, without leaving the shell.
+A solve clock runs while you work, each attempt can leave a note behind, and
+problems worth a second look go on a spaced-repetition deck that follows you
+between machines.
 
 ```bash
 lc                              # the full-screen browser: pick, edit, test, submit
@@ -19,8 +20,9 @@ lc submit                       # submit for real
 ![lc test against the real judge](docs/test.svg)
 
 **Contents** · [Install](#install) · [Log in](#log-in) · [The browser](#the-browser)
-· [Review deck](#review-deck) · [Syncing between machines](#syncing-between-machines)
-· [Vim](#vim) · [Settings](#settings) · [All commands](#all-commands)
+· [Solving](#solving) · [Notes](#notes) · [Review deck](#review-deck)
+· [Syncing between machines](#syncing-between-machines) · [Vim](#vim)
+· [Settings](#settings) · [All commands](#all-commands)
 · [Where files live](#where-files-live) · [WSL](#wsl)
 
 ## Install
@@ -70,26 +72,9 @@ Bare `lc` (or `lc tui`) opens two panes: problems on the left, the statement
 on the right. On a fresh machine it downloads the problem index by itself.
 
 The loop is: move to a problem, `enter` to open it, write, run, submit —
-repeat. `enter` on a problem you already started reopens your existing file.
-
-With `lc config editor builtin` (or no editor configured), `enter` opens the
-**built-in edit screen**: statement on the left, code on the right, judge
-results as notifications, the solve clock on the status bar — solving never
-leaves the TUI. `ctrl+r` runs the samples, `ctrl+s` submits, `ctrl+n`
-toggles a note split, `ctrl+b` pauses the clock behind a cover (and starts
-it again from anywhere it is stopped), `ctrl+g` resets it to 00:00, `esc`
-saves and returns (pausing the clock, exactly like quitting Vim). Typing the
-first character is what starts an armed clock — reading the statement is
-still free.
-
-The built-in editor highlights Python, and
-**speaks a Vim subset** by default: modes, `hjkl w b e 0 ^ $ gg G` (with
-counts), `i a I A o O s x r`, `dd yy cc dw cw D C p P`, `v` visual, `u`
-undo, `U` redo (`ctrl+r` runs the samples), and `ZZ` to leave — esc never
-exits, exactly so you can lean on it. `lc config vimkeys off` gives a plain
-editor where `esc` backs out. Prefer the real thing? `lc config editor vim`
-(or any command) keeps today's suspend-into-your-editor flow, plugin and
-all.
+repeat. `enter` on a problem you already started reopens your existing file,
+in the language you started it in. Where that happens is up to you — see
+[Solving](#solving).
 
 Today's daily challenge is pinned to the top with a yellow `★` and selected
 when the app opens, so it is always one keypress away; `D` jumps back to it.
@@ -124,20 +109,6 @@ marks it cannot see — signing out of LeetCode is not unsolving.
 Drag the divider between the two panes to give either side more room; it
 stops when one of them is down to 24 columns.
 
-Opening a problem arms a solve clock; **`space` in Vim starts it** — the
-statusline says so until you do. The clock lives where the solving does —
-on **Vim's statusline**, not in the TUI. `\z` pauses it behind a cover that
-hides the code and statement (a stopped clock beside a readable problem
-would be free reading time); `space` there resumes. A failed submit leaves
-it running; an accepted one — `s` in the TUI, `lc submit`, or `\s` in Vim —
-stops it and reports your time. `\Z` resets it to zero for a fresh attempt.
-`lc timer` shows it from the shell (with `start` / `pause` / `resume` /
-`reset`), and `lc config timer off` turns the whole thing off. `space` works
-even in a bare `vim solution.py` session — it conjures the clock itself.
-Quitting Vim pauses a running clock — editor time is the solve time — and
-`space` picks it back up on your next visit. A clock a crash left running
-overnight is quietly demoted to paused the next time you open the problem.
-
 Click the statement's `url` line to open the problem in your browser — or
 press `o`, which does the same from either tab. In Vim's statement pane the
 same line takes a double-click (`\o` works from either window): Vim owns the
@@ -148,6 +119,57 @@ The footer shows the solving loop only. `c` (settings), `d`/`t` (filters),
 `o` (open on leetcode.com), `D` (jump to the daily), `ctrl+r` (refresh from
 the local index) and `R` (re-download it) all still work — press `?` for the
 full list, and `?`, `esc` or `q` to put it away again.
+
+## Solving
+
+With `lc config editor builtin` — or no editor configured at all — `enter`
+opens the problem in **lc's own editor**: statement on the left, code on the
+right, judge results as notifications, the solve clock on the status line.
+Nothing suspends; nothing hands off to another program.
+
+![the built-in editor](docs/edit.svg)
+
+| Key | Action |
+| --- | --- |
+| `ctrl+r` | Run the samples |
+| `ctrl+s` | Submit |
+| `ctrl+n` | Toggle the note split below the code |
+| `ctrl+b` | Pause the clock behind a cover — and start it again from anywhere it is stopped |
+| `ctrl+g` | Reset the clock to 00:00 |
+| `esc` / `ZZ` | Save and go back (`ZZ` with Vim keys on, where `esc` belongs to the editor) |
+
+It highlights Python and **speaks a Vim subset** by default: modes,
+`hjkl w b e 0 ^ $ gg G` with counts, `i a I A o O s x r`,
+`dd yy cc dw cw D C p P`, `v` for visual, `u` undo and `U` redo — `ZZ`
+leaves, and `esc` never exits the screen, exactly so you can lean on it.
+`lc config vimkeys off` gives a plain editor where `esc` backs out.
+
+**Prefer your own editor?** `lc config editor vim` (or `code -w`, or
+anything else) restores the flow where lc suspends into it and picks up
+when you quit — the [Vim plugin](#vim) is built for that side. Both are
+first-class; the setting is one line either way.
+
+**The solve clock.** Opening a problem arms it at 00:00; the first
+keystroke starts it (reading the statement is free). A failed submit leaves
+it running, an accepted one stops it and reports your time, and leaving the
+editor pauses it — editor time is solve time. `lc timer` shows it from the
+shell, `lc config timer off` removes it. In Vim it lives on the statusline:
+`space` starts, `\z` pauses behind a cover, `\Z` resets.
+
+## Notes
+
+Every attempt can leave a card behind. After a submit, `ctrl+n` (or `lc
+note`, or `\n` in Vim) stamps a heading — date, verdict, language — into
+the problem's own `notes.md` and drops you under it, with the code you just
+submitted still on screen.
+
+![note cards](docs/notes.svg)
+
+`n` in the problem list shows that problem's cards, newest first; `n` again
+returns to the statement. It is plain markdown in the problem's directory,
+so your workspace git versions it with the code — and `lc review sync`
+carries the cards between machines along with the deck (a union: cards from
+both sides survive, and the sync never deletes one).
 
 ## Review deck
 
@@ -192,17 +214,6 @@ so a problem you solved in Vim is already green when you get back to the
 list. The mark describes today: it clears when you grade the problem, and
 otherwise fades overnight — the TUI rolls the day over by itself, due
 counts and the daily pin included, even if you never touch a key.
-
-**Notes.** Every attempt can leave a card behind: after a submit, `lc note`
-(or `\n` in Vim) stamps a heading — date, verdict, language — into the
-problem's own `notes.md` and drops you in your editor to write under it. In
-Vim the file opens in a split below the solution, so the code you just
-submitted stays in front of you while you write. `n` in the problem list
-shows that problem's cards, newest first. It is a plain markdown file in
-the problem's directory — your workspace git versions it with the code,
-and `lc review sync` carries the cards between machines along with the deck
-(a union: cards from both sides all survive; deleting one somewhere brings
-it back from the other — notes are a record).
 
 Nothing is ever added behind your back. Only `m`, Vim's `\m`, and
 `lc review add` put a problem on the deck.
@@ -441,7 +452,7 @@ automatically. Windows Chrome and Edge seal their cookie stores with keys only
 the browser itself can open — sign in with `lc login --paste` there; the login
 flow reminds you.
 
-## Notes
+## Odds and ends
 
 - Accepted verdicts end in fireworks — a burst for `lc test`, a four-shot
   volley for `lc submit` — and a failed one in a little figure sinking to its
