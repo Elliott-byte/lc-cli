@@ -737,7 +737,12 @@ def note(
     known = store.find(slug)
     verdict = {"ac": "Accepted", "notac": "Not accepted"}.get(
         known.status if known else None, "")
-    path = notes.open_card(directory, verdict, lang.slug)
+    try:
+        path = notes.open_card(directory, verdict, lang.slug)
+    except OSError as exc:
+        die(f"could not write the note: {exc.strerror or exc}",
+            f"check the permissions on {notes.path_in(directory)}")
+        return
     console.print(Text(f"✎ {path}", style="dim"))
     if edit and not workspace.open_in_editor(config, path):
         console.print(Text("  (set $EDITOR or `lc config editor <cmd>` to auto-open)",

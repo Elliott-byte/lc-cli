@@ -3414,3 +3414,79 @@ def test_notes_merge_is_an_order_free_union(tmp_path, monkeypatch):
         merged = notes.merge_texts(x, y)
         assert merged == notes.merge_texts(y, x)
         assert notes.merge_texts(merged, merged) == merged
+
+
+def test_notes_survive_a_workspace_that_moved(tmp_path, monkeypatch):
+    """A problem directory can be gone by the time a note is written — a
+    `git clean`, a moved workspace, a directory deleted while the editor is
+    open. Writing the card used to raise FileNotFoundError; in the TUI that
+    killed the app with the buffer on screen."""
+    import asyncio
+    import json as _json
+    import shutil
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    ws = tmp_path / "ws"; ws.mkdir()
+    (tmp_path / "config.json").write_text(_json.dumps(
+        {"workspace": str(ws), "editor": "builtin", "builtin_vim": False}))
+    from lc import notes, tui
+
+    # the module level: the directory is created on demand
+    gone = tmp_path / "never-existed"
+    notes.open_card(gone, "Accepted", "python3")
+    assert notes.path_in(gone).exists()
+    # ...but a notes.md that is a *directory* still refuses, cleanly
+    weird = tmp_path / "weird"; weird.mkdir()
+    notes.path_in(weird).mkdir()
+    assert notes.load(weird) == [] and notes.read(notes.path_in(weird)) == ""
+    with pytest.raises(OSError):
+        notes.open_card(weird)
+
+    async def drive():
+        app = tui.LeetCodeTUI()
+        seen = {}
+        async with app.run_test(size=(150, 40)) as pilot:
+            await pilot.pause()
+            app._show(PROBLEM); app.current_slug = PROBLEM.slug
+            await pilot.pause()
+            app.action_pick(); await pilot.pause()
+            shutil.rmtree(ws / "0322-coin-change")
+            app.screen.action_notes(); await pilot.pause()
+            seen["split opened"] = bool(app.screen.query("#edit-notes"))
+            app.screen.query_one("#edit-notes").insert("survived")
+            app.screen.action_notes(); await pilot.pause()
+            seen["note written"] = "survived" in (
+                ws / "0322-coin-change" / "notes.md").read_text()
+            seen["app alive"] = app.screen.__class__.__name__ == "EditScreen"
+        return seen
+
+    result = asyncio.run(drive())
+    assert all(result.values()), {k: v for k, v in result.items() if not v}
+
+
+def test_lc_note_explains_a_note_it_cannot_write(tmp_path, monkeypatch):
+    """A read-only notes.md is a permissions problem, not a crash."""
+    import json as _json
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    from typer.testing import CliRunner
+
+    from lc.cli import app
+
+    ws = tmp_path / "ws" / "0322-coin-change"
+    ws.mkdir(parents=True)
+    (tmp_path / "config.json").write_text(_json.dumps(
+        {"workspace": str(tmp_path / "ws"), "editor": ""}))
+    (ws / ".lc.json").write_text(_json.dumps(
+        {"slug": "coin-change", "lang": "python3", "file": "solution.py"}))
+    (ws / "solution.py").write_text("pass\n")
+    # a card with a body, so a fresh heading really has to be appended
+    (ws / "notes.md").write_text("## 2026-08-22 09:00 · python3\n\nbody\n")
+    (ws / "notes.md").chmod(0o400)
+
+    monkeypatch.chdir(ws)
+    result = CliRunner().invoke(app, ["note", "--no-edit"])
+    (ws / "notes.md").chmod(0o600)
+    assert result.exit_code != 0
+    assert isinstance(result.exception, SystemExit)   # died on purpose
+    assert "could not write the note" in result.output

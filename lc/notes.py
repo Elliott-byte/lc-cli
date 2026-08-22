@@ -64,6 +64,9 @@ def open_card(directory: Path, verdict: str = "", lang: str = "") -> Path:
     should not litter the file.
     """
     path = path_in(directory)
+    # The directory can be gone by now — a `git clean`, a moved workspace,
+    # a problem deleted between opening it and writing the note.
+    directory.mkdir(parents=True, exist_ok=True)
     text = read(path) if path.exists() else ""
     cards = parse(text)
     if cards and not cards[-1].body:

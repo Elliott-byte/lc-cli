@@ -271,8 +271,13 @@ class EditScreen(Screen):
         known = store.find(self.problem.slug)
         verdict = {"ac": "Accepted", "notac": "Not accepted"}.get(
             known.status if known else None, "")
-        path = notes.open_card(self.solution.directory, verdict,
-                               self.solution.language.slug)
+        try:
+            path = notes.open_card(self.solution.directory, verdict,
+                                   self.solution.language.slug)
+        except OSError as exc:
+            self.notify(f"could not open the notes: {exc.strerror or exc}",
+                        severity="error", timeout=10)
+            return
         area = TextArea(notes.read(path), id="edit-notes")
         self.query_one("#edit-right", Vertical).mount(area)
         area.focus()

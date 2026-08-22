@@ -213,6 +213,11 @@ never submitted by accident.
   problem URL — a user's own comment is never deleted.
 
 ### `lc/notes.py` — note cards
+- `open_card` **creates the directory** — it can be gone by the time a note
+  is written (a `git clean`, a moved workspace, a problem deleted while the
+  editor is open), and in the TUI that exception killed the app with the
+  buffer on screen. Callers still guard OSError: a `notes.md` that is a
+  *directory* rightly refuses.
 - **Read note files through `notes.read`, never `read_text`.** They sit in
   the user's workspace, where a stray binary or a bad encoding is possible;
   one undecodable file used to raise straight out of `_merge_notes` and

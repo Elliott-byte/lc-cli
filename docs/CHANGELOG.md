@@ -11,6 +11,15 @@ every commit bumps the version (early tags grouped a few commits); tags
 the top section for the current day — or start a new one. Say what changed
 and, when behaviour reversed, what it used to do.
 
+## 0.7.63 — 2026-08-22 · notes that survive a moved workspace
+
+- Writing a note no longer crashes when the problem's directory has since
+  been removed (a `git clean`, a moved workspace, a directory deleted while
+  the editor is open) — it is recreated. In the built-in editor that
+  exception took the app down with the unsaved buffer on screen.
+- `lc note` explains a notes file it cannot write instead of showing a
+  traceback.
+
 ## 0.7.62 — 2026-08-22 · notes that actually converge
 
 - Two machines that both wrote a note in the same minute never agreed on
