@@ -13,9 +13,11 @@ and, when behaviour reversed, what it used to do.
 
 ## 0.7.58 — 2026-08-22 · the built-in editor grows up
 
-- Syntax highlighting: Python in the code pane, markdown in the notes
-  split (tree-sitter grammars ship as dependencies; other languages fall
-  back to plain text instead of crashing — a Go file found that out).
+- Syntax highlighting: Python in the code pane (the tree-sitter grammar
+  ships as a dependency; other languages fall back to plain text instead
+  of crashing — a Go file found that out). The markdown grammar was cut
+  in 0.7.59: the notes split never set a language, and its sdist does not
+  build from source.
 - A Vim subset, on by default: modes, hjkl/w/b/e/0/^/$/gg/G with counts,
   i a I A o O s x r, dd yy cc dw cw D C p P, visual, u undo, U redo
   (ctrl+r runs the samples), ZZ leaves. esc never exits the screen in vim

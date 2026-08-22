@@ -81,7 +81,7 @@ and returns (pausing the clock, exactly like quitting Vim). Typing the
 first character is what starts an armed clock — reading the statement is
 still free.
 
-The built-in editor highlights Python (and the notes split, markdown), and
+The built-in editor highlights Python, and
 **speaks a Vim subset** by default: modes, `hjkl w b e 0 ^ $ gg G` (with
 counts), `i a I A o O s x r`, `dd yy cc dw cw D C p P`, `v` visual, `u`
 undo, `U` redo (`ctrl+r` runs the samples), and `ZZ` to leave — esc never

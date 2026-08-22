@@ -244,6 +244,10 @@ never submitted by accident.
   permanent insert mode, esc → screen Back (a bare TextArea would eat esc
   as its own focus-next). Vim-inclusive visual ranges: Textual selections
   are end-exclusive, so y/d/c extend the end by one column.
+- Grammar sdists are wheel-first upstreams whose source builds are broken
+  (missing scanner objects/headers) — the brew formula ships
+  tree-sitter-python as a **platform wheel**; never add a grammar as an
+  sdist resource without building it first.
 - Syntax needs the grammar *installed*, not just known —
   `available_languages` lists names textual recognises, so the edit screen
   assigns `language` in a try/except and falls back to plain text (found

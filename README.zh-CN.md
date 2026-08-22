@@ -70,7 +70,7 @@ Cookie 以 `0600` 权限写入 `~/.lc/cookies.json`；不想落盘也可以通�
 `ctrl+n` 开关笔记分栏，`ctrl+b` 弹遮罩暂停计时，`esc` 保存返回（同时暂停计时，和退出 Vim
 一个规矩）。备好的表在你敲下第一个字符时才开始走——读题不计时。
 
-内置编辑器带 Python 代码高亮（笔记分栏是 markdown 高亮），并且**默认说 Vim 话**：模式切换、
+内置编辑器带 Python 代码高亮，并且**默认说 Vim 话**：模式切换、
 `hjkl w b e 0 ^ $ gg G`（支持数字前缀）、`i a I A o O s x r`、`dd yy cc dw cw D C p P`、
 `v` 可视、`u` 撤销、`U` 重做（`ctrl+r` 留给跑样例）、`ZZ` 离开——esc 永远不会退出屏幕，
 就是为了让你放心连按。`lc config vimkeys off` 换成普通编辑器（esc 返回）。想用真 Vim？

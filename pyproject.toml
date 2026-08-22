@@ -1,6 +1,6 @@
 [project]
 name = "lc-cli"
-version = "0.7.58"
+version = "0.7.59"
 description = "Practice LeetCode from your terminal"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -10,11 +10,12 @@ dependencies = [
     "typer>=0.12",
     "textual>=0.79",
     # Syntax highlighting in the built-in edit screen. Grammars are separate
-    # packages textual imports by name: python for solutions, markdown for
-    # the notes split. Other languages fall back to plain text.
+    # packages textual imports by name; python covers the solving language,
+    # everything else falls back to plain text. (Grammar sdists do not build
+    # from source — wheel-first upstreams — so the brew formula ships the
+    # python one as a platform wheel.)
     "tree-sitter>=0.25",
     "tree-sitter-python>=0.23",
-    "tree-sitter-markdown>=0.3",
     "browser-cookie3>=0.19",
 ]
 
