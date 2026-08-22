@@ -391,9 +391,10 @@ function! s:LcTimerToggle() abort
     return
   endif
   if get(l:t, 'started') is v:null
-    call system('lc timer resume')
-    redrawstatus!
-    echo 'lc: clock running'
+    " \z is the pause button, nothing else. It used to start a stopped
+    " clock — a toggle — which read as "pause is broken": you pressed
+    " pause, and the meter began to run.
+    echo 'lc: clock is not running — space starts it'
     return
   endif
   call system('lc timer pause')
@@ -464,6 +465,8 @@ function! s:LcTimerReset() abort
     return
   endif
   if confirm('Reset the solve clock to 00:00?', "&Yes\n&No", 2) != 1
+    " Enter takes the default (No): say so, or declining reads as broken.
+    echo 'lc: not reset'
     return
   endif
   call system('lc timer reset')

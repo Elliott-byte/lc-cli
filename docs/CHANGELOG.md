@@ -13,6 +13,10 @@ and, when behaviour reversed, what it used to do.
 
 ## 0.7.49–0.7.50 — 2026-08-22 · stale clocks, deduped chrome
 
+- `\z` pauses, full stop — as a toggle it silently *started* a stopped
+  clock, which read as "pause is broken". A stopped clock now answers
+  "space starts it"; declining `\Z`'s confirm (Enter = No) says "not
+  reset" instead of nothing.
 - The clock and the key hints show once, on the solution's statusline — the
   statement pane's carries only `q close` (both statuslines share a screen
   row, so everything on both was everything twice).

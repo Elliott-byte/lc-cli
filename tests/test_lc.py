@@ -373,6 +373,11 @@ def test_vim_quit_never_fights_the_statement_terminal():
     # page, and closing the cover is the resume.
     assert "<leader>z :call <SID>LcTimerToggle()" in text
     assert "lc timer pause" in text and "lc timer resume" in text
+    # \z pauses, full stop — as a toggle it silently *started* a stopped
+    # clock, which read as "pause is broken". Declining \Z's confirm says
+    # so too, since Enter takes the default (No).
+    assert "clock is not running — space starts it" in text
+    assert "echo 'lc: not reset'" in text
     assert "tab new" in text and "tabclose" in text
     # \Z resets — one shifted slip from \z, so it must confirm first.
     assert "<leader>Z :call <SID>LcTimerReset()" in text
