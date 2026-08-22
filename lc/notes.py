@@ -33,6 +33,20 @@ def path_in(directory: Path) -> Path:
     return directory / FILENAME
 
 
+def read(path: Path) -> str:
+    """A notes file's text, or "" when it cannot be read as one.
+
+    Notes live in the user's own workspace, where anything can happen to a
+    file: a stray binary, a bad encoding, a permissions change. None of that
+    is worth an exception — one unreadable file used to abort the whole
+    deck sync, taking every *other* problem's notes with it.
+    """
+    try:
+        return path.read_text()
+    except (OSError, UnicodeDecodeError):
+        return ""
+
+
 def stamp_header(
     verdict: str = "", lang: str = "", now: time.struct_time | None = None
 ) -> str:
@@ -50,7 +64,7 @@ def open_card(directory: Path, verdict: str = "", lang: str = "") -> Path:
     should not litter the file.
     """
     path = path_in(directory)
-    text = path.read_text() if path.exists() else ""
+    text = read(path) if path.exists() else ""
     cards = parse(text)
     if cards and not cards[-1].body:
         return path
@@ -84,10 +98,7 @@ def load(directory: Path) -> list[Card]:
     path = path_in(directory)
     if not path.exists():
         return []
-    try:
-        return parse(path.read_text())
-    except OSError:
-        return []
+    return parse(read(path))
 
 
 def render(cards: list[Card]) -> str:

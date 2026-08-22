@@ -213,6 +213,12 @@ never submitted by accident.
   problem URL — a user's own comment is never deleted.
 
 ### `lc/notes.py` — note cards
+- **Read note files through `notes.read`, never `read_text`.** They sit in
+  the user's workspace, where a stray binary or a bad encoding is possible;
+  one undecodable file used to raise straight out of `_merge_notes` and
+  abort the whole deck sync, losing every *other* problem's notes with it.
+  `read` returns "" instead, and the unreadable file is left untouched
+  rather than overwritten.
 - One markdown file per problem (`notes.md`, in the problem's workspace
   directory), one `##` heading per card. `open_card` stamps a heading and
   **reuses a still-blank newest card**, so two submits before one written
@@ -233,6 +239,10 @@ never submitted by accident.
   `#edit-status` (its own id — `set_status` writes `#status-bar` and must
   no-op here, or the 1s tick would erase judge text). First edit starts an
   armed clock; esc saves and pauses it, like quitting Vim.
+- **Saving can fail** (read-only file, full disk): `_save` returns False
+  and toasts rather than raising — esc then stays on the screen instead of
+  leaving with the buffer unwritten and unrecoverable, and run/submit do
+  not judge code the buffer never reached.
 - Clock keys: ctrl+b pauses *running* clocks behind the cover and starts
   stopped ones (never a no-op key; covering a stopped clock would hide the
   statement with nothing counting), ctrl+g resets. `space` cannot be the

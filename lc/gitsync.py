@@ -294,7 +294,9 @@ def _local_notes(config: Config) -> dict[str, tuple[Path, str]]:
         except (json.JSONDecodeError, OSError):
             continue
         if slug:
-            found[slug] = (note_file, note_file.read_text())
+            # notes.read, not read_text: one unreadable file in the
+            # workspace must not abort the sync for every other problem.
+            found[slug] = (note_file, notes.read(note_file))
     return found
 
 
@@ -302,7 +304,7 @@ def _clone_notes(path: Path) -> dict[str, str]:
     folder = path / NOTES_DIR
     if not folder.is_dir():
         return {}
-    return {f.stem: f.read_text() for f in sorted(folder.glob("*.md"))}
+    return {f.stem: notes.read(f) for f in sorted(folder.glob("*.md"))}
 
 
 def _merge_notes(path: Path, write_clone: bool) -> None:
@@ -333,7 +335,7 @@ def _merge_notes(path: Path, write_clone: bool) -> None:
                 summary.frontend_id, slug)
             directory.mkdir(parents=True, exist_ok=True)
             target = directory / notes.FILENAME
-        if not target.exists() or target.read_text() != text:
+        if not target.exists() or notes.read(target) != text:
             target.write_text(text)
 
     if write_clone:

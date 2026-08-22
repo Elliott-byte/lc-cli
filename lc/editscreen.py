@@ -214,9 +214,17 @@ class EditScreen(Screen):
 
         self.app.push_screen(PauseScreen(timer.accum), resumed)
 
+    def _save_notes(self) -> None:
+        try:
+            notes.path_in(self.solution.directory).write_text(
+                self.query_one("#edit-notes", TextArea).text)
+        except OSError as exc:
+            self.notify(f"could not save the note: {exc.strerror or exc}",
+                        severity="error", timeout=10)
+
     def action_reset_clock(self) -> None:
         """ctrl+g — back to 00:00 and running, a fresh attempt at this
-        problem. Vim has \Z; the built-in editor had nothing."""
+        problem. Vim has \\Z; the built-in editor had nothing."""
         timer = solvetimer.load()
         if not (timer and timer.slug == self.problem.slug):
             return
@@ -226,16 +234,28 @@ class EditScreen(Screen):
 
     # -------------------------------------------------------------- judge
 
-    def _save(self) -> None:
-        self.solution.file.write_text(self.query_one("#edit-code", TextArea).text)
+    def _save(self) -> bool:
+        """Write the code back. False (with a toast) when the disk says no —
+        a read-only file, a full disk, a deleted directory. Crashing here
+        would take the unsaved buffer down with it."""
+        try:
+            self.solution.file.write_text(
+                self.query_one("#edit-code", TextArea).text)
+            return True
+        except OSError as exc:
+            self.notify(f"could not save {self.solution.file.name}: "
+                        f"{exc.strerror or exc}", severity="error", timeout=10)
+            return False
 
     def action_run(self) -> None:
-        self._save()
-        self.app._judge(submit=False)
+        # Judging what is on disk when the buffer could not get there would
+        # report on code the user is not looking at.
+        if self._save():
+            self.app._judge(submit=False)
 
     def action_submit(self) -> None:
-        self._save()
-        self.app._judge(submit=True)
+        if self._save():
+            self.app._judge(submit=True)
 
     # -------------------------------------------------------------- notes
 
@@ -243,7 +263,7 @@ class EditScreen(Screen):
         """ctrl+n — the note split under the code, toggled; closing saves."""
         if self._notes_open:
             area = self.query_one("#edit-notes", TextArea)
-            notes.path_in(self.solution.directory).write_text(area.text)
+            self._save_notes()
             area.remove()
             self._notes_open = False
             self.query_one("#edit-code", TextArea).focus()
@@ -253,7 +273,7 @@ class EditScreen(Screen):
             known.status if known else None, "")
         path = notes.open_card(self.solution.directory, verdict,
                                self.solution.language.slug)
-        area = TextArea(path.read_text(), id="edit-notes")
+        area = TextArea(notes.read(path), id="edit-notes")
         self.query_one("#edit-right", Vertical).mount(area)
         area.focus()
         area.move_cursor(area.document.end)
@@ -262,10 +282,11 @@ class EditScreen(Screen):
     # --------------------------------------------------------------- exit
 
     def action_back(self) -> None:
-        self._save()
+        if not self._save():
+            # Stay put: leaving would strand the edit with nowhere to go.
+            return
         if self._notes_open:
-            notes.path_in(self.solution.directory).write_text(
-                self.query_one("#edit-notes", TextArea).text)
+            self._save_notes()
         # Leaving the editor is leaving the solve, exactly like quitting Vim.
         if self.app.config.timer_on:
             timer = solvetimer.load()

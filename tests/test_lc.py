@@ -3309,3 +3309,69 @@ def test_builtin_editor_clock_keys(tmp_path, monkeypatch):
 
     result = asyncio.run(drive())
     assert all(result.values()), {k: v for k, v in result.items() if not v}
+
+
+def test_one_unreadable_notes_file_cannot_break_the_sync(tmp_path, monkeypatch):
+    """Notes live in the user's workspace, where anything can happen to a
+    file. One that is not decodable used to raise straight out of the sync,
+    taking every *other* problem's notes — and the deck push — with it."""
+    import json as _json
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    ws = tmp_path / "ws"
+    (ws / "0001-two-sum").mkdir(parents=True)
+    (ws / "0322-coin-change").mkdir(parents=True)
+    (tmp_path / "config.json").write_text(_json.dumps({"workspace": str(ws)}))
+    (ws / "0001-two-sum" / ".lc.json").write_text(
+        _json.dumps({"slug": "two-sum"}))
+    (ws / "0001-two-sum" / "notes.md").write_bytes(b"\xff\xfe not utf-8")
+    (ws / "0322-coin-change" / ".lc.json").write_text(
+        _json.dumps({"slug": "coin-change"}))
+    (ws / "0322-coin-change" / "notes.md").write_text("## a\n\nreal note\n")
+
+    from lc import gitsync, notes
+
+    clone = tmp_path / "clone"
+    clone.mkdir()
+    gitsync._merge_notes(clone, write_clone=True)     # must not raise
+    assert "real note" in (clone / "notes" / "coin-change.md").read_text()
+    # the unreadable file is left exactly as it was, not overwritten
+    assert (ws / "0001-two-sum" / "notes.md").read_bytes() == b"\xff\xfe not utf-8"
+    assert notes.load(ws / "0001-two-sum") == []
+
+
+def test_the_editor_never_loses_a_buffer_it_cannot_save(tmp_path, monkeypatch):
+    """A read-only solution file (or a full disk) used to raise out of esc —
+    taking the unsaved edit with it. Report and stay put instead."""
+    import asyncio
+    import json as _json
+    import stat
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    ws = tmp_path / "ws"; ws.mkdir()
+    (tmp_path / "config.json").write_text(_json.dumps(
+        {"workspace": str(ws), "editor": "builtin", "builtin_vim": False}))
+    from lc import tui
+
+    async def drive():
+        app = tui.LeetCodeTUI()
+        seen = {}
+        async with app.run_test(size=(160, 45)) as pilot:
+            await pilot.pause()
+            app._show(PROBLEM); app.current_slug = PROBLEM.slug
+            await pilot.pause()
+            app.action_pick(); await pilot.pause()
+            solution = ws / "0322-coin-change" / "solution.py"
+            solution.chmod(stat.S_IRUSR)
+            app.screen.query_one("#edit-code").insert("# work\n")
+            app.screen.action_back(); await pilot.pause()
+            seen["stays"] = app.screen.__class__.__name__ == "EditScreen"
+            seen["buffer kept"] = "# work" in app.screen.query_one("#edit-code").text
+            solution.chmod(stat.S_IRUSR | stat.S_IWUSR)
+            app.screen.action_back(); await pilot.pause()
+            seen["leaves"] = app.screen.__class__.__name__ == "Screen"
+            seen["saved"] = "# work" in solution.read_text()
+        return seen
+
+    result = asyncio.run(drive())
+    assert all(result.values()), {k: v for k, v in result.items() if not v}

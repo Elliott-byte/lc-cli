@@ -11,6 +11,17 @@ every commit bumps the version (early tags grouped a few commits); tags
 the top section for the current day — or start a new one. Say what changed
 and, when behaviour reversed, what it used to do.
 
+## 0.7.61 — 2026-08-22 · an audit's findings
+
+- One unreadable `notes.md` anywhere in the workspace no longer aborts the
+  whole deck sync (it raised out of the notes merge, taking every other
+  problem's notes and the deck push with it). Such a file is skipped and
+  left untouched.
+- The built-in editor no longer crashes when it cannot save — a read-only
+  file used to raise out of `esc`, taking the unsaved buffer with it. It
+  now reports and stays put, and run/submit refuse to judge code that
+  never reached disk.
+
 ## 0.7.60 — 2026-08-22 · the built-in editor's clock keys
 
 - `ctrl+b` on a clock that is merely stopped now starts it again (it did
