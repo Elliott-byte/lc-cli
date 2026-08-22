@@ -226,6 +226,18 @@ never submitted by accident.
   for a problem the receiving machine never picked waits in the clone until
   the index can name its directory.
 
+### `lc/editscreen.py` — the built-in edit screen
+- Pushed by `action_pick` when the editor is `builtin` (or nothing resolves).
+  Statement left, `TextArea.code_editor` right, judge via the app's own
+  `_judge` (results are toasts, so they land on any screen), clock on
+  `#edit-status` (its own id — `set_status` writes `#status-bar` and must
+  no-op here, or the 1s tick would erase judge text). First edit starts an
+  armed clock; esc saves and pauses it, like quitting Vim.
+- **While it is on top, the app's bindings stand down** via
+  `LeetCodeTUI.check_action` — the priority `tab` binding would otherwise
+  reach through the editor and flip the hidden Problems/Review tabs when
+  the code needed an indent.
+
 ### `lc/editors.py` — the Vim plugin (one file, installed by `lc setup vim`)
 - Everything is buffer-local, attached by an autocmd when the buffer's
   directory has `.lc.json`. The statement pane is a terminal running

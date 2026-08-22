@@ -103,6 +103,16 @@ user typing bookkeeping. The deck sync carries the cards as a **union**
 two machines converge — at the price that the sync never deletes a card;
 removing one locally resurrects it from the other side.
 
+## Built-in editor
+
+**The TUI can be the whole loop.** — *standing.* `editor builtin` opens an
+edit screen inside the TUI instead of suspending into an external editor:
+one look, no terminal hand-offs, the same files, judge, clock and notes
+underneath. The external-editor path (and the Vim plugin) remains a peer,
+not a fallback — modal editing is a preference, not a legacy. The clock's
+deliberate start translates to "the first keystroke", since space must
+type.
+
 ## Solve clock
 
 **The clock's state is a file.** — *standing.* Three processes read it —

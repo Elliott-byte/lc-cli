@@ -69,9 +69,18 @@ disk. The session expires every couple of weeks — just run `lc login` again.
 Bare `lc` (or `lc tui`) opens two panes: problems on the left, the statement
 on the right. On a fresh machine it downloads the problem index by itself.
 
-The loop is: move to a problem, `enter` to open it in your editor, write, quit
-the editor back to the list, `r` to run the samples, `s` to submit — repeat.
-`enter` on a problem you already started reopens your existing file.
+The loop is: move to a problem, `enter` to open it, write, run, submit —
+repeat. `enter` on a problem you already started reopens your existing file.
+
+With `lc config editor builtin` (or no editor configured), `enter` opens the
+**built-in edit screen**: statement on the left, code on the right, judge
+results as notifications, the solve clock on the status bar — solving never
+leaves the TUI. `ctrl+r` runs the samples, `ctrl+s` submits, `ctrl+n`
+toggles a note split, `ctrl+b` pauses the clock behind a cover, `esc` saves
+and returns (pausing the clock, exactly like quitting Vim). Typing the
+first character is what starts an armed clock — reading the statement is
+still free. Prefer a real editor? `lc config editor vim` (or any command)
+keeps today's suspend-into-your-editor flow, Vim plugin and all.
 
 Today's daily challenge is pinned to the top with a yellow `★` and selected
 when the app opens, so it is always one keypress away; `D` jumps back to it.

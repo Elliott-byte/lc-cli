@@ -1345,8 +1345,11 @@ def config_workspace(path: Path = typer.Argument(..., help="where solution files
 
 
 @config_app.command("editor")
-def config_editor(command: str = typer.Argument(..., help="e.g. 'code -w' or 'nvim'")) -> None:
-    """Set the editor command used by `lc pick` / `lc edit`."""
+def config_editor(command: str = typer.Argument(
+    ..., help="e.g. 'code -w', 'nvim' — or 'builtin' for the TUI's own editor")
+) -> None:
+    """Set the editor for `lc pick` / `lc edit` — `builtin` keeps solving
+    inside the TUI (statement, code, judge and clock on one screen)."""
     cfg = load_config()
     cfg.editor = command
     save_config(cfg)

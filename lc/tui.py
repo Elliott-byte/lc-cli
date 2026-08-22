@@ -26,6 +26,7 @@ from textual.widgets import (
     TabbedContent,
     TabPane,
 )
+from textual.css.query import NoMatches
 from textual.widgets.data_table import RowDoesNotExist
 from textual.strip import Strip
 
@@ -36,6 +37,7 @@ from rich.panel import Panel
 from rich.text import Text
 
 from . import fx, gitsync, notes, review, solvetimer, store, workspace
+from .editscreen import EditScreen, PauseScreen
 from .api import (
     JudgeResult,
     LeetCode,
@@ -378,7 +380,8 @@ class ConfigScreen(ModalScreen[bool]):
     FIELDS = (
         ("workspace", "Workspace — where solution files are written", "~/leetcode"),
         ("lang", "Default language for new problems", "python3"),
-        ("editor", "Editor command (blank uses $EDITOR)", "vim"),
+        ("editor", "Editor — a command, or `builtin` for the TUI's own",
+         "builtin"),
         ("review_repo", "Review repo — git remote the deck syncs with",
          "git@github.com:you/lc-review.git"),
     )
@@ -631,7 +634,10 @@ class LeetCodeTUI(App):
     # ----------------------------------------------------------------- state
 
     def set_status(self, message: str, style: str = "") -> None:
-        bar = self.query_one("#status-bar", Static)
+        try:
+            bar = self.query_one("#status-bar", Static)
+        except NoMatches:
+            return   # between screens; the next refresh repaints it anyway
         filters = []
         # The d/t filters shape the problem list only — prefixed onto the
         # Review tab's line they would claim the deck was filtered too.
@@ -671,6 +677,10 @@ class LeetCodeTUI(App):
             self.notify(f"solved in {solvetimer.clock(stopped.accum)}", timeout=8)
 
     def refresh_list(self) -> None:
+        try:
+            self.query_one("#list", ProblemList)
+        except NoMatches:
+            return   # the edit screen is on top; refreshed again on the way out
         selected = self.current_slug
         rows = store.search(
             keyword=self.keyword,
@@ -698,6 +708,10 @@ class LeetCodeTUI(App):
             self._remember_status("pane-problems", message)
 
     def refresh_review(self, focus: str = "") -> None:
+        try:
+            self.query_one("#review", ReviewList)
+        except NoMatches:
+            return   # see refresh_list
         today = date.today()
         items = review.load()
         rows = review.order(items)
@@ -790,6 +804,16 @@ class LeetCodeTUI(App):
         self.action_pick()
 
     # ----------------------------------------------------------------- actions
+
+    def check_action(self, action: str, parameters: tuple) -> bool | None:
+        # With the edit screen (or its pause cover) on top, the app's own
+        # bindings stand down: priority ones like tab would otherwise reach
+        # through and flip the hidden Problems/Review tabs when the editor
+        # needed an indent, and the footer would advertise keys that either
+        # do nothing or type themselves into the code.
+        if isinstance(self.screen, (EditScreen, PauseScreen)):
+            return False
+        return True
 
     def action_focus_filter(self) -> None:
         self.query_one("#filter", Input).focus()
@@ -1084,6 +1108,14 @@ class LeetCodeTUI(App):
         self._timer_was_passed = (
             marked is not None and marked.attempt_today(date.today()) == "passed"
         )
+        if (self.config.editor or "").strip() == "builtin" \
+                or not self.config.resolve_editor():
+            # The built-in screen: no suspend, no hand-off — the TUI itself.
+            def back(_: bool | None) -> None:
+                self.refresh_list()
+                self.refresh_review()
+            self.push_screen(EditScreen(problem, solution), back)
+            return
         editor = self.config.resolve_editor()
         if editor:
             with self.suspend():

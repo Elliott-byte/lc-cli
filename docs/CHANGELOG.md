@@ -11,6 +11,14 @@ every commit bumps the version (early tags grouped a few commits); tags
 the top section for the current day — or start a new one. Say what changed
 and, when behaviour reversed, what it used to do.
 
+## 0.7.56 — 2026-08-22 · the built-in edit screen
+
+- `lc config editor builtin` (or no editor at all): `enter` now opens an
+  edit screen inside the TUI — statement left, code right, `ctrl+r` run,
+  `ctrl+s` submit, `ctrl+n` note split, `ctrl+b` pause cover, `esc` saves
+  and returns (pausing the clock, like quitting Vim). Typing the first
+  character starts an armed clock. The external-editor flow is unchanged.
+
 ## 0.7.55 — 2026-08-22 · notes travel
 
 - `lc review sync` now carries note cards between machines, next to the

@@ -110,6 +110,10 @@ class Config:
         return self.review_autograde is True
 
     def resolve_editor(self) -> str | None:
+        """The external editor command, or None — "builtin" is not one: it
+        names the TUI's own edit screen, and must never be exec'd."""
+        if (self.editor or "").strip() == "builtin":
+            return None
         for candidate in (self.editor, os.environ.get("LC_EDITOR"), os.environ.get("VISUAL"),
                           os.environ.get("EDITOR")):
             if candidate:

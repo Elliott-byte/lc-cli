@@ -3093,3 +3093,92 @@ def test_notes_travel_with_the_deck_between_two_homes(tmp_path, monkeypatch):
                                         50.0, False, None, [])])
     gitsync.pull(remote)
     assert (ws_b / "0001-two-sum" / "notes.md").read_text().count("hash map.") == 1
+
+
+def test_builtin_editor_solves_inside_the_tui(tmp_path, monkeypatch):
+    """`lc config editor builtin`: enter pushes the edit screen — statement,
+    code, judge and clock in one look, no suspend. Typing starts the armed
+    clock, ctrl+b pauses behind a cover, ctrl+n writes a note card, an
+    accepted ctrl+s stops the clock, tab indents (the hidden main screen's
+    tab binding must not reach through), and esc saves and returns."""
+    import asyncio
+    import json as _json
+    import types
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    (tmp_path / "config.json").write_text(_json.dumps(
+        {"workspace": str(ws), "editor": "builtin"}))
+    from textual.widgets import TabbedContent, TextArea
+
+    from lc import solvetimer, tui
+    from lc.api import JudgeResult
+
+    async def solve():
+        app = tui.LeetCodeTUI()
+        seen = {}
+        async with app.run_test(size=(160, 45)) as pilot:
+            await pilot.pause()
+            app._show(PROBLEM)
+            app.current_slug = PROBLEM.slug
+            await pilot.pause()
+            app.action_pick()
+            await pilot.pause()
+            seen["screen"] = app.screen.__class__.__name__
+            code = app.screen.query_one("#edit-code", TextArea)
+            seen["loaded"] = "coinChange" in code.text and app.focused is code
+            seen["armed"] = solvetimer.load().armed
+
+            code.insert("x")
+            await pilot.pause()
+            seen["typing_starts"] = solvetimer.load().running
+
+            await pilot.press("ctrl+b")
+            await pilot.pause()
+            seen["cover"] = (app.screen.__class__.__name__ == "PauseScreen"
+                             and not solvetimer.load().running)
+            await pilot.press("space")
+            await pilot.pause()
+            seen["resume"] = solvetimer.load().running
+
+            await pilot.press("ctrl+n")
+            await pilot.pause()
+            app.screen.query_one("#edit-notes", TextArea).insert("two sum idea")
+            await pilot.press("ctrl+n")
+            await pilot.pause()
+            note = ws / "0322-coin-change" / "notes.md"
+            seen["note"] = note.exists() and "two sum idea" in note.read_text()
+
+            before_tab = app.screen_stack[0].query_one(TabbedContent).active
+            where = code.cursor_location
+            code.focus()
+            await pilot.press("tab")
+            await pilot.pause()
+            seen["tab_indents"] = (
+                code.cursor_location != where
+                and app.screen_stack[0].query_one(TabbedContent).active == before_tab)
+
+            app.client = types.SimpleNamespace(
+                authenticated=True, close=lambda: None,
+                submit=lambda *a, **k: JudgeResult(
+                    raw={}, accepted=True, status="Accepted", is_run=False))
+            await pilot.press("ctrl+s")
+            for _ in range(30):
+                await pilot.pause(0.1)
+                if solvetimer.load().done:
+                    break
+            seen["accept_stops"] = solvetimer.load().done
+
+            await pilot.press("escape")
+            await pilot.pause()
+            seen["back"] = app.screen.__class__.__name__ == "Screen"
+            seen["saved"] = "x" in (ws / "0322-coin-change" /
+                                    "solution.py").read_text()
+        return seen
+
+    assert asyncio.run(solve()) == {
+        "screen": "EditScreen", "loaded": True, "armed": True,
+        "typing_starts": True, "cover": True, "resume": True, "note": True,
+        "tab_indents": True, "accept_stops": True, "back": True, "saved": True,
+    }
