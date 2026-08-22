@@ -294,7 +294,7 @@ In a solution buffer (any file next to a `.lc.json`), normal mode:
 | `\p` | show/hide the problem statement in a left split |
 | `\o` | open the problem page in your browser (figures render there) |
 | `\m` | save this problem to the review deck |
-| `\n` | write a note card about this attempt (notes.md opens below) |
+| `\n` | toggle the note split below — again saves the card and closes it |
 | `space` | start the armed solve clock (once running, space is space) |
 | `\z` | pause the solve clock behind a cover (space there resumes) |
 | `\Z` | reset the clock to 00:00 for a fresh attempt (asks first) |

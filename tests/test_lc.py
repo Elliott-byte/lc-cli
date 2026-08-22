@@ -406,6 +406,9 @@ def test_vim_quit_never_fights_the_statement_terminal():
     # split opens under the solution, and `lc note` stamps the heading.
     assert "<leader>n :call <SID>LcNote()" in text
     assert "lc note --no-edit" in text and "belowright split" in text
+    # ...and \n is a toggle like \p: again saves the card and closes the
+    # split, instead of stacking window upon window.
+    assert "LcNoteWin" in text and text.count("call s:LcNoteWin") >= 1
     assert text.count("LcClockText") >= 2 and "if exists('b:lc_statement_for')" in text
     assert "return \' \'" in text          # the fall-through: plain space
 

@@ -11,6 +11,11 @@ every commit bumps the version (early tags grouped a few commits); tags
 the top section for the current day — or start a new one. Say what changed
 and, when behaviour reversed, what it used to do.
 
+## 0.7.53 — 2026-08-22 · \n toggles
+
+- `\n` is a toggle like `\p`: pressed again it saves the card and closes
+  the split (it used to stack a new split on every press).
+
 ## 0.7.52 — 2026-08-22 · note cards
 
 - Every attempt can leave a note: `lc note` (or `\n` in Vim, which opens

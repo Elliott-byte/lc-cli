@@ -19,7 +19,7 @@ VIM_PLUGIN = r'''" lc.vim — Vim integration for the lc LeetCode CLI.
 "   <leader>p   show/hide the problem statement in a left split
 "   <leader>o   open the problem page in your browser (for figures/animations)
 "   <leader>m   save this problem to the lc review deck (spaced repetition)
-"   <leader>n   write a note card about this attempt (notes.md, split below)
+"   <leader>n   write a note card about this attempt; \n again saves and closes
 "   space       start the solve clock (opening a problem only arms it)
 "   <leader>z   pause the solve clock behind a cover (space there resumes)
 "   <leader>Z   reset the solve clock to 00:00 (asks first)
@@ -513,11 +513,33 @@ function! s:LcClickOpen() abort
   endif
 endfunction
 
+function! s:LcNoteWin(dir) abort
+  " The window showing this problem's notes.md, or -1.
+  for l:w in range(1, winnr('$'))
+    if fnamemodify(bufname(winbufnr(l:w)), ':p') ==# a:dir . '/notes.md'
+      return l:w
+    endif
+  endfor
+  return -1
+endfunction
+
 function! s:LcNote() abort
   " \n — write a note about this attempt, with the submitted code still on
   " screen: the notes file opens in a split under the solution, and `lc
   " note` has already stamped a card heading (date · verdict · language).
+  " A toggle, like \p: pressed again it saves the card and puts the split
+  " away — repeated \n must not stack window upon window.
   let l:dir = s:LcDir()
+  let l:open = s:LcNoteWin(l:dir)
+  if l:open != -1
+    execute l:open . 'wincmd w'
+    if &modified
+      write
+    endif
+    close
+    call s:LcFocusSolution(l:dir)
+    return
+  endif
   call system('cd ' . shellescape(l:dir) . ' && lc note --no-edit')
   let l:win = s:LcSolutionWin(l:dir)
   if l:win != -1
