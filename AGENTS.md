@@ -108,7 +108,11 @@ never submitted by accident.
   `attempt_passed` uses `is True` because a hand-typed `"false"` is a truthy
   string.
 
-### `lc/gitsync.py` — deck sync
+- Dates are clamped at `date.max`: a deck can hold a far-future `due`
+  (hand-edited, or written by a newer lc and synced in), and `postpone`
+  used to raise OverflowError straight out of the TUI's `z`.
+
+### `lc/gitsync.py`### `lc/gitsync.py` — deck sync
 - The clone is disposable; `~/.lc/review.json` is the deck of record.
   `fetch_remote_deck` hard-resets the clone to `origin/<branch>` first, so a
   divergence is a Python merge, never a git conflict.

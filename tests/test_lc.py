@@ -3490,3 +3490,26 @@ def test_lc_note_explains_a_note_it_cannot_write(tmp_path, monkeypatch):
     assert result.exit_code != 0
     assert isinstance(result.exception, SystemExit)   # died on purpose
     assert "could not write the note" in result.output
+
+
+def test_a_far_future_due_date_cannot_crash_the_deck(tmp_path, monkeypatch):
+    """`date` runs out at 9999-12-31, and a deck can hold one — hand-edited,
+    or written by a newer lc and synced in. Postponing it raised
+    OverflowError straight out of the TUI's `z`."""
+    import json as _json
+    from datetime import date, timedelta
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    (tmp_path / "review.json").write_text(_json.dumps(
+        {"x": {"title": "X", "frontend_id": "1", "level": 3,
+               "due": "9999-12-31"}}))
+    from lc import review
+
+    assert review.postpone("x").due == "9999-12-31"      # pinned, not raised
+    assert review.postpone_due() == 0                    # nothing is due
+    # grading still schedules from today, normally
+    graded = review.shift_level("x", +1, list(review.DEFAULT_CURVE))
+    gap = timedelta(days=review.DEFAULT_CURVE[graded.level - 1])
+    assert graded.due == (date.today() + gap).isoformat()
+    # a clock set to the end of time clamps rather than overflowing
+    assert review.add("y", curve=[3650], today=date(9999, 1, 1)).due == "9999-12-31"

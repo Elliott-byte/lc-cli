@@ -11,6 +11,13 @@ every commit bumps the version (early tags grouped a few commits); tags
 the top section for the current day — or start a new one. Say what changed
 and, when behaviour reversed, what it used to do.
 
+## 0.7.64 — 2026-08-22 · a date at the end of time
+
+- `z` (postpone) no longer crashes on a problem whose next review is a
+  far-future date — one hand-edited into `review.json`, or written by a
+  newer lc and synced in. Dates are clamped at 9999-12-31 throughout the
+  deck's write path.
+
 ## 0.7.63 — 2026-08-22 · notes that survive a moved workspace
 
 - Writing a note no longer crashes when the problem's directory has since

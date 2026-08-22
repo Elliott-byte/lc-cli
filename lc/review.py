@@ -257,6 +257,13 @@ def due_count(items: dict[str, ReviewItem], today: date | None = None) -> int:
 
 # ---------------------------------------------------------------- operations
 
+def _day_after(day: date) -> date:
+    """Tomorrow, or the last date there is. `date` runs out at 9999-12-31,
+    and a deck can hold one: hand-edited, or written by a newer lc and
+    synced in. Postponing it must not raise out of the TUI."""
+    return day + timedelta(days=1) if day < date.max else date.max
+
+
 def _interval(curve: list[int], level: int) -> int:
     """Days a pass at *level* buys. Levels past the end of the curve get its
     top gap, so shortening the curve reschedules rather than crashing."""
@@ -268,7 +275,11 @@ def _interval(curve: list[int], level: int) -> int:
 def _schedule(item: ReviewItem, level: int, curve: list[int], today: date) -> None:
     item.level = max(1, min(level, len(curve)))
     item.graded = today.isoformat()
-    item.due = (today + timedelta(days=_interval(curve, item.level))).isoformat()
+    # Clamped: a system clock far in the future would otherwise overflow
+    # the date type inside the deck's core write path.
+    gap = _interval(curve, item.level)
+    room = (date.max - today).days
+    item.due = (today + timedelta(days=min(gap, room))).isoformat()
     item.updated = _stamp()
     # Grading answers the "you solved this today" prompt, so the mark clears.
     item.attempted = ""
@@ -367,7 +378,7 @@ def postpone(slug: str, today: date | None = None) -> ReviewItem | None:
         base = max(date.fromisoformat(item.due), today)
     except ValueError:
         base = today
-    item.due = (base + timedelta(days=1)).isoformat()
+    item.due = _day_after(base).isoformat()
     item.updated = _stamp()   # postponing is an edit too, and syncing sorts on it
     save(items)
     return item
@@ -381,7 +392,7 @@ def postpone_due(today: date | None = None) -> int:
     moved = 0
     for item in live(items).values():
         if item.due_in(today) <= 0:
-            item.due = (today + timedelta(days=1)).isoformat()
+            item.due = _day_after(today).isoformat()
             item.updated = _stamp()
             moved += 1
     if moved:
