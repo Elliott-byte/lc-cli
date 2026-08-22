@@ -11,6 +11,14 @@ every commit bumps the version (early tags grouped a few commits); tags
 the top section for the current day — or start a new one. Say what changed
 and, when behaviour reversed, what it used to do.
 
+## 0.7.62 — 2026-08-22 · notes that actually converge
+
+- Two machines that both wrote a note in the same minute never agreed on
+  the merged file: cards sharing a heading were ordered by which side
+  merged first, so each machine rewrote the other's order and every sync
+  committed a reordering diff, forever. The merge sorts on the whole card
+  now — verified commutative and idempotent over randomised card sets.
+
 ## 0.7.61 — 2026-08-22 · an audit's findings
 
 - One unreadable `notes.md` anywhere in the workspace no longer aborts the

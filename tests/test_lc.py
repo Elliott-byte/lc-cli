@@ -3375,3 +3375,42 @@ def test_the_editor_never_loses_a_buffer_it_cannot_save(tmp_path, monkeypatch):
 
     result = asyncio.run(drive())
     assert all(result.values()), {k: v for k, v in result.items() if not v}
+
+
+def test_notes_merge_is_an_order_free_union(tmp_path, monkeypatch):
+    """Two machines must reach the same bytes whichever side merges first.
+
+    Cards can share a heading — both machines wrote one in the same minute —
+    and sorting on the title alone left their order to the stable sort, i.e.
+    to argument order. Each machine then wrote a different file, saw the
+    other's as changed, and the repo ping-ponged a reordering commit at
+    every sync, forever.
+    """
+    import random
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    from lc import notes
+
+    same = "## 2026-08-22 09:00 · Accepted · python3\n\n"
+    mine, theirs = same + "my idea\n", same + "their idea\n"
+    assert notes.merge_texts(mine, theirs) == notes.merge_texts(theirs, mine)
+    # ...and repeated syncs settle rather than oscillate
+    a, b = mine, theirs
+    for _ in range(3):
+        a, b = notes.merge_texts(a, b), notes.merge_texts(b, a)
+    assert a == b and a.count("## ") == 2
+
+    # The property, not just the example: commutative and idempotent for
+    # any pair of card sets.
+    random.seed(11)
+
+    def cards(n):
+        return "".join(
+            f"## 2026-08-{random.randint(1, 28):02d} 0{random.randint(0, 9)}:00"
+            f"\n\nbody{random.randint(0, 3)}\n\n" for _ in range(n))
+
+    for _ in range(200):
+        x, y = cards(random.randint(0, 4)), cards(random.randint(0, 4))
+        merged = notes.merge_texts(x, y)
+        assert merged == notes.merge_texts(y, x)
+        assert notes.merge_texts(merged, merged) == merged

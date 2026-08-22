@@ -227,8 +227,10 @@ never submitted by accident.
   submitted code stays visible); read by the TUI's `n` (cards, newest
   first). The workspace's own git versions it, and the deck sync carries
   it too: `notes/<slug>.md` in the review repo, merged as a card **union**
-  (`merge_texts` — deterministic, idempotent, commutative, which is what
-  makes two machines converge). Nothing is ever deleted by the sync; a card
+  (`merge_texts` — deterministic, idempotent, **commutative**, which is what
+  makes two machines converge; sort on the whole card, never the title
+  alone: same-minute cards would otherwise order by argument position and
+  the repo would ping-pong a reordering commit at every sync). Nothing is ever deleted by the sync; a card
   for a problem the receiving machine never picked waits in the clone until
   the index can name its directory.
 

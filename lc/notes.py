@@ -122,5 +122,10 @@ def merge_texts(ours: str, theirs: str) -> str:
         key = (card.title, card.body)
         if key not in seen:
             seen.append(key)
-    ordered = sorted(seen, key=lambda k: k[0])
+    # Sort on the whole card, not the title: two cards can share a heading
+    # (both machines wrote one in the same minute), and a title-only key
+    # leaves their order to the stable sort — i.e. to which side was passed
+    # first. Each machine then writes different bytes, sees the other's file
+    # as changed, and the repo ping-pongs a reordering commit forever.
+    ordered = sorted(seen)
     return render([Card(t, b) for t, b in ordered])
