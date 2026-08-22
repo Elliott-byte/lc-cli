@@ -11,7 +11,11 @@ every commit bumps the version (early tags grouped a few commits); tags
 the top section for the current day — or start a new one. Say what changed
 and, when behaviour reversed, what it used to do.
 
-## 0.7.49 — 2026-08-22 · stale clocks, slim headers
+## 0.7.49–0.7.50 — 2026-08-22 · stale clocks, deduped chrome
+
+- The clock and the key hints show once, on the solution's statusline — the
+  statement pane's carries only `q close` (both statuslines share a screen
+  row, so everything on both was everything twice).
 
 - A clock still running when a problem is opened is treated as escaped (a
   crash or killed terminal skipped the quit-pause): the phantom stretch is

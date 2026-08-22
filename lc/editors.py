@@ -30,7 +30,9 @@ VIM_PLUGIN = r'''" lc.vim — Vim integration for the lc LeetCode CLI.
 " automatically when the solution file is the only window; `let
 " g:lc_auto_statement = 0` turns that off. The pane is read-only and the
 " cursor starts in the solution — CTRL-W h goes over to read, q closes the
-" pane, and the keys above work there too. Double-clicking the pane's url
+" pane, and the keys above work there too, though its statusline shows only
+" `q close` — the full list sits beside it on the solution's statusline.
+" Double-clicking the pane's url
 " line opens the problem page: Vim owns the mouse there, so the terminal
 " never sees the click, and Vim's terminal drops the hyperlink escape anyway.
 " Quitting the solution (:q, ZZ, …) never strands you in the pane: a
@@ -189,8 +191,9 @@ function! s:LcOpenStatement() abort
   nnoremap <buffer> <leader>Z :call <SID>LcTimerReset()<CR>
   nnoremap <buffer> <leader>q :call <SID>LcQuitAll()<CR>
   nnoremap <buffer> <2-LeftMouse> <LeftMouse>:call <SID>LcClickOpen()<CR>
-  call s:LcKeyHints([['', 'q close'], ['t', 'test'], ['s', 'submit'],
-        \ ['z', 'pause'], ['q', 'quit']])
+  " Only the pane's own key. The full list sits an inch away on the
+  " solution's statusline — and those keys all work from here regardless.
+  call s:LcKeyHints([['', 'q close']])
   " Back to the code — that is what you are here to type in.
   call s:LcFocusSolution(l:dir)
   " Once more after startup finishes: Vim re-enters the first window when it
@@ -203,6 +206,12 @@ function! s:LcOpenStatement() abort
 endfunction
 
 function! s:LcClockText() abort
+  " One clock, on the solution's statusline only: in a vertical split both
+  " statuslines share a screen row, and the same time twice an inch apart
+  " reads as a rendering bug.
+  if exists('b:lc_statement_for')
+    return ''
+  endif
   " The lc solve clock, read from $LC_HOME/timer.json — written by the TUI
   " and `lc pick`, stopped by an accepted `lc submit` (\s included). Vim is
   " where the solving happens, so this is where the clock has to be visible.

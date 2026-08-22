@@ -217,9 +217,11 @@ never submitted by accident.
   `lc show` (README fallback), marked by `b:lc_statement_for`.
 - The pane's terminal quirks are all commented in place (term_start options,
   QuitPre semantics — `:q` in the pane means "leave Vim", `q` closes it).
-- The clock is drawn on the statusline from `timer.json` by a 1s ticker that
-  holds its repaint while a prompt owns the screen; space starts/resumes via
-  `lc timer start <slug>` and falls through to plain space once running.
+- The clock is drawn on the solution's statusline (the pane shows only
+  `q close` — both statuslines share a screen row, so anything else doubles)
+  from `timer.json` by a 1s ticker that holds its repaint while a prompt
+  owns the screen; space starts/resumes via `lc timer start <slug>` and
+  falls through to plain space once running.
 - Quitting Vim pauses this session's running clock — but **commands run
   inside an autocmd fire no further autocmds**, so the `VimLeavePre` hook
   never sees an exit performed by the plugin's own `qall!` (QuitPre's

@@ -306,8 +306,10 @@ Python buffers are kept space-indented: Tab inserts spaces, and pasted tabs
 are converted on save. LeetCode's starters use spaces and the judge answers a
 single stray tab with a `TabError` — `let g:lc_python_indent = 0` disables it.
 
-The keys are listed on each window's status line, shortened to fit a narrow
-split (`let g:lc_statusline = 0` leaves your own status line alone). The
+The keys (and the solve clock) live on the solution's status line, shortened
+to fit a narrow split; the statement pane's shows only `q close`, though
+every key works from either window (`let g:lc_statusline = 0` leaves your
+own status line alone). The
 cursor starts in the solution, and the pane is read-only: the statement is
 there to read, not to type in. `ctrl+w h` goes over to it and `ctrl+w l`
 comes back. The keys work from the pane as well, so it does not matter which

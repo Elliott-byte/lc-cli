@@ -393,6 +393,11 @@ def test_vim_quit_never_fights_the_statement_terminal():
     assert "autocmd VimLeavePre * call s:LcTimerAutoPause()" in text
     assert text.count("call s:LcTimerAutoPause()") >= 5
     assert "has_key(s:lc_slugs" in text     # unrelated Vims touch nothing
+    # One clock, one hint list: both statuslines share a screen row in a
+    # vertical split, so the pane carries only its own `q close` and the
+    # clock skips it entirely.
+    assert "call s:LcKeyHints([['', 'q close']])" in text
+    assert text.count("LcClockText") >= 2 and "if exists('b:lc_statement_for')" in text
     assert "return \' \'" in text          # the fall-through: plain space
 
     # Vim owns the mouse in the pane, and its terminal drops the hyperlink
