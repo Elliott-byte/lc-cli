@@ -76,8 +76,9 @@ With `lc config editor builtin` (or no editor configured), `enter` opens the
 **built-in edit screen**: statement on the left, code on the right, judge
 results as notifications, the solve clock on the status bar — solving never
 leaves the TUI. `ctrl+r` runs the samples, `ctrl+s` submits, `ctrl+n`
-toggles a note split, `ctrl+b` pauses the clock behind a cover, `esc` saves
-and returns (pausing the clock, exactly like quitting Vim). Typing the
+toggles a note split, `ctrl+b` pauses the clock behind a cover (and starts
+it again from anywhere it is stopped), `ctrl+g` resets it to 00:00, `esc`
+saves and returns (pausing the clock, exactly like quitting Vim). Typing the
 first character is what starts an armed clock — reading the statement is
 still free.
 

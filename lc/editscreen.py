@@ -98,6 +98,7 @@ class EditScreen(Screen):
         Binding("ctrl+s", "submit", "Submit", priority=True),
         Binding("ctrl+n", "notes", "Note", priority=True),
         Binding("ctrl+b", "pause", "Pause", priority=True),
+        Binding("ctrl+g", "reset_clock", "Reset clock", priority=True),
         # escape is NOT priority: the vim layer needs it first (insert ->
         # normal), and in vim mode ZZ is the way out. With vim keys off, or
         # focus outside the code, escape still backs out.
@@ -161,7 +162,8 @@ class EditScreen(Screen):
                 elif timer.armed:
                     right = "typing starts the clock"
                 else:
-                    right = f"paused {solvetimer.clock(timer.elapsed())}"
+                    right = (f"paused {solvetimer.clock(timer.elapsed())}"
+                             " · ^b resumes")
         text = Text(left, style="dim")
         try:
             area = self.query_one("#edit-code", TextArea)
@@ -189,8 +191,19 @@ class EditScreen(Screen):
             self._tick()
 
     def action_pause(self) -> None:
+        """ctrl+b — pause behind the cover, or start a clock standing still.
+
+        A stopped clock has no pause to give: the same key starts it again,
+        so ctrl+b is never a key that does nothing. (Only a *running* clock
+        gets the cover — covering a stopped one would hide the statement
+        with nothing counting.)
+        """
         timer = solvetimer.load()
-        if not (timer and timer.slug == self.problem.slug and timer.running):
+        if not (timer and timer.slug == self.problem.slug) or timer.done:
+            return
+        if not timer.running:
+            solvetimer.resume()
+            self._tick()
             return
         timer = solvetimer.pause()
         self._tick()
@@ -200,6 +213,16 @@ class EditScreen(Screen):
             self._tick()
 
         self.app.push_screen(PauseScreen(timer.accum), resumed)
+
+    def action_reset_clock(self) -> None:
+        """ctrl+g — back to 00:00 and running, a fresh attempt at this
+        problem. Vim has \Z; the built-in editor had nothing."""
+        timer = solvetimer.load()
+        if not (timer and timer.slug == self.problem.slug):
+            return
+        fresh = solvetimer.reset()
+        self._tick()
+        self.notify(f"clock reset — {solvetimer.clock(fresh.accum)}")
 
     # -------------------------------------------------------------- judge
 

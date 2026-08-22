@@ -3255,3 +3255,57 @@ def test_builtin_editor_speaks_vim(tmp_path, monkeypatch):
 
     result = asyncio.run(drive())
     assert all(result.values()), {k: v for k, v in result.items() if not v}
+
+
+def test_builtin_editor_clock_keys(tmp_path, monkeypatch):
+    """ctrl+b pauses behind the cover, resumes from it, and revives a clock
+    that is merely stopped — it must never be a key that does nothing.
+    ctrl+g resets to 00:00 and running, the built-in answer to Vim's \\Z."""
+    import asyncio
+    import json as _json
+    import time as _time
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    ws = tmp_path / "ws"; ws.mkdir()
+    (tmp_path / "config.json").write_text(_json.dumps(
+        {"workspace": str(ws), "editor": "builtin"}))
+    from lc import solvetimer, tui
+
+    def state():
+        t = solvetimer.load()
+        return ("done" if t.done else "running" if t.running
+                else "armed" if t.armed else "paused")
+
+    async def drive():
+        app = tui.LeetCodeTUI()
+        seen = {}
+        async with app.run_test(size=(160, 45)) as pilot:
+            await pilot.pause()
+            app._show(PROBLEM); app.current_slug = PROBLEM.slug
+            await pilot.pause()
+            app.action_pick(); await pilot.pause()
+            app.screen.query_one("#edit-code").insert("x")
+            await pilot.pause()
+            seen["typing runs it"] = state() == "running"
+
+            await pilot.press("ctrl+b"); await pilot.pause()
+            seen["ctrl+b covers"] = (state() == "paused"
+                                     and app.screen.__class__.__name__ == "PauseScreen")
+            await pilot.press("space"); await pilot.pause()
+            seen["space resumes"] = (state() == "running"
+                                     and app.screen.__class__.__name__ == "EditScreen")
+
+            solvetimer.pause()       # stopped with no cover on screen
+            await pilot.press("ctrl+b"); await pilot.pause()
+            seen["ctrl+b revives"] = state() == "running"
+
+            _time.sleep(0.4)
+            before = solvetimer.load().elapsed()
+            await pilot.press("ctrl+g"); await pilot.pause()
+            after = solvetimer.load().elapsed()
+            seen["ctrl+g resets"] = (state() == "running" and before >= 0.3
+                                     and after < before)
+        return seen
+
+    result = asyncio.run(drive())
+    assert all(result.values()), {k: v for k, v in result.items() if not v}

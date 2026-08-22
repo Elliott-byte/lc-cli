@@ -11,6 +11,14 @@ every commit bumps the version (early tags grouped a few commits); tags
 the top section for the current day — or start a new one. Say what changed
 and, when behaviour reversed, what it used to do.
 
+## 0.7.60 — 2026-08-22 · the built-in editor's clock keys
+
+- `ctrl+b` on a clock that is merely stopped now starts it again (it did
+  nothing, so a pause taken any way but the cover was a dead end), and
+  `ctrl+g` resets the clock to 00:00 — the built-in answer to Vim's `\Z`,
+  which had no equivalent here at all. The status line names `^b resumes`
+  while paused.
+
 ## 0.7.58 — 2026-08-22 · the built-in editor grows up
 
 - Syntax highlighting: Python in the code pane (the tree-sitter grammar

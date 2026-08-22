@@ -233,6 +233,10 @@ never submitted by accident.
   `#edit-status` (its own id — `set_status` writes `#status-bar` and must
   no-op here, or the 1s tick would erase judge text). First edit starts an
   armed clock; esc saves and pauses it, like quitting Vim.
+- Clock keys: ctrl+b pauses *running* clocks behind the cover and starts
+  stopped ones (never a no-op key; covering a stopped clock would hide the
+  statement with nothing counting), ctrl+g resets. `space` cannot be the
+  pause here — it types.
 - **While it is on top, the app's bindings stand down** via
   `LeetCodeTUI.check_action` — the priority `tab` binding would otherwise
   reach through the editor and flip the hidden Problems/Review tabs when
