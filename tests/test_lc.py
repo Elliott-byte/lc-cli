@@ -3513,3 +3513,55 @@ def test_a_far_future_due_date_cannot_crash_the_deck(tmp_path, monkeypatch):
     assert graded.due == (date.today() + gap).isoformat()
     # a clock set to the end of time clamps rather than overflowing
     assert review.add("y", curve=[3650], today=date(9999, 1, 1)).due == "9999-12-31"
+
+
+def test_a_judge_that_explodes_does_not_take_the_session(tmp_path, monkeypatch):
+    """A judge run touches the network, the disk and a third party's payload
+    shape. api.py wraps what it knows into LeetCodeError, but an unexpected
+    exception in the worker used to kill the app mid-solve — the session and
+    the unsaved buffer with it. Report and stay alive; the same for the
+    bookkeeping that files a verdict away."""
+    import asyncio
+    import json as _json
+    import types
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    ws = tmp_path / "ws"; ws.mkdir()
+    (tmp_path / "config.json").write_text(_json.dumps(
+        {"workspace": str(ws), "editor": "builtin", "builtin_vim": False}))
+    from lc import review, tui
+    from lc.api import JudgeResult
+
+    def boom(*_a, **_k):
+        raise RuntimeError("boom")
+
+    async def drive():
+        app = tui.LeetCodeTUI()
+        seen = {}
+        async with app.run_test(size=(150, 40)) as pilot:
+            await pilot.pause()
+            app._show(PROBLEM); app.current_slug = PROBLEM.slug
+            await pilot.pause()
+            app.action_pick(); await pilot.pause()
+
+            app.client = types.SimpleNamespace(
+                authenticated=True, close=lambda: None, submit=boom)
+            app.screen.action_submit()
+            for _ in range(25):
+                await pilot.pause(0.1)
+            seen["judge explosion"] = app.screen.__class__.__name__ == "EditScreen"
+
+            app.client = types.SimpleNamespace(
+                authenticated=True, close=lambda: None,
+                submit=lambda *a, **k: JudgeResult(
+                    raw={}, accepted=True, status="Accepted", is_run=False))
+            monkeypatch.setattr(review, "record_submit", boom)
+            app.screen.action_submit()
+            for _ in range(25):
+                await pilot.pause(0.1)
+            seen["bookkeeping explosion"] = (
+                app.screen.__class__.__name__ == "EditScreen")
+        return seen
+
+    result = asyncio.run(drive())
+    assert all(result.values()), {k: v for k, v in result.items() if not v}

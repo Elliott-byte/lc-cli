@@ -216,6 +216,12 @@ never submitted by accident.
 - `strip_header` removes only a leading comment block that contains the
   problem URL — a user's own comment is never deleted.
 
+- The judge worker's boundary is **guarded twice**: unexpected exceptions
+  from the judge, and from the bookkeeping that files a verdict away, are
+  reported in full and never allowed to kill the session — the app dying
+  mid-solve takes the unsaved buffer with it. `api.py` wraps what it knows
+  into `LeetCodeError`; this is for what it does not.
+
 ### `lc/notes.py` — note cards
 - `open_card` **creates the directory** — it can be gone by the time a note
   is written (a `git clean`, a moved workspace, a problem deleted while the

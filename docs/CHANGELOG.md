@@ -11,6 +11,14 @@ every commit bumps the version (early tags grouped a few commits); tags
 the top section for the current day — or start a new one. Say what changed
 and, when behaviour reversed, what it used to do.
 
+## 0.7.65 — 2026-08-22 · the judge cannot take the session
+
+- An unexpected error inside a judge run — or inside the bookkeeping that
+  records its verdict — is now reported and survived instead of killing
+  the app mid-solve (which took the unsaved buffer with it). Known
+  network, HTTP and JSON failures were already handled; this covers what
+  is not.
+
 ## 0.7.64 — 2026-08-22 · a date at the end of time
 
 - `z` (postpone) no longer crashes on a problem whose next review is a

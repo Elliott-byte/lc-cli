@@ -1265,40 +1265,65 @@ class LeetCodeTUI(App):
             self.call_from_thread(self.notify, escape(str(exc)), severity="error")
             self.call_from_thread(self.set_status, "judge failed", "red")
             return
+        except Exception as exc:      # noqa: BLE001 — see below
+            # A judge run touches the network, the disk and a third party's
+            # payload shape. api.py wraps what it knows into LeetCodeError,
+            # but an unexpected one here would take the whole session down
+            # mid-solve — the app dies, the buffer with it. Report it in
+            # full (never silently) and stay alive.
+            self.call_from_thread(
+                self.notify, escape(f"{type(exc).__name__}: {exc}"),
+                title="judge failed unexpectedly", severity="error", timeout=15)
+            self.call_from_thread(self.set_status, "judge failed", "red")
+            return
 
         if submit:
-            # Mirror the CLI: record the attempt, but never downgrade a solve.
-            if result.accepted:
-                store.update_status(problem.slug, "ac")
+            try:
+                self._record_submit(problem, result)
+            except Exception as exc:  # noqa: BLE001
+                # The verdict is already known; failing to file it away is
+                # worth a warning, not the loss of the session (and of the
+                # result the user is waiting for).
+                self.call_from_thread(
+                    self.notify, escape(f"could not record the attempt — "
+                                        f"{type(exc).__name__}: {exc}"),
+                    severity="warning", timeout=12)
+        self.call_from_thread(self._show_result, result, cases)
+
+    def _record_submit(self, problem: Problem, result: JudgeResult) -> None:
+        """File a verdict away: the index's mark, the deck, the clock."""
+        # Mirror the CLI: record the attempt, but never downgrade a solve.
+        if result.accepted:
+            store.update_status(problem.slug, "ac")
+        else:
+            known = store.find(problem.slug)
+            if known is not None and not known.solved:
+                store.update_status(problem.slug, "notac")
+        autograde = self.config.autograde
+        note = review.record_submit(
+            problem.slug, result.accepted,
+            curve=self.curve if autograde else None,
+        )
+        self.call_from_thread(self.refresh_list)
+        # Leave the deck's cursor on the problem just submitted, so tabbing
+        # over lands on it and + / - grade what was actually re-solved
+        # instead of whatever the cursor was parked on beforehand. A note
+        # of None means it is not on the deck, so there is nothing to aim at.
+        self.call_from_thread(
+            self.refresh_review, problem.slug if note else ""
+        )
+        if note:
+            # Autograde has already moved the level — prompting for the key
+            # that would move it again is exactly the wrong advice.
+            if autograde:
+                tail = ""
             else:
-                known = store.find(problem.slug)
-                if known is not None and not known.solved:
-                    store.update_status(problem.slug, "notac")
-            autograde = self.config.autograde
-            note = review.record_submit(
-                problem.slug, result.accepted,
-                curve=self.curve if autograde else None,
-            )
-            self.call_from_thread(self.refresh_list)
-            # Leave the deck's cursor on the problem just submitted, so tabbing
-            # over lands on it and + / - grade what was actually re-solved
-            # instead of whatever the cursor was parked on beforehand. A note
-            # of None means it is not on the deck, so there is nothing to aim at.
-            self.call_from_thread(
-                self.refresh_review, problem.slug if note else ""
-            )
-            if note:
-                # Autograde has already moved the level — prompting for the key
-                # that would move it again is exactly the wrong advice.
-                if autograde:
-                    tail = ""
-                else:
-                    tail = " · press %s in the Review tab" % (
-                        "+" if result.accepted else "-")
-                self.call_from_thread(self.notify, f"{note}{tail}", timeout=8)
-            self.call_from_thread(
-                self._timer_submit, problem.slug, result.accepted
-            )
+                tail = " · press %s in the Review tab" % (
+                    "+" if result.accepted else "-")
+            self.call_from_thread(self.notify, f"{note}{tail}", timeout=8)
+        self.call_from_thread(
+            self._timer_submit, problem.slug, result.accepted
+        )
 
         self.call_from_thread(self._show_result, result, cases)
 
