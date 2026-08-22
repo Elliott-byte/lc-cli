@@ -98,7 +98,10 @@ screen (Vim opens `notes.md` in a split under the solution), the workspace
 git versions them with the code, and `cat` reads them anywhere. The TUI
 renders the `##` sections as cards, newest first. lc stamps the heading
 (date · verdict · language) so the card is tied to the attempt without the
-user typing bookkeeping.
+user typing bookkeeping. The deck sync carries the cards as a **union**
+(`notes/<slug>.md` in the review repo): deterministic and idempotent, so
+two machines converge — at the price that the sync never deletes a card;
+removing one locally resurrects it from the other side.
 
 ## Solve clock
 

@@ -3016,3 +3016,80 @@ def test_tui_n_shows_this_problems_cards(tmp_path, monkeypatch):
             return shown, toggled, app._notes_for == ""
 
     assert asyncio.run(view()) == (True, True, True)
+
+
+def test_notes_travel_with_the_deck_between_two_homes(tmp_path, monkeypatch):
+    """Note cards written on either machine reach the other through the deck
+    repo — a union, so unrelated cards from both sides all survive. A note
+    for a problem the receiving machine never picked waits in the clone and
+    is delivered once the index can name its directory."""
+    import json as _json
+    import subprocess
+    import sys
+
+    remote = _bare_repo(tmp_path)
+
+    def machine(name):
+        home = tmp_path / name
+        ws = home / "ws"
+        ws.mkdir(parents=True)
+        (home / "config.json").write_text(_json.dumps({"workspace": str(ws)}))
+        return home, ws
+
+    def use(home):
+        monkeypatch.setenv("LC_HOME", str(home))
+        for mod in [m for m in sys.modules if m.startswith("lc.")]:
+            del sys.modules[mod]
+        from lc import gitsync, notes, review, store  # noqa: F401
+        return gitsync, notes, review, store
+
+    def problem_dir(ws, name, slug, fid):
+        d = ws / name
+        d.mkdir(parents=True, exist_ok=True)
+        (d / ".lc.json").write_text(_json.dumps({"slug": slug,
+                                                 "frontend_id": fid}))
+        return d
+
+    home_a, ws_a = machine("a")
+    home_b, ws_b = machine("b")
+
+    # Machine A: a deck problem and a card about it.
+    gitsync, notes, review, store = use(home_a)
+    review.add("coin-change", title="Coin Change", frontend_id="322",
+               curve=[1, 2, 4])
+    d = problem_dir(ws_a, "0322-coin-change", "coin-change", "322")
+    (d / "notes.md").write_text("## 2026-08-21 21:10 · python3\n\ngreedy fails.\n")
+    gitsync.push(remote)
+    assert subprocess.run(
+        ["git", "--git-dir", remote, "cat-file", "-e", "HEAD:notes/coin-change.md"],
+    ).returncode == 0
+
+    # Machine B: has the problem directory, writes its own card, syncs.
+    gitsync, notes, review, store = use(home_b)
+    d = problem_dir(ws_b, "0322-coin-change", "coin-change", "322")
+    (d / "notes.md").write_text("## 2026-08-22 08:00 · python3\n\noffice idea.\n")
+    gitsync.sync(remote)
+    text = (d / "notes.md").read_text()
+    assert "greedy fails." in text and "office idea." in text
+    assert text.find("21:10") < text.find("08:00")   # chronological order
+
+    # ...and A picks B's card up on its next pull.
+    gitsync, notes, review, store = use(home_a)
+    gitsync.pull(remote)
+    text = (ws_a / "0322-coin-change" / "notes.md").read_text()
+    assert "office idea." in text and "greedy fails." in text
+
+    # A problem B never picked: the card waits in the clone (no directory
+    # invented), then lands once the index knows the problem.
+    d2 = problem_dir(ws_a, "0001-two-sum", "two-sum", "1")
+    (d2 / "notes.md").write_text("## 2026-08-22 10:00 · python3\n\nhash map.\n")
+    gitsync.push(remote)
+
+    gitsync, notes, review, store = use(home_b)
+    gitsync.pull(remote)
+    assert not (ws_b / "0001-two-sum").exists()      # index empty: parked
+    from lc.api import ProblemSummary
+    store.replace_index([ProblemSummary("1", "Two Sum", "two-sum", "Easy",
+                                        50.0, False, None, [])])
+    gitsync.pull(remote)
+    assert (ws_b / "0001-two-sum" / "notes.md").read_text().count("hash map.") == 1

@@ -11,6 +11,17 @@ every commit bumps the version (early tags grouped a few commits); tags
 the top section for the current day — or start a new one. Say what changed
 and, when behaviour reversed, what it used to do.
 
+## 0.7.55 — 2026-08-22 · notes travel
+
+- `lc review sync` now carries note cards between machines, next to the
+  deck (`notes/<slug>.md` in the review repo). Card union: both sides'
+  cards survive, in timestamp order; the sync never deletes one. A card
+  for a problem the other machine never picked waits in the clone until
+  the index can name its directory.
+- The deck merge inside pull/push now runs under the deck lock, so a grade
+  pressed in the TUI at the exact moment a sync lands can no longer be
+  lost between the merge's read and its write.
+
 ## 0.7.53 — 2026-08-22 · \n toggles
 
 - `\n` is a toggle like `\p`: pressed again it saves the card and closes

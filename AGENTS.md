@@ -79,7 +79,7 @@ Everything lc owns lives under `$LC_HOME` (default `~/.lc`):
 | `cache.db` | sqlite cache (problem index, statements, meta). Disposable. |
 | `review-repo/` | Private clone used by sync. **Disposable** — every sync resets it to the remote. |
 | `timer.json` | The one active solve clock. Shared by TUI, CLI and Vim, hence a file. |
-| `<workspace>/<dir>/notes.md` | That problem's note cards — one `##` heading per card. User data in the user's own workspace, not lc's. |
+| `<workspace>/<dir>/notes.md` | That problem's note cards — one `##` heading per card. User data; synced into the review repo as `notes/<slug>.md`. |
 
 Solutions live in `~/leetcode/<0322-coin-change>/` with `solution.<ext>`,
 `README.md` (rendered statement) and `.lc.json` (slug, lang, file). The
@@ -219,7 +219,12 @@ never submitted by accident.
   word do not litter the file. Prose above the first heading is not a card.
 - Written by `lc note` / Vim's `\n` (split under the solution — the
   submitted code stays visible); read by the TUI's `n` (cards, newest
-  first). The workspace's own git versions it; lc never syncs it.
+  first). The workspace's own git versions it, and the deck sync carries
+  it too: `notes/<slug>.md` in the review repo, merged as a card **union**
+  (`merge_texts` — deterministic, idempotent, commutative, which is what
+  makes two machines converge). Nothing is ever deleted by the sync; a card
+  for a problem the receiving machine never picked waits in the clone until
+  the index can name its directory.
 
 ### `lc/editors.py` — the Vim plugin (one file, installed by `lc setup vim`)
 - Everything is buffer-local, attached by an autocmd when the buffer's

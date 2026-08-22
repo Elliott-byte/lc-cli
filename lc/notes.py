@@ -88,3 +88,28 @@ def load(directory: Path) -> list[Card]:
         return parse(path.read_text())
     except OSError:
         return []
+
+
+def render(cards: list[Card]) -> str:
+    """Cards back to markdown — the inverse of parse, normalised."""
+    blocks = [f"## {c.title}\n\n{c.body}".rstrip() for c in cards]
+    return "\n\n".join(blocks) + "\n"
+
+
+def merge_texts(ours: str, theirs: str) -> str:
+    """Two machines' versions of one problem's notes, combined.
+
+    Cards are near-append-only, so the merge is a union: every distinct
+    (title, body) survives, ordered by title — headings start with the
+    timestamp, so that is chronological. Deterministic and idempotent, which
+    is what makes two machines converge instead of ping-ponging. The cost:
+    deleting a card on one machine resurrects it from the other — notes are
+    a record, and the sync treats them as one.
+    """
+    seen = []
+    for card in parse(ours) + parse(theirs):
+        key = (card.title, card.body)
+        if key not in seen:
+            seen.append(key)
+    ordered = sorted(seen, key=lambda k: k[0])
+    return render([Card(t, b) for t, b in ordered])

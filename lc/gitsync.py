@@ -20,7 +20,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import review, store
+from . import notes, review, store
 from .config import (
     DEFAULT_AUTHOR_EMAIL,
     DEFAULT_AUTHOR_NAME,
@@ -33,6 +33,8 @@ from .config import (
 #: lc at a repo that already has one must never overwrite it.
 DECK_FILE = "review.json"
 TABLE_FILE = "REVIEW.md"
+#: Note cards travel too, one file per problem: notes/<slug>.md.
+NOTES_DIR = "notes"
 
 TIMEOUT = 120
 
@@ -277,10 +279,77 @@ def author(path: Path | None = None) -> tuple[str, str, str]:
             "configured" if name or email else "lc's own")
 
 
+def _local_notes(config: Config) -> dict[str, tuple[Path, str]]:
+    """slug -> (file, text) for every problem in the workspace with notes."""
+    root = config.workspace_path
+    found: dict[str, tuple[Path, str]] = {}
+    if not root.is_dir():
+        return found
+    for meta in root.glob("*/.lc.json"):
+        note_file = meta.parent / notes.FILENAME
+        if not note_file.is_file():
+            continue
+        try:
+            slug = json.loads(meta.read_text()).get("slug", "")
+        except (json.JSONDecodeError, OSError):
+            continue
+        if slug:
+            found[slug] = (note_file, note_file.read_text())
+    return found
+
+
+def _clone_notes(path: Path) -> dict[str, str]:
+    folder = path / NOTES_DIR
+    if not folder.is_dir():
+        return {}
+    return {f.stem: f.read_text() for f in sorted(folder.glob("*.md"))}
+
+
+def _merge_notes(path: Path, write_clone: bool) -> None:
+    """Combine the workspace's note files with the clone's, both directions.
+
+    Local files whose problem directory exists are updated in place; a note
+    for a problem this machine never picked is delivered once the index can
+    name its directory, and stays safely in the clone until then. Card
+    union only — nothing is ever removed here.
+    """
+    config = load_config()
+    local = _local_notes(config)
+    remote = _clone_notes(path)
+    merged: dict[str, str] = {}
+    for slug in sorted(set(local) | set(remote)):
+        ours = local.get(slug, (None, ""))[1]
+        theirs = remote.get(slug, "")
+        merged[slug] = notes.merge_texts(ours, theirs) if theirs else ours
+
+    for slug, text in merged.items():
+        target = local.get(slug, (None, ""))[0]
+        if target is None:
+            summary = store.find(slug)
+            if summary is None:
+                continue     # no directory to deliver into yet
+            from .workspace import slug_dir_name
+            directory = config.workspace_path / slug_dir_name(
+                summary.frontend_id, slug)
+            directory.mkdir(parents=True, exist_ok=True)
+            target = directory / notes.FILENAME
+        if not target.exists() or target.read_text() != text:
+            target.write_text(text)
+
+    if write_clone:
+        folder = path / NOTES_DIR
+        folder.mkdir(exist_ok=True)
+        for slug, text in merged.items():
+            clone_file = folder / f"{slug}.md"
+            if not clone_file.exists() or clone_file.read_text() != text:
+                clone_file.write_text(text)
+
+
 def _commit_and_push(path: Path, message: str) -> bool:
     """Commit the deck files and push. False when there was nothing to commit."""
-    _git("add", "--", DECK_FILE, TABLE_FILE, cwd=path)
-    if not _git("status", "--porcelain", "--", DECK_FILE, TABLE_FILE, cwd=path):
+    _git("add", "--", DECK_FILE, TABLE_FILE, NOTES_DIR, cwd=path)
+    if not _git("status", "--porcelain", "--", DECK_FILE, TABLE_FILE, NOTES_DIR,
+                cwd=path):
         return False
     # -c rather than writing the clone's config: lc states who it commits as
     # on every call and never edits a git config of yours.
@@ -399,16 +468,20 @@ def pull(url: str) -> tuple[int, int, int]:
     """Merge the repo's deck into this machine's. Returns (added, updated,
     removed) — what the pull did to the deck as the user sees it."""
     try:
-        _, remote = fetch_remote_deck(url)
-        local = review.load()
-        merged, added, updated, removed = review.merge(local, remote)
-        # Written whenever the merge changed anything — not when the counters
-        # are non-zero. A tombstone for a problem this machine never had is
-        # counted as neither added nor updated, so guarding on them dropped it
-        # and left `status` reporting a change to push that pushing never
-        # cleared.
-        if merged != local:
-            review.save(merged)
+        path, remote = fetch_remote_deck(url)
+        # Under the deck lock: a + pressed in the TUI while this merges must
+        # not vanish between our load and our save.
+        with review._LOCK:
+            local = review.load()
+            merged, added, updated, removed = review.merge(local, remote)
+            # Written whenever the merge changed anything — not when the
+            # counters are non-zero. A tombstone for a problem this machine
+            # never had is counted as neither added nor updated, so guarding
+            # on them dropped it and left `status` reporting a change to push
+            # that pushing never cleared.
+            if merged != local:
+                review.save(merged)
+        _merge_notes(path, write_clone=False)
     except SyncError as exc:
         record_sync(error=str(exc))
         raise
@@ -442,11 +515,13 @@ def push(url: str) -> tuple[int, bool]:
 
 def _push_once(url: str) -> tuple[int, bool]:
     path, remote = fetch_remote_deck(url)
-    local = review.load()
-    merged, added, updated, removed = review.merge(local, remote)
-    if merged != local:      # see pull(): the counters do not cover tombstones
-        review.save(merged)
+    with review._LOCK:       # see pull(): a concurrent grade must survive
+        local = review.load()
+        merged, added, updated, removed = review.merge(local, remote)
+        if merged != local:  # see pull(): the counters do not cover tombstones
+            review.save(merged)
     write_deck(path, merged)
+    _merge_notes(path, write_clone=True)
     count = len(review.live(merged))
     return count, _commit_and_push(path, f"review: {count} problem(s)")
 

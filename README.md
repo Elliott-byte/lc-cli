@@ -181,7 +181,10 @@ problem's own `notes.md` and drops you in your editor to write under it. In
 Vim the file opens in a split below the solution, so the code you just
 submitted stays in front of you while you write. `n` in the problem list
 shows that problem's cards, newest first. It is a plain markdown file in
-the problem's directory — your workspace git versions it with the code.
+the problem's directory — your workspace git versions it with the code,
+and `lc review sync` carries the cards between machines along with the deck
+(a union: cards from both sides all survive; deleting one somewhere brings
+it back from the other — notes are a record).
 
 Nothing is ever added behind your back. Only `m`, Vim's `\m`, and
 `lc review add` put a problem on the deck.
