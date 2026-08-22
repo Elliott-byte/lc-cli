@@ -59,6 +59,20 @@ def _header(problem: Problem, lang: Language) -> str:
     return f"{c} [{problem.frontend_id}] {problem.title} · {url}\n\n"
 
 
+def starter_code(problem: Problem, lang: Language) -> str:
+    """Build the exact initial solution text used on disk and in the editor."""
+    snippet = problem.snippets.get(lang.slug, "")
+    if not snippet:
+        available = ", ".join(sorted(problem.snippets)) or "none"
+        raise ValueError(
+            f"LeetCode has no {lang.name} starter code for this problem "
+            f"(available: {available})"
+        )
+    # Only trailing newlines come off: LeetCode's Python snippets end with the
+    # body's indentation, and stripping that leaves a file that will not compile.
+    return _header(problem, lang) + snippet.rstrip("\n") + "\n"
+
+
 def statement_markdown(problem: Problem) -> str:
     """A README for the problem directory, so the statement reads well in an editor."""
     from .render import to_markdown
@@ -92,16 +106,7 @@ def create(
     file = directory / f"{stem}{lang.ext}"
 
     if not file.exists() or overwrite:
-        snippet = problem.snippets.get(lang.slug, "")
-        if not snippet:
-            available = ", ".join(sorted(problem.snippets)) or "none"
-            raise ValueError(
-                f"LeetCode has no {lang.name} starter code for this problem "
-                f"(available: {available})"
-            )
-        # Only trailing newlines come off: LeetCode's Python snippets end with the
-        # body's indentation, and stripping that leaves a file that will not compile.
-        file.write_text(_header(problem, lang) + snippet.rstrip("\n") + "\n")
+        file.write_text(starter_code(problem, lang))
 
     (directory / "README.md").write_text(statement_markdown(problem))
     (directory / ".lc.json").write_text(

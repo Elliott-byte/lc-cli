@@ -18,6 +18,8 @@ from textual.widgets import TextArea
 
 _WORD_MOTIONS = {"w": "action_cursor_word_right", "b": "action_cursor_word_left",
                  "e": "action_cursor_word_right"}
+_GLOBAL_COMMANDS = {"R": "run", "S": "submit", "N": "notes",
+                    "B": "pause", "T": "reset_clock", "X": "reset_code"}
 
 
 class VimTextArea(TextArea):
@@ -31,10 +33,16 @@ class VimTextArea(TextArea):
         self._pending = ""            # d y c g r Z awaiting their second key
         self._count = ""
         self._register: tuple[str, bool] = ("", False)   # text, linewise
+        self.source_language = ""
 
     def set_vim(self, enabled: bool) -> "VimTextArea":
         self.vim_enabled = enabled
         self.mode = "normal" if enabled else "insert"
+        return self
+
+    def set_source_language(self, language: str) -> "VimTextArea":
+        """Remember the solution language even when no syntax grammar loads."""
+        self.source_language = language
         return self
 
     # ---------------------------------------------------------------- status
@@ -59,11 +67,20 @@ class VimTextArea(TextArea):
         tick = getattr(screen, "_tick", None)
         if callable(tick):
             tick()
+        refresh_bindings = getattr(screen, "refresh_bindings", None)
+        if callable(refresh_bindings):
+            refresh_bindings()
 
     # ------------------------------------------------------------------ keys
 
     async def _on_key(self, event: events.Key) -> None:
         if self.mode == "insert":
+            if event.key == "enter":
+                event.stop()
+                event.prevent_default()
+                start, end = self.selection
+                self._replace_via_keyboard(self._indented_newline(), start, end)
+                return
             if event.key == "escape":
                 if not self.vim_enabled:
                     # plain editor: esc belongs to the screen ("Back") — and
@@ -85,11 +102,18 @@ class VimTextArea(TextArea):
             await super()._on_key(event)
             return
 
-        # normal & visual: keys are commands, never text
+        # Normal/Visual is also the editor's global command layer. Route
+        # these before Vim parsing; Insert returned above and types them.
         key = event.key
         char = event.character or ""
         event.stop()
         event.prevent_default()
+        command = _GLOBAL_COMMANDS.get(char)
+        screen = getattr(self, "screen", None)
+        dispatch = getattr(screen, "action_global_command", None)
+        if not self._pending and command is not None and callable(dispatch):
+            dispatch(command)
+            return
 
         if self._pending == "r":
             self._pending = ""
@@ -134,6 +158,17 @@ class VimTextArea(TextArea):
 
         self._normal_key(key, char, count)
         self._touch()
+
+    def _indented_newline(self) -> str:
+        """Carry indentation forward; Python block headers add one level."""
+        row, column = self.cursor_location
+        prefix = self.document.get_line(row)[:column]
+        indent = prefix[:len(prefix) - len(prefix.lstrip(" \t"))]
+        if self.source_language in ("python", "python3") \
+                and prefix.rstrip().endswith(":"):
+            indent += ("\t" if self.indent_type == "tabs"
+                       else " " * self.indent_width)
+        return "\n" + indent
 
     def _touch(self) -> None:
         screen = getattr(self, "screen", None)

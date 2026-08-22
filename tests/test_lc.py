@@ -3197,6 +3197,14 @@ def test_builtin_editor_solves_inside_the_tui(tmp_path, monkeypatch):
             seen["loaded"] = "coinChange" in code.text and app.focused is code
             seen["armed"] = solvetimer.load().armed
 
+            original = code.text
+            code.load_text("    value = 1")
+            code.move_cursor(code.document.end)
+            await pilot.press("enter")
+            seen["plain_newline_indents"] = code.text == "    value = 1\n    "
+            code.load_text(original)
+            code.move_cursor(code.document.end)
+
             code.insert("x")
             await pilot.pause()
             seen["typing_starts"] = solvetimer.load().running
@@ -3246,7 +3254,8 @@ def test_builtin_editor_solves_inside_the_tui(tmp_path, monkeypatch):
 
     assert asyncio.run(solve()) == {
         "screen": "EditScreen", "loaded": True, "armed": True,
-        "typing_starts": True, "cover": True, "resume": True, "note": True,
+        "plain_newline_indents": True, "typing_starts": True,
+        "cover": True, "resume": True, "note": True,
         "tab_indents": True, "accept_stops": True, "back": True, "saved": True,
     }
 
@@ -3277,6 +3286,11 @@ def test_builtin_editor_speaks_vim(tmp_path, monkeypatch):
             # twin class and fail for reasons that have nothing to do with vim.
             ok["vim+syntax"] = (getattr(code, "mode", "") == "normal"
                                 and code.language == "python")
+            code.load_text("def solve():")
+            code.move_cursor(code.document.end)
+            await pilot.press("A", "enter")
+            ok["python newline indents"] = code.text == "def solve():\n    "
+            await pilot.press("escape")
             code.load_text("alpha beta gamma\nsecond line\nthird line\n")
             code.move_cursor((0, 0)); await pilot.pause()
 
@@ -3317,6 +3331,135 @@ def test_builtin_editor_speaks_vim(tmp_path, monkeypatch):
 
     result = asyncio.run(drive())
     assert all(result.values()), {k: v for k, v in result.items() if not v}
+
+
+def test_vim_normal_mode_uses_easy_global_commands(tmp_path, monkeypatch):
+    """Outside Insert, editor commands use single non-conflicting letters and
+    the footer follows the mode. Insert must restore ctrl chords so uppercase
+    code remains text; the displayed normal-mode commands must also click."""
+    import asyncio
+    import json as _json
+    import time as _time
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    ws = tmp_path / "ws"; ws.mkdir()
+    (tmp_path / "config.json").write_text(_json.dumps(
+        {"workspace": str(ws), "editor": "builtin", "builtin_vim": True}))
+
+    from lc import store, tui
+    from lc.api import ProblemSummary
+
+    store.replace_index([ProblemSummary(
+        PROBLEM.frontend_id, PROBLEM.title, PROBLEM.slug, PROBLEM.difficulty,
+        PROBLEM.ac_rate, PROBLEM.paid_only, None, PROBLEM.tags)])
+    store.put_statement(PROBLEM)
+    store.set_meta("daily_date", _time.strftime("%Y-%m-%d", _time.gmtime()))
+    store.set_meta("daily_slug", PROBLEM.slug)
+
+    async def drive():
+        app = tui.LeetCodeTUI()
+        async with app.run_test(size=(170, 45)) as pilot:
+            await pilot.pause()
+            app._show(PROBLEM); app.current_slug = PROBLEM.slug
+            await pilot.pause()
+            app.action_pick(); await pilot.pause()
+            screen = app.screen
+            called = []
+            screen.action_run = lambda: called.append("run")
+            screen.action_submit = lambda: called.append("submit")
+            screen.action_notes = lambda: called.append("note")
+            screen.action_pause = lambda: called.append("pause")
+            screen.action_reset_clock = lambda: called.append("reset")
+            screen.action_reset_code = lambda: called.append("reset code")
+
+            def displays():
+                return {app.get_key_display(binding): binding.description
+                        for _, binding, _enabled, _tip
+                        in screen.active_bindings.values() if binding.show}
+
+            normal = displays()
+            code = screen.query_one("#edit-code")
+            code.load_text("x")
+            code.move_cursor((0, 0))
+            await pilot.press("r", "R")
+            replaced = code.text
+            await pilot.press("R", "S", "N", "B", "T", "X")
+            await pilot.pause()
+            await pilot.press("ctrl+r"); await pilot.pause()
+            button = next(k for k in screen.query("FooterKey")
+                          if getattr(k, "key_display", "") == "R")
+            await pilot.click(button); await pilot.pause()
+
+            code.load_text("")
+            await pilot.press("i"); await pilot.pause()
+            insert = displays()
+            await pilot.press("R", "S", "N", "B", "T", "X")
+            await pilot.pause()
+            return normal, insert, called, replaced, code.text
+
+    normal, insert, called, replaced, text = asyncio.run(drive())
+    assert {"R", "S", "N", "B", "T", "X"} <= normal.keys(), normal
+    assert {"^r", "^s", "^n", "^b", "^g"} <= insert.keys(), insert
+    assert called == ["run", "submit", "note", "pause", "reset",
+                      "reset code", "run", "run"]
+    assert replaced == "R"
+    assert text == "RSNBTX"
+
+
+def test_reset_code_confirms_and_keeps_the_old_buffer_undoable(
+        tmp_path, monkeypatch):
+    """Reset is intentionally one Normal-mode key, but it must not turn one
+    stray press into lost work. Confirmation replaces only the live buffer,
+    and Vim undo must restore the answer that was there before it."""
+    import asyncio
+    import json as _json
+    import time as _time
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    ws = tmp_path / "ws"; ws.mkdir()
+    (tmp_path / "config.json").write_text(_json.dumps(
+        {"workspace": str(ws), "editor": "builtin", "builtin_vim": True}))
+
+    from lc import editscreen, store, tui, workspace
+    from lc.api import ProblemSummary
+
+    store.replace_index([ProblemSummary(
+        PROBLEM.frontend_id, PROBLEM.title, PROBLEM.slug, PROBLEM.difficulty,
+        PROBLEM.ac_rate, PROBLEM.paid_only, None, PROBLEM.tags)])
+    store.put_statement(PROBLEM)
+    store.set_meta("daily_date", _time.strftime("%Y-%m-%d", _time.gmtime()))
+    store.set_meta("daily_slug", PROBLEM.slug)
+
+    async def drive():
+        app = tui.LeetCodeTUI()
+        async with app.run_test(size=(170, 45)) as pilot:
+            await pilot.pause()
+            app._show(PROBLEM); app.current_slug = PROBLEM.slug
+            await pilot.pause()
+            app.action_pick(); await pilot.pause()
+            edit = app.screen
+            code = edit.query_one("#edit-code")
+            old = "class Solution:\n    pass\n"
+            code.load_text(old)
+
+            button = next(k for k in edit.query("FooterKey")
+                          if getattr(k, "key_display", "") == "X")
+            await pilot.click(button); await pilot.pause()
+            asked = isinstance(app.screen, editscreen.ResetCodeScreen)
+            unchanged = code.text == old
+            await pilot.press("escape"); await pilot.pause()
+            cancelled = isinstance(app.screen, editscreen.EditScreen) \
+                and code.text == old
+
+            await pilot.press("X"); await pilot.pause()
+            await pilot.press("y"); await pilot.pause()
+            reset = code.text == workspace.starter_code(
+                PROBLEM, edit.solution.language)
+            await pilot.press("u"); await pilot.pause()
+            undone = code.text == old
+            return asked, unchanged, cancelled, reset, undone
+
+    assert asyncio.run(drive()) == (True, True, True, True, True)
 
 
 def test_builtin_editor_clock_keys(tmp_path, monkeypatch):
@@ -3627,6 +3770,65 @@ def test_a_judge_that_explodes_does_not_take_the_session(tmp_path, monkeypatch):
 
     result = asyncio.run(drive())
     assert all(result.values()), {k: v for k, v in result.items() if not v}
+
+
+def test_judging_covers_the_editor_and_cannot_be_started_twice(tmp_path, monkeypatch):
+    """Run/Submit must switch away from the live controls while LeetCode is
+    working. Leaving the footer active made an impatient second click enqueue
+    another request before the first verdict arrived."""
+    import asyncio
+    import json as _json
+    import threading
+    import types
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    ws = tmp_path / "ws"; ws.mkdir()
+    (tmp_path / "config.json").write_text(_json.dumps(
+        {"workspace": str(ws), "editor": "builtin", "builtin_vim": False}))
+
+    from lc import editscreen, tui
+    from lc.api import JudgeResult
+
+    entered = threading.Event()
+    release = threading.Event()
+    calls = []
+
+    def run(*_args, **_kwargs):
+        calls.append("run")
+        entered.set()
+        assert release.wait(5), "the test must release the fake judge"
+        return JudgeResult(raw={}, accepted=True, status="Accepted", is_run=True)
+
+    async def drive():
+        app = tui.LeetCodeTUI()
+        async with app.run_test(size=(150, 40)) as pilot:
+            await pilot.pause()
+            app._show(PROBLEM); app.current_slug = PROBLEM.slug
+            await pilot.pause()
+            app.action_pick(); await pilot.pause()
+            app.client = types.SimpleNamespace(
+                authenticated=True, close=lambda: None, run=run)
+            app.screen.action_run()
+            for _ in range(20):
+                await pilot.pause(0.05)
+                if entered.is_set():
+                    break
+            covered = isinstance(app.screen, editscreen.JudgeScreen)
+            await pilot.press("ctrl+r", "R"); await pilot.pause()
+            while_judging = list(calls)
+            release.set()
+            for _ in range(30):
+                await pilot.pause(0.05)
+                if isinstance(app.screen, editscreen.EditScreen):
+                    break
+            returned = isinstance(app.screen, editscreen.EditScreen)
+            app.client = types.SimpleNamespace(
+                authenticated=False, close=lambda: None)
+            app.screen.action_submit(); await pilot.pause()
+            preflight_returned = isinstance(app.screen, editscreen.EditScreen)
+            return covered, while_judging, returned, preflight_returned
+
+    assert asyncio.run(drive()) == (True, ["run"], True, True)
 
 
 def test_the_editor_footer_never_advertises_a_dead_key(tmp_path, monkeypatch):

@@ -37,7 +37,7 @@ from rich.panel import Panel
 from rich.text import Text
 
 from . import fx, gitsync, notes, review, solvetimer, store, workspace
-from .editscreen import EditScreen, PauseScreen
+from .editscreen import EditScreen, JudgeScreen, PauseScreen, ResetCodeScreen
 from .api import (
     JudgeResult,
     LeetCode,
@@ -814,7 +814,8 @@ class LeetCodeTUI(App):
         # through and flip the hidden Problems/Review tabs when the editor
         # needed an indent, and the footer would advertise keys that either
         # do nothing or type themselves into the code.
-        if isinstance(self.screen, (EditScreen, PauseScreen)):
+        if isinstance(self.screen,
+                      (EditScreen, JudgeScreen, PauseScreen, ResetCodeScreen)):
             return False
         return True
 
@@ -1232,19 +1233,20 @@ class LeetCodeTUI(App):
         self.query_one("#right", VerticalScroll).scroll_home(animate=False)
         self.sub_title = f"{problem.frontend_id}. {problem.title}"
 
-    def _judge(self, submit: bool) -> None:
+    def _judge(self, submit: bool) -> bool:
         if not self.current:
-            return
+            return False
         if not self.client.authenticated:
             self.notify("not logged in — run `lc login` first", severity="error")
-            return
+            return False
         solution = workspace.load(self.config, self.current)
         if solution is None:
             self.notify("no solution file yet — press enter to create one",
                         severity="warning")
-            return
+            return False
         self.set_status("submitting…" if submit else "running samples…", "yellow")
         self._judge_worker(self.current, solution, submit)
+        return True
 
     @work(thread=True, exclusive=True, group="judge")
     def _judge_worker(
@@ -1262,6 +1264,7 @@ class LeetCodeTUI(App):
                     problem, solution.language.slug, code, data_input
                 )
         except LeetCodeError as exc:
+            self.call_from_thread(self._judge_finished)
             self.call_from_thread(self.notify, escape(str(exc)), severity="error")
             self.call_from_thread(self.set_status, "judge failed", "red")
             return
@@ -1271,6 +1274,7 @@ class LeetCodeTUI(App):
             # but an unexpected one here would take the whole session down
             # mid-solve — the app dies, the buffer with it. Report it in
             # full (never silently) and stay alive.
+            self.call_from_thread(self._judge_finished)
             self.call_from_thread(
                 self.notify, escape(f"{type(exc).__name__}: {exc}"),
                 title="judge failed unexpectedly", severity="error", timeout=15)
@@ -1288,7 +1292,13 @@ class LeetCodeTUI(App):
                     self.notify, escape(f"could not record the attempt — "
                                         f"{type(exc).__name__}: {exc}"),
                     severity="warning", timeout=12)
+        self.call_from_thread(self._judge_finished)
         self.call_from_thread(self._show_result, result, cases)
+
+    def _judge_finished(self) -> None:
+        """Return from the in-flight cover before presenting the verdict."""
+        if isinstance(self.screen, JudgeScreen):
+            self.screen.dismiss(None)
 
     def _record_submit(self, problem: Problem, result: JudgeResult) -> None:
         """File a verdict away: the index's mark, the deck, the clock."""

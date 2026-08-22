@@ -213,6 +213,9 @@ never submitted by accident.
 - `create` refreshes `README.md` + `.lc.json` every time but never touches an
   existing solution file unless `overwrite`. Python snippets keep their
   trailing indentation (`rstrip("\n")` only) — stripping it breaks compiles.
+- `starter_code` is the single constructor for header + snippet text. The
+  built-in editor's reset and `create(overwrite=True)` must use the same path,
+  or reset can silently produce a different file from a fresh pick.
 - `strip_header` removes only a leading comment block that contains the
   problem URL — a user's own comment is never deleted.
 
@@ -260,6 +263,14 @@ never submitted by accident.
   and toasts rather than raising — esc then stays on the screen instead of
   leaving with the buffer unwritten and unrecoverable, and run/submit do
   not judge code the buffer never reached.
+- Run/Submit push an opaque `JudgeScreen` before starting the worker, so the
+  live controls cannot enqueue duplicate requests. Every worker exit path
+  must call `_judge_finished` before its toast/result; `_judge()` returns
+  False for preflight failures so `_start_judge` removes the cover instead
+  of trapping the user behind a wait that never began.
+- `X Reset code` is Normal/Visual-only and confirms before replacing the live
+  buffer. It uses one TextArea history batch rather than `load_text`, so `u`
+  restores the previous answer; the disk file changes only on a later save.
 - Clock keys: ctrl+b pauses *running* clocks behind the cover and starts
   stopped ones (never a no-op key; covering a stopped clock would hide the
   statement with nothing counting), ctrl+g resets. `space` cannot be the
@@ -269,6 +280,17 @@ never submitted by accident.
   and Footer clicks simulate one key, so ZZ uses a priority synthetic F24
   action with `key_display="ZZ"`; binding a real `Z` would steal the first
   half from `VimTextArea`. `check_action` ensures only one exit is shown.
+- Command bindings also swap by mode: Vim Normal/Visual shows and accepts
+  `R S N B T X`; Insert/plain shows the ctrl chords. The uppercase keys are
+  non-conflicting with the supported Vim subset and are dispatched by
+  `VimTextArea` only after its Insert branch and only with no pending Vim
+  operator (`rR` must still replace with uppercase R). Textual does not
+  reliably route uppercase screen bindings and omits them from Footer, so
+  F18-F23 provide clickable display aliases. The physical ctrl bindings stay
+  enabled and hidden in every mode, while F13-F17 are their Insert/plain
+  display aliases; disabling the ctrl actions to hide them also disables the
+  old keys. Mode changes must call `refresh_bindings()` or the footer lies
+  until refocus.
 - **While it is on top, the app's bindings stand down** via
   `LeetCodeTUI.check_action` — the priority `tab` binding would otherwise
   reach through the editor and flip the hidden Problems/Review tabs when
@@ -284,6 +306,11 @@ never submitted by accident.
   permanent insert mode, esc → screen Back (a bare TextArea would eat esc
   as its own focus-next). Vim-inclusive visual ranges: Textual selections
   are end-exclusive, so y/d/c extend the end by one column.
+- Textual's code TextArea inserts a bare newline, so `VimTextArea` supplies
+  indentation in both Vim insert and plain modes: preserve the current
+  leading whitespace, and add one level after a Python line ending in `:`.
+  `source_language` is separate from syntax grammar because highlighting may
+  fall back to plain text while editing behaviour must remain language-aware.
 - Grammar sdists are wheel-first upstreams whose source builds are broken
   (missing scanner objects/headers) — the brew formula ships
   tree-sitter-python as a **platform wheel**; never add a grammar as an

@@ -135,15 +135,26 @@ typing.
 
 | Key | Action |
 | --- | --- |
-| `ctrl+r` | Run the samples |
-| `ctrl+s` | Submit |
-| `ctrl+n` | Toggle the note split below the code |
-| `ctrl+b` | Pause the clock behind a cover — and start it again from anywhere it is stopped |
-| `ctrl+g` | Reset the clock to 00:00 |
+| `R` / `ctrl+r` | Run the samples |
+| `S` / `ctrl+s` | Submit |
+| `N` / `ctrl+n` | Toggle the note split below the code |
+| `B` / `ctrl+b` | Pause the clock behind a cover — and start it again from anywhere it is stopped |
+| `T` / `ctrl+g` | Reset the clock to 00:00 |
+| `X` | Restore the starter code after confirmation; `u` brings the old buffer back |
 | `ZZ` | Save and go back — shown beside Run in the footer; with Vim keys off it becomes `esc Back` |
 
-The footer shows `ZZ Back` beside the other editor commands and it works as a
-mouse button too. The status line stays with the current Vim mode.
+In Vim Normal/Visual mode the footer uses the easy single-letter set
+`R S N B T X`; Insert mode switches it back to the ctrl chords so typing stays
+safe. The ctrl chords remain valid in every mode for compatibility. Every
+footer command, including `ZZ Back`, also works as a mouse button. The status
+line stays with the current Vim mode.
+`X Reset code` asks first, then restores the current language's LeetCode
+starter in one undoable edit; it does not overwrite the solution file until
+the editor is saved.
+Enter keeps the current indentation; after a Python line ending in `:`, the
+editor starts the new line one level deeper.
+Run and Submit immediately switch to a waiting screen until LeetCode answers,
+so a second click or keypress cannot accidentally send the request again.
 
 It highlights Python and **speaks a Vim subset** by default: modes,
 `hjkl w b e 0 ^ $ gg G` with counts, `i a I A o O s x r`,

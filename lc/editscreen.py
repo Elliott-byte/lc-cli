@@ -20,9 +20,9 @@ from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.css.query import NoMatches
 from textual.screen import ModalScreen, Screen
-from textual.widgets import Footer, Static, TextArea
+from textual.widgets import Button, Footer, LoadingIndicator, Static, TextArea
 
-from . import notes, solvetimer, store
+from . import notes, solvetimer, store, workspace
 from .browser import open_url
 from .vimtext import VimTextArea
 from .render import problem_header, render_statement
@@ -63,6 +63,74 @@ class PauseScreen(ModalScreen[None]):
         self.dismiss(None)
 
 
+class JudgeScreen(ModalScreen[None]):
+    """Opaque in-flight cover: one judge request, no live controls beneath."""
+
+    CSS = """
+    JudgeScreen { background: $background; align: center middle; }
+    #judge-box {
+        width: 34; height: 7; padding: 1 3;
+        align: center middle;
+        background: $surface; border: round $accent;
+    }
+    #judge-box > Static { width: 1fr; text-align: center; }
+    #judge-box > LoadingIndicator { height: 1; margin-top: 1; }
+    """
+
+    def __init__(self, submit: bool) -> None:
+        super().__init__()
+        self.submit = submit
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="judge-box"):
+            yield Static("Submitting…" if self.submit else "Running samples…")
+            yield LoadingIndicator()
+
+
+class ResetCodeScreen(ModalScreen[bool]):
+    """Confirm the destructive-looking edit before making it undoable."""
+
+    CSS = """
+    ResetCodeScreen { background: $background 70%; align: center middle; }
+    #reset-code-box {
+        width: 48; height: auto; padding: 1 2;
+        background: $surface; border: round $warning;
+    }
+    #reset-code-title { width: 1fr; text-style: bold; }
+    #reset-code-detail { width: 1fr; color: $text-muted; margin: 1 0; }
+    #reset-code-actions { width: 1fr; height: 3; align-horizontal: right; }
+    #reset-code-actions Button { margin-left: 1; }
+    """
+
+    BINDINGS = [
+        Binding("y,enter", "confirm", "Reset"),
+        Binding("n,escape", "cancel", "Cancel"),
+    ]
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="reset-code-box"):
+            yield Static("Reset this solution?", id="reset-code-title")
+            yield Static("Restore LeetCode's starter code. Undo still restores "
+                         "your current buffer.", id="reset-code-detail")
+            with Horizontal(id="reset-code-actions"):
+                yield Button("Cancel", id="reset-code-cancel")
+                yield Button("Reset", id="reset-code-confirm", variant="warning")
+
+    def action_confirm(self) -> None:
+        self.dismiss(True)
+
+    def action_cancel(self) -> None:
+        self.dismiss(False)
+
+    @on(Button.Pressed, "#reset-code-confirm")
+    def _confirm_button(self) -> None:
+        self.action_confirm()
+
+    @on(Button.Pressed, "#reset-code-cancel")
+    def _cancel_button(self) -> None:
+        self.action_cancel()
+
+
 def statement_body(problem) -> RenderableType:
     """Header + statement + hints, the same content the main screen shows."""
     parts: list[RenderableType] = [
@@ -96,12 +164,39 @@ class EditScreen(Screen):
     """
 
     BINDINGS = [
-        # priority: a TextArea eats plain keys, and must not eat these.
-        Binding("ctrl+r", "run", "Run", priority=True),
-        Binding("ctrl+s", "submit", "Submit", priority=True),
-        Binding("ctrl+n", "notes", "Note", priority=True),
-        Binding("ctrl+b", "pause", "Pause", priority=True),
-        Binding("ctrl+g", "reset_clock", "Reset clock", priority=True),
+        # Ctrl chords remain compatible in every mode but stay out of the
+        # dynamic footer; F13-F17 are their clickable Insert/plain labels.
+        Binding("ctrl+r", "editor_command('run')", show=False, priority=True),
+        Binding("ctrl+s", "editor_command('submit')", show=False, priority=True),
+        Binding("ctrl+n", "editor_command('notes')", show=False, priority=True),
+        Binding("ctrl+b", "editor_command('pause')", show=False, priority=True),
+        Binding("ctrl+g", "editor_command('reset_clock')", show=False,
+                priority=True),
+        Binding("f13", "insert_command('run')", "Run",
+                key_display="^r", priority=True),
+        Binding("f14", "insert_command('submit')", "Submit",
+                key_display="^s", priority=True),
+        Binding("f15", "insert_command('notes')", "Note",
+                key_display="^n", priority=True),
+        Binding("f16", "insert_command('pause')", "Pause",
+                key_display="^b", priority=True),
+        Binding("f17", "insert_command('reset_clock')", "Reset clock",
+                key_display="^g", priority=True),
+        # VimTextArea routes Normal/Visual R/S/N/B/T/X itself. Textual omits
+        # uppercase bindings from Footer, so synthetic function keys provide
+        # the matching clickable display entries.
+        Binding("f19", "global_command('run')", "Run",
+                key_display="R", priority=True),
+        Binding("f20", "global_command('submit')", "Submit",
+                key_display="S", priority=True),
+        Binding("f21", "global_command('notes')", "Note",
+                key_display="N", priority=True),
+        Binding("f22", "global_command('pause')", "Pause",
+                key_display="B", priority=True),
+        Binding("f23", "global_command('reset_clock')", "Reset clock",
+                key_display="T", priority=True),
+        Binding("f18", "global_command('reset_code')", "Reset code",
+                key_display="X", priority=True),
         # FooterKey clicks simulate their binding's key. F24 is an internal,
         # priority-only handle so the button can invoke Back without making
         # one real Z steal the first half of Vim's ZZ command.
@@ -120,7 +215,21 @@ class EditScreen(Screen):
             return not self.app.config.vim_keys_on
         if action == "vim_back":
             return self.app.config.vim_keys_on
+        global_mode = self._global_mode()
+        if action == "global_command":
+            return global_mode
+        if action == "insert_command":
+            return not global_mode
         return True
+
+    def _global_mode(self) -> bool:
+        if not self.app.config.vim_keys_on:
+            return False
+        try:
+            area = self.query_one("#edit-code", VimTextArea)
+        except NoMatches:
+            return False
+        return area.mode != "insert"
 
     def __init__(self, problem, solution) -> None:
         super().__init__()
@@ -138,6 +247,8 @@ class EditScreen(Screen):
                 lang = _TS_LANG.get(self.solution.language.slug)
                 area = VimTextArea.code_editor(
                     self.solution.code, id="edit-code",
+                ).set_source_language(
+                    self.solution.language.slug
                 ).set_vim(self.app.config.vim_keys_on)
                 if lang:
                     # available_languages lists names textual KNOWS, not
@@ -159,6 +270,7 @@ class EditScreen(Screen):
             solvetimer.begin(self.problem.slug)
         self.set_interval(1.0, self._tick)
         self._tick()
+        self.refresh_bindings()
 
     # -------------------------------------------------------------- clock
 
@@ -249,6 +361,29 @@ class EditScreen(Screen):
         self._tick()
         self.notify(f"clock reset — {solvetimer.clock(fresh.accum)}")
 
+    def action_reset_code(self) -> None:
+        """Restore starter code in one undoable edit after confirmation."""
+        def reset(confirmed: bool | None) -> None:
+            if not confirmed:
+                return
+            area = self.query_one("#edit-code", VimTextArea)
+            try:
+                code = workspace.starter_code(
+                    self.problem, self.solution.language)
+            except ValueError as exc:
+                self.notify(str(exc), severity="warning")
+                return
+            # Bracket the whole replacement as one history batch. load_text()
+            # would clear history and make the answer impossible to recover.
+            area.history.checkpoint()
+            area.replace(code, (0, 0), area.document.end,
+                         maintain_selection_offset=False)
+            area.history.checkpoint()
+            area.move_cursor(area.document.end)
+            area.focus()
+
+        self.app.push_screen(ResetCodeScreen(), reset)
+
     def action_open_web(self) -> None:
         if not open_url(self.problem.url):
             self.notify(f"could not open a browser — {self.problem.url}",
@@ -272,12 +407,19 @@ class EditScreen(Screen):
     def action_run(self) -> None:
         # Judging what is on disk when the buffer could not get there would
         # report on code the user is not looking at.
-        if self._save():
-            self.app._judge(submit=False)
+        self._start_judge(submit=False)
 
     def action_submit(self) -> None:
-        if self._save():
-            self.app._judge(submit=True)
+        self._start_judge(submit=True)
+
+    def _start_judge(self, submit: bool) -> None:
+        if not self._save():
+            return
+        self.app.push_screen(JudgeScreen(submit))
+        if not self.app._judge(submit):
+            # Authentication and missing-solution checks happen in the app.
+            # They report their own warning; uncover the editor immediately.
+            self.app.screen.dismiss(None)
 
     # -------------------------------------------------------------- notes
 
@@ -332,3 +474,15 @@ class EditScreen(Screen):
     def action_vim_back(self) -> None:
         """The clickable footer entry for Vim's two-keystroke ZZ command."""
         self.action_back()
+
+    def action_global_command(self, command: str) -> None:
+        """Dispatch a Normal/Visual shortcut to the existing editor action."""
+        getattr(self, f"action_{command}")()
+
+    def action_insert_command(self, command: str) -> None:
+        """Dispatch a clickable Insert/plain footer command."""
+        getattr(self, f"action_{command}")()
+
+    def action_editor_command(self, command: str) -> None:
+        """Keep the original ctrl chords working in every editor mode."""
+        getattr(self, f"action_{command}")()

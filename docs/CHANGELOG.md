@@ -11,6 +11,22 @@ every commit bumps the version (early tags grouped a few commits); tags
 the top section for the current day — or start a new one. Say what changed
 and, when behaviour reversed, what it used to do.
 
+## 0.7.70 — 2026-08-22 · new lines keep their indentation
+
+- Vim Normal/Visual mode now has a clickable `X Reset code` command. It asks
+  for confirmation, restores the current language's LeetCode starter code as
+  one buffer edit, and remains recoverable with `u` before saving.
+- The built-in editor now carries the current indentation onto a new line
+  and adds one level after a Python block header ending in `:`. Previously
+  Enter always returned to column zero, leaving every line to be tabbed by
+  hand in both Vim insert mode and the plain editor.
+- Vim Normal/Visual mode now exposes `R S N B T` for Run, Submit, Note,
+  Pause and Reset, with the same clickable labels in the footer. Insert and
+  plain modes retain the ctrl chords so uppercase code cannot fire commands.
+- Run and Submit now cover the built-in editor with an in-flight screen until
+  the verdict or error returns. The live footer used to remain underneath,
+  making impatient clicks or keypresses start the judge repeatedly.
+
 ## 0.7.69 — 2026-08-22 · ZZ joins the editor footer
 
 - With Vim keys on, the built-in editor now shows a clickable `ZZ Back`
