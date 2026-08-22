@@ -79,6 +79,7 @@ Everything lc owns lives under `$LC_HOME` (default `~/.lc`):
 | `cache.db` | sqlite cache (problem index, statements, meta). Disposable. |
 | `review-repo/` | Private clone used by sync. **Disposable** — every sync resets it to the remote. |
 | `timer.json` | The one active solve clock. Shared by TUI, CLI and Vim, hence a file. |
+| `<workspace>/<dir>/notes.md` | That problem's note cards — one `##` heading per card. User data in the user's own workspace, not lc's. |
 
 Solutions live in `~/leetcode/<0322-coin-change>/` with `solution.<ext>`,
 `README.md` (rendered statement) and `.lc.json` (slug, lang, file). The
@@ -210,6 +211,15 @@ never submitted by accident.
   trailing indentation (`rstrip("\n")` only) — stripping it breaks compiles.
 - `strip_header` removes only a leading comment block that contains the
   problem URL — a user's own comment is never deleted.
+
+### `lc/notes.py` — note cards
+- One markdown file per problem (`notes.md`, in the problem's workspace
+  directory), one `##` heading per card. `open_card` stamps a heading and
+  **reuses a still-blank newest card**, so two submits before one written
+  word do not litter the file. Prose above the first heading is not a card.
+- Written by `lc note` / Vim's `\n` (split under the solution — the
+  submitted code stays visible); read by the TUI's `n` (cards, newest
+  first). The workspace's own git versions it; lc never syncs it.
 
 ### `lc/editors.py` — the Vim plugin (one file, installed by `lc setup vim`)
 - Everything is buffer-local, attached by an autocmd when the buffer's

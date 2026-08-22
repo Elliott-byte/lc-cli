@@ -11,6 +11,14 @@ every commit bumps the version (early tags grouped a few commits); tags
 the top section for the current day — or start a new one. Say what changed
 and, when behaviour reversed, what it used to do.
 
+## 0.7.52 — 2026-08-22 · note cards
+
+- Every attempt can leave a note: `lc note` (or `\n` in Vim, which opens
+  `notes.md` in a split under the solution so the submitted code stays on
+  screen) stamps a card heading — date · verdict · language — and you write
+  under it. `n` in the TUI's list shows that problem's cards, newest first.
+  Plain markdown in the problem's directory; your workspace git owns it.
+
 ## 0.7.49–0.7.50 — 2026-08-22 · stale clocks, deduped chrome
 
 - `\z` pauses, full stop — as a toggle it silently *started* a stopped

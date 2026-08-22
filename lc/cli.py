@@ -19,7 +19,7 @@ from rich.text import Text
 
 from datetime import date
 
-from . import __version__, browser, editors, fx, gitsync, review, solvetimer, store
+from . import __version__, browser, editors, fx, gitsync, notes, review, solvetimer, store
 from .api import (
     AuthError,
     JudgeResult,
@@ -707,6 +707,44 @@ def pick(
 
 
 @app.command()
+def note(
+    ref: str = typer.Argument("", help="problem id, slug or title"),
+    edit: bool = typer.Option(True, "--edit/--no-edit", help="open in $EDITOR"),
+) -> None:
+    """Write a note about your latest attempt (a card in notes.md).
+
+    Stamps a fresh card heading — date, verdict, language — and opens the
+    file. In Vim, \n does the same with the solution still on screen, so
+    the code you just submitted is in front of you while you write.
+    """
+    config = load_config()
+    if not ref:
+        found = _current_dir_problem()
+        if not found:
+            die("no problem given and this is not a problem directory")
+            return
+        slug, lang, path = found
+        directory = path.parent
+    else:
+        with client() as lc:
+            problem = resolve_problem(ref, lc)
+        solution = workspace.load(config, problem)
+        if solution is None:
+            die(f"no solution file yet for {problem.title}",
+                f"run `lc pick {ref}` first")
+            return
+        slug, lang, directory = problem.slug, solution.language, solution.directory
+    known = store.find(slug)
+    verdict = {"ac": "Accepted", "notac": "Not accepted"}.get(
+        known.status if known else None, "")
+    path = notes.open_card(directory, verdict, lang.slug)
+    console.print(Text(f"✎ {path}", style="dim"))
+    if edit and not workspace.open_in_editor(config, path):
+        console.print(Text("  (set $EDITOR or `lc config editor <cmd>` to auto-open)",
+                           style="dim"))
+
+
+@app.command()
 def edit(ref: str = typer.Argument("", help="problem id, slug or title")) -> None:
     """Open an existing solution file."""
     config = load_config()
@@ -860,6 +898,8 @@ def submit(
         if stopped is not None and stopped.accum > 0:
             console.print(Text(f"  ⏱ solved in {solvetimer.clock(stopped.accum)}",
                                style="dim"))
+    console.print(Text("  ✎ `lc note` (\\n in Vim) — write down what this "
+                       "attempt taught you", style="dim"))
     if note:
         console.print(Text(f"  {note}", style="dim"))
         if not autograde:

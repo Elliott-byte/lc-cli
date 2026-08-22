@@ -32,9 +32,10 @@ from textual.strip import Strip
 from rich.console import Group, RenderableType
 from rich.segment import Segment
 from rich.markup import escape
+from rich.panel import Panel
 from rich.text import Text
 
-from . import fx, gitsync, review, solvetimer, store, workspace
+from . import fx, gitsync, notes, review, solvetimer, store, workspace
 from .api import (
     JudgeResult,
     LeetCode,
@@ -522,6 +523,7 @@ class LeetCodeTUI(App):
         Binding("r", "run", "Run"),
         Binding("s", "submit", "Submit"),
         Binding("m", "save_review", "Save"),
+        Binding("n", "view_notes", "Notes"),
         # Priority: the Screen's own tab binding (focus-next) would win otherwise.
         Binding("tab", "switch_pane", "Review", priority=True),
         Binding("question_mark", "toggle_keys", "Keys"),
@@ -556,6 +558,9 @@ class LeetCodeTUI(App):
         # What the problem's solved-state was when the editor opened — the
         # return check needs "became solved", not "is solved".
         self._timer_was_solved = False
+        # Which problem's notes fill the right pane, "" when it shows the
+        # statement — pressing n again (or moving the cursor) restores it.
+        self._notes_for = ""
         self._timer_was_passed = False
         #: (local date, UTC date) at the last look — the deck follows the
         #: first, the daily challenge rotates on the second.
@@ -776,6 +781,7 @@ class LeetCodeTUI(App):
         if event.data_table is not self._active_table():
             return
         if event.row_key is not None and event.row_key.value:
+            self._notes_for = ""
             self.load_problem(str(event.row_key.value))
 
     @on(DataTable.RowSelected, "#list")
@@ -994,6 +1000,44 @@ class LeetCodeTUI(App):
         i = STATUSES.index(self.status_filter)
         self.status_filter = STATUSES[(i + 1) % len(STATUSES)]
         self.refresh_list()
+
+    def action_view_notes(self) -> None:
+        """`n` — this problem's notes as cards; n again restores the statement."""
+        slug = self.current_slug
+        if not slug:
+            return
+        summary = store.find(slug)
+        if summary is None:
+            return
+        if self._notes_for == slug:
+            self._notes_for = ""
+            self.load_problem(slug)
+            return
+        directory = self.config.workspace_path / workspace.slug_dir_name(
+            summary.frontend_id, slug)
+        cards = notes.load(directory)
+        if not cards:
+            self.notify("no notes yet — after a submit, `lc note` "
+                        "(or \\n in Vim) writes one")
+            return
+        body: list[RenderableType] = [
+            Text(f"[{summary.frontend_id}] {summary.title} — notes",
+                 style="bold"),
+            Text(""),
+        ]
+        # Newest first: the card you just wrote is the one you came to read.
+        for card in reversed(cards):
+            body.append(Panel(
+                Text(card.body or "(empty — finish it with `lc note`)"),
+                title=Text(card.title, style="bold cyan"),
+                title_align="left",
+                border_style="cyan",
+                padding=(0, 1),
+            ))
+            body.append(Text(""))
+        self.query_one("#statement", Static).update(Group(*body))
+        self.query_one("#right", VerticalScroll).scroll_home(animate=False)
+        self._notes_for = slug
 
     def action_open_web(self) -> None:
         if self.current and not open_url(self.current.url):

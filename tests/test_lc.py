@@ -402,6 +402,10 @@ def test_vim_quit_never_fights_the_statement_terminal():
     # vertical split, so the pane carries only its own `q close` and the
     # clock skips it entirely.
     assert "call s:LcKeyHints([['', 'q close']])" in text
+    # \n writes a note card with the submitted code still on screen: the
+    # split opens under the solution, and `lc note` stamps the heading.
+    assert "<leader>n :call <SID>LcNote()" in text
+    assert "lc note --no-edit" in text and "belowright split" in text
     assert text.count("LcClockText") >= 2 and "if exists('b:lc_statement_for')" in text
     assert "return \' \'" in text          # the fall-through: plain space
 
@@ -1842,7 +1846,8 @@ def test_the_footer_carries_the_loop_and_hides_the_rest():
 
     app_shown = {b.key for b in LeetCodeTUI.BINDINGS if b.show}
     app_hidden = {b.key for b in LeetCodeTUI.BINDINGS if not b.show}
-    assert app_shown == {"slash", "p", "r", "s", "m", "tab", "question_mark", "q"}
+    assert app_shown == {"slash", "p", "r", "s", "m", "n", "tab",
+                         "question_mark", "q"}
     # Everything taken off the footer must still be bound, not deleted.
     for key in ("c", "d", "t", "o", "D", "ctrl+r", "R"):
         assert key in app_hidden, key
@@ -2910,3 +2915,101 @@ def test_solution_header_is_one_line(tmp_path, monkeypatch):
     old = ("# [1] Two Sum\n# Easy  ·  50.0% acceptance\n"
            "# https://leetcode.com/problems/two-sum/\n\nx = 1\n")
     assert workspace.strip_header(old, resolve("python3")) == "x = 1\n"
+
+
+def test_notes_cards_append_parse_and_reuse_blank(tmp_path):
+    """notes.md: one ## heading per card; a blank newest card is reused so
+    two submits before one written word do not litter the file."""
+    import time as _time
+
+    from lc import notes
+
+    header = notes.stamp_header("Accepted", "python3",
+                                _time.localtime(1787600000))
+    assert header.startswith("## 2026-08-2") and header.endswith(
+        "· Accepted · python3")
+
+    p = notes.open_card(tmp_path, "Accepted", "python3")
+    assert notes.open_card(tmp_path) == p          # blank card: reused
+    assert len(notes.load(tmp_path)) == 1
+    p.write_text(p.read_text() + "dp over amounts\n")
+    notes.open_card(tmp_path, "Not accepted", "python3")
+    cards = notes.load(tmp_path)
+    assert [c.body for c in cards] == ["dp over amounts", ""]
+    # prose above the first heading is not a card
+    assert notes.parse("# Notes\n\nintro\n\n## one\nbody\n")[0].body == "body"
+
+
+def test_cli_note_stamps_a_card_in_the_problem_dir(tmp_path, monkeypatch):
+    import json as _json
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    from typer.testing import CliRunner
+
+    from lc.cli import app
+
+    ws = tmp_path / "ws" / "0322-coin-change"
+    ws.mkdir(parents=True)
+    (tmp_path / "config.json").write_text(_json.dumps(
+        {"workspace": str(tmp_path / "ws"), "editor": ""}))
+    (ws / ".lc.json").write_text(_json.dumps(
+        {"slug": "coin-change", "question_id": "322", "frontend_id": "322",
+         "lang": "python3", "file": "solution.py"}))
+    (ws / "solution.py").write_text("pass\n")
+
+    monkeypatch.chdir(ws)
+    result = CliRunner().invoke(app, ["note", "--no-edit"])
+    assert result.exit_code == 0
+    text = (ws / "notes.md").read_text()
+    assert text.startswith("## ") and "python3" in text
+    # outside a problem directory, an explanation — not a stack trace
+    monkeypatch.chdir(tmp_path)
+    assert CliRunner().invoke(app, ["note", "--no-edit"]).exit_code != 0
+
+
+def test_tui_n_shows_this_problems_cards(tmp_path, monkeypatch):
+    """`n` on a problem renders its notes.md as cards, newest first; n again
+    restores the statement; a problem without notes just says so."""
+    import asyncio
+    import json as _json
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    ws = tmp_path / "ws"
+    (ws / "0322-coin-change").mkdir(parents=True)
+    (tmp_path / "config.json").write_text(_json.dumps(
+        {"workspace": str(ws), "editor": ""}))
+    (ws / "0322-coin-change" / "notes.md").write_text(
+        "## 2026-08-21 21:10 · Not accepted · python3\n\n"
+        "greedy fails on [1,3,4] amount 6.\n\n"
+        "## 2026-08-22 09:05 · Accepted · python3\n\nbottom-up dp.\n")
+    from textual.geometry import Region
+
+    from lc import store, tui
+    from lc.api import ProblemSummary
+
+    async def view():
+        app = tui.LeetCodeTUI()
+        async with app.run_test(size=(140, 40)) as pilot:
+            await pilot.pause()
+            store.replace_index([ProblemSummary(
+                "322", "Coin Change", "coin-change", "Medium",
+                48.9, False, "ac", [])])
+            app.current_slug = "coin-change"
+            await pilot.press("n")
+            await pilot.pause()
+            st = app.query_one("#statement")
+            strips = st.render_lines(Region(0, 0, st.size.width or 120, 50))
+            text = "\n".join("".join(seg.text for seg in strip)
+                             for strip in strips)
+            shown = ("[322] Coin Change — notes" in text
+                     and text.find("09:05") < text.find("21:10")
+                     and "greedy fails" in text and "bottom-up dp" in text)
+            await pilot.press("n")
+            await pilot.pause()
+            toggled = app._notes_for == ""
+            app.current_slug = "two-sum"   # nothing on disk for this one
+            await pilot.press("n")
+            await pilot.pause()
+            return shown, toggled, app._notes_for == ""
+
+    assert asyncio.run(view()) == (True, True, True)

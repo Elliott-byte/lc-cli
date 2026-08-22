@@ -19,6 +19,7 @@ VIM_PLUGIN = r'''" lc.vim — Vim integration for the lc LeetCode CLI.
 "   <leader>p   show/hide the problem statement in a left split
 "   <leader>o   open the problem page in your browser (for figures/animations)
 "   <leader>m   save this problem to the lc review deck (spaced repetition)
+"   <leader>n   write a note card about this attempt (notes.md, split below)
 "   space       start the solve clock (opening a problem only arms it)
 "   <leader>z   pause the solve clock behind a cover (space there resumes)
 "   <leader>Z   reset the solve clock to 00:00 (asks first)
@@ -186,6 +187,7 @@ function! s:LcOpenStatement() abort
   nnoremap <buffer> <leader>p :call <SID>LcCloseStatement()<CR>
   nnoremap <buffer> <leader>o :call <SID>LcOpenWeb()<CR>
   nnoremap <buffer> <leader>m :call <SID>LcReview()<CR>
+  nnoremap <buffer> <leader>n :call <SID>LcNote()<CR>
   nnoremap <buffer> <expr> <Space> <SID>LcSpaceKey()
   nnoremap <buffer> <leader>z :call <SID>LcTimerToggle()<CR>
   nnoremap <buffer> <leader>Z :call <SID>LcTimerReset()<CR>
@@ -511,6 +513,20 @@ function! s:LcClickOpen() abort
   endif
 endfunction
 
+function! s:LcNote() abort
+  " \n — write a note about this attempt, with the submitted code still on
+  " screen: the notes file opens in a split under the solution, and `lc
+  " note` has already stamped a card heading (date · verdict · language).
+  let l:dir = s:LcDir()
+  call system('cd ' . shellescape(l:dir) . ' && lc note --no-edit')
+  let l:win = s:LcSolutionWin(l:dir)
+  if l:win != -1
+    execute l:win . 'wincmd w'
+  endif
+  execute 'belowright split ' . fnameescape(l:dir . '/notes.md')
+  normal! G
+endfunction
+
 function! s:LcToggleStatement() abort
   let l:win = s:LcStatementWin()
   if l:win != -1 && winnr('$') > 1
@@ -544,6 +560,8 @@ function! s:LcSetup() abort
   nnoremap <buffer> <leader>o :call <SID>LcOpenWeb()<CR>
   " Mid-solve: "I'll want to see this one again."
   nnoremap <buffer> <leader>m :call <SID>LcReview()<CR>
+  " What did this attempt teach you? A card in notes.md, code in view.
+  nnoremap <buffer> <leader>n :call <SID>LcNote()<CR>
   let s:lc_slugs[s:LcSlug(expand('%:p:h'))] = 1
   " Space starts the armed clock; once it runs, space is space again.
   nnoremap <buffer> <expr> <Space> <SID>LcSpaceKey()
@@ -552,9 +570,9 @@ function! s:LcSetup() abort
   nnoremap <buffer> <leader>Z :call <SID>LcTimerReset()<CR>
   " One stroke back to whatever launched Vim (the lc TUI resumes on exit).
   nnoremap <buffer> <leader>q :call <SID>LcQuitAll()<CR>
-  call s:LcKeyHints([['t', 'test'], ['s', 'submit'], ['z', 'pause'],
-        \ ['q', 'quit'], ['p', 'statement'], ['m', 'deck'], ['o', 'web'],
-        \ ['Z', 'reset']])
+  call s:LcKeyHints([['t', 'test'], ['s', 'submit'], ['n', 'note'],
+        \ ['z', 'pause'], ['q', 'quit'], ['p', 'statement'], ['m', 'deck'],
+        \ ['o', 'web'], ['Z', 'reset']])
   " Fresh `lc pick` / `lc edit`: put the statement alongside the solution.
   if get(g:, 'lc_auto_statement', 1) && winnr('$') == 1
         \ && expand('%:t') !=# 'README.md'

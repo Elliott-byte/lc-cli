@@ -95,6 +95,7 @@ marks it cannot see — signing out of LeetCode is not unsolving.
 | `s` | Submit |
 | `tab` | Switch between the **Problems** and **Review** tabs |
 | `m` | Save this problem to the review deck |
+| `n` | This problem's notes, as cards (`n` again returns) |
 | `c` | Settings |
 | `d` / `t` | Cycle the difficulty / status filter |
 | `o` | Open the problem on leetcode.com |
@@ -173,6 +174,14 @@ so a problem you solved in Vim is already green when you get back to the
 list. The mark describes today: it clears when you grade the problem, and
 otherwise fades overnight — the TUI rolls the day over by itself, due
 counts and the daily pin included, even if you never touch a key.
+
+**Notes.** Every attempt can leave a card behind: after a submit, `lc note`
+(or `\n` in Vim) stamps a heading — date, verdict, language — into the
+problem's own `notes.md` and drops you in your editor to write under it. In
+Vim the file opens in a split below the solution, so the code you just
+submitted stays in front of you while you write. `n` in the problem list
+shows that problem's cards, newest first. It is a plain markdown file in
+the problem's directory — your workspace git versions it with the code.
 
 Nothing is ever added behind your back. Only `m`, Vim's `\m`, and
 `lc review add` put a problem on the deck.
@@ -285,6 +294,7 @@ In a solution buffer (any file next to a `.lc.json`), normal mode:
 | `\p` | show/hide the problem statement in a left split |
 | `\o` | open the problem page in your browser (figures render there) |
 | `\m` | save this problem to the review deck |
+| `\n` | write a note card about this attempt (notes.md opens below) |
 | `space` | start the armed solve clock (once running, space is space) |
 | `\z` | pause the solve clock behind a cover (space there resumes) |
 | `\Z` | reset the clock to 00:00 for a fresh attempt (asks first) |

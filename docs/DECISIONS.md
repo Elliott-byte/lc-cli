@@ -90,6 +90,16 @@ lc's own name, passed via `git -c` on every commit, never written into any
 config. GH007 (email privacy) gets a specific hint pointing at the
 GitHub noreply address.
 
+## Notes
+
+**A note is a markdown card in the problem's own directory.** — *standing.*
+Not a database: you write notes in your editor with the submitted code on
+screen (Vim opens `notes.md` in a split under the solution), the workspace
+git versions them with the code, and `cat` reads them anywhere. The TUI
+renders the `##` sections as cards, newest first. lc stamps the heading
+(date · verdict · language) so the card is tied to the attempt without the
+user typing bookkeeping.
+
 ## Solve clock
 
 **The clock's state is a file.** — *standing.* Three processes read it —
