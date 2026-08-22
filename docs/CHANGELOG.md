@@ -11,6 +11,12 @@ every commit bumps the version (early tags grouped a few commits); tags
 the top section for the current day — or start a new one. Say what changed
 and, when behaviour reversed, what it used to do.
 
+## 0.7.68 — 2026-08-22 · the editor URL opens
+
+- The built-in editor's statement URL opens in the browser again. Its click
+  action was aimed at the main app, whose bindings intentionally stand down
+  while the editor is on top, so the link looked live but did nothing.
+
 ## 0.7.67 — 2026-08-22 · the footer stops promising a dead esc
 
 - With Vim keys on, the editor's footer advertised `esc Back` while the

@@ -370,7 +370,7 @@ def status_mark(status: str | None) -> Text:
     return Text(" ")
 
 
-def problem_header(problem) -> RenderableType:
+def problem_header(problem, *, click_action: str = "app.open_web()") -> RenderableType:
     """Title line + metadata table for a fetched Problem."""
     title = Text(f"[{problem.frontend_id}] {problem.title}", style="bold")
     if problem.paid_only:
@@ -410,6 +410,6 @@ def problem_header(problem) -> RenderableType:
     # the TUI, which captures the mouse, nor inside Vim's terminal, which
     # swallows the escape entirely. So hand Textual its own handle on the
     # same text: plain Rich printing ignores meta, leaving `lc show` as is.
-    url.apply_meta({"@click": "app.open_web()"})
+    url.apply_meta({"@click": click_action})
     meta.add_row("url", url)
     return Group(title, Text(""), meta)

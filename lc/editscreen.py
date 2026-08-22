@@ -23,6 +23,7 @@ from textual.screen import ModalScreen, Screen
 from textual.widgets import Footer, Static, TextArea
 
 from . import notes, solvetimer, store
+from .browser import open_url
 from .vimtext import VimTextArea
 from .render import problem_header, render_statement
 
@@ -64,7 +65,9 @@ class PauseScreen(ModalScreen[None]):
 
 def statement_body(problem) -> RenderableType:
     """Header + statement + hints, the same content the main screen shows."""
-    parts: list[RenderableType] = [problem_header(problem), Text("")]
+    parts: list[RenderableType] = [
+        problem_header(problem, click_action="screen.open_web()"), Text("")
+    ]
     if problem.paid_only and not problem.content:
         parts.append(Text("Premium problem — your account cannot read it.",
                           style="yellow"))
@@ -245,6 +248,11 @@ class EditScreen(Screen):
         fresh = solvetimer.reset()
         self._tick()
         self.notify(f"clock reset — {solvetimer.clock(fresh.accum)}")
+
+    def action_open_web(self) -> None:
+        if not open_url(self.problem.url):
+            self.notify(f"could not open a browser — {self.problem.url}",
+                        severity="warning")
 
     # -------------------------------------------------------------- judge
 

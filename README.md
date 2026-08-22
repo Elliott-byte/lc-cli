@@ -129,6 +129,10 @@ Nothing suspends; nothing hands off to another program.
 
 ![the built-in editor](docs/edit.svg)
 
+The statement's `url` line on the left is still clickable here; app-level
+keys such as `o` stay out of the code area, so plain typing stays plain
+typing.
+
 | Key | Action |
 | --- | --- |
 | `ctrl+r` | Run the samples |

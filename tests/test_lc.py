@@ -2002,6 +2002,58 @@ def test_clicking_the_url_in_the_tui_opens_the_browser(tmp_path, monkeypatch):
     assert opened == [PROBLEM.url]
 
 
+def test_clicking_the_url_in_the_builtin_editor_opens_the_browser(tmp_path, monkeypatch):
+    """The editor screen blocks app-level bindings so hidden tabs cannot steal
+    keys from the code area. That also blocked the statement URL's app action:
+    the click looked live, but nothing opened."""
+    import asyncio
+    import json as _json
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    ws = tmp_path / "ws"; ws.mkdir()
+    (tmp_path / "config.json").write_text(_json.dumps(
+        {"workspace": str(ws), "editor": "builtin", "builtin_vim": False}))
+    from textual.widgets import TextArea
+
+    from lc import editscreen, tui
+
+    opened: list[str] = []
+    monkeypatch.setattr(editscreen, "open_url",
+                        lambda url: opened.append(url) or True, raising=False)
+
+    async def click_it():
+        app = tui.LeetCodeTUI()
+        async with app.run_test(size=(160, 45)) as pilot:
+            await pilot.pause()
+            app._show(PROBLEM)
+            app.current_slug = PROBLEM.slug
+            await pilot.pause()
+            app.action_pick()
+            await pilot.pause()
+            cells = [
+                (x, y)
+                for y in range(45)
+                for x in range(160)
+                if app.screen.get_style_at(x, y).meta.get("@click")
+            ]
+            if not cells:
+                return None, "", ""
+            await pilot.click(offset=cells[len(cells) // 2])
+            await pilot.pause()
+            code = app.screen.query_one("#edit-code", TextArea)
+            code.focus()
+            before = code.text
+            await pilot.press("o")
+            await pilot.pause()
+            return len(cells), before, code.text
+
+    cells, before, after = asyncio.run(click_it())
+    shown = PROBLEM.url.removeprefix("https://").rstrip("/")
+    assert cells and cells >= len(shown) - 2
+    assert opened == [PROBLEM.url]
+    assert after == before + "o"
+
+
 def test_the_key_list_can_be_closed_without_quitting(tmp_path, monkeypatch):
     """`?` opens an overlay with no obvious way out, and `q` sat right there
     in the footer — pressing it to dismiss the list quit the whole app."""

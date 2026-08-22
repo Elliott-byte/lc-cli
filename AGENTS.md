@@ -274,6 +274,10 @@ never submitted by accident.
   `LeetCodeTUI.check_action` — the priority `tab` binding would otherwise
   reach through the editor and flip the hidden Problems/Review tabs when
   the code needed an indent.
+- The statement URL uses `screen.open_web()`, not `app.open_web()`: app
+  actions are disabled while the editor is on top, so pointing the link at
+  the app makes it look clickable but do nothing. Do not re-enable app
+  `open_web` here, or the `o` key leaks through into the code area.
 
 ### `lc/vimtext.py` — the built-in editor's Vim layer
 - A deliberate subset (docstring lists it), not an emulator; one unnamed
