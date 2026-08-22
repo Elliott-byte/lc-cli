@@ -264,6 +264,12 @@ never submitted by accident.
   stopped ones (never a no-op key; covering a stopped clock would hide the
   statement with nothing counting), ctrl+g resets. `space` cannot be the
   pause here — it types.
+- The footer must not advertise a key the Vim layer eats: `check_action`
+  hides `esc Back` when Vim keys are on, and the status line names `ZZ`
+  instead. Two Textual facts behind that — a **single uppercase letter
+  never reaches the footer** (it still fires, which is why `D`/`R`/`Z`
+  work), and a `priority=True` screen binding runs **before** the focused
+  widget, so binding `escape` that way would steal insert→normal.
 - **While it is on top, the app's bindings stand down** via
   `LeetCodeTUI.check_action` — the priority `tab` binding would otherwise
   reach through the editor and flip the hidden Problems/Review tabs when

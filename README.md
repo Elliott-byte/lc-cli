@@ -136,7 +136,10 @@ Nothing suspends; nothing hands off to another program.
 | `ctrl+n` | Toggle the note split below the code |
 | `ctrl+b` | Pause the clock behind a cover — and start it again from anywhere it is stopped |
 | `ctrl+g` | Reset the clock to 00:00 |
-| `esc` / `ZZ` | Save and go back (`ZZ` with Vim keys on, where `esc` belongs to the editor) |
+| `ZZ` | Save and go back — `esc` with Vim keys off, where the footer says so |
+
+The status line carries the mode and the way out (`ZZ back · i insert`),
+because the footer cannot: `ZZ` is two keystrokes.
 
 It highlights Python and **speaks a Vim subset** by default: modes,
 `hjkl w b e 0 ^ $ gg G` with counts, `i a I A o O s x r`,

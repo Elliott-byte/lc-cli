@@ -101,9 +101,23 @@ class EditScreen(Screen):
         Binding("ctrl+g", "reset_clock", "Reset clock", priority=True),
         # escape is NOT priority: the vim layer needs it first (insert ->
         # normal), and in vim mode ZZ is the way out. With vim keys off, or
-        # focus outside the code, escape still backs out.
+        # focus outside the code (the note split), escape still backs out.
         Binding("escape", "back", "Back"),
     ]
+
+    def check_action(self, action: str, parameters: tuple) -> bool | None:
+        # Under Vim keys the editor owns escape, so the footer must not
+        # advertise it — pressing the key a UI promises and getting nothing
+        # is how this was reported. The way out is ZZ, which the status line
+        # names: two keystrokes handled inside the text area, which no single
+        # Binding can express (and Textual keeps single uppercase letters out
+        # of the footer regardless). False here hides the row *and* disables
+        # it, which is right: with Vim keys on, escape never reaches the
+        # screen from the code — only from the note split, and that is
+        # handled in `action_notes`.
+        if action == "back":
+            return not self.app.config.vim_keys_on
+        return True
 
     def __init__(self, problem, solution) -> None:
         super().__init__()
@@ -287,6 +301,14 @@ class EditScreen(Screen):
     # --------------------------------------------------------------- exit
 
     def action_back(self) -> None:
+        # From the note split, backing out closes the note rather than the
+        # problem — dropping the whole screen from a half-written card is a
+        # surprise. (Reached in plain-editor mode; under Vim keys the note
+        # split is closed with ctrl+n, as the footer says.)
+        if self._notes_open and self.focused is not None \
+                and self.focused.id == "edit-notes":
+            self.action_notes()
+            return
         if not self._save():
             # Stay put: leaving would strand the edit with nowhere to go.
             return

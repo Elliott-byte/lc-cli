@@ -44,9 +44,12 @@ class VimTextArea(TextArea):
         if not self.vim_enabled:
             return ""
         if self.mode == "insert":
-            return "-- INSERT --"
+            return "-- INSERT -- · esc for normal"
         if self.mode == "visual":
             return "-- VISUAL --"
+        # The footer cannot carry this: ZZ is two keystrokes, and Textual
+        # keeps single uppercase letters out of the footer anyway. So the
+        # way out is named here, where the mode already is.
         return (self._count + self._pending) or "ZZ back · i insert"
 
     def _set_mode(self, mode: str) -> None:

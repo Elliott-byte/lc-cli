@@ -2993,14 +2993,23 @@ def test_tui_n_shows_this_problems_cards(tmp_path, monkeypatch):
     from lc import store, tui
     from lc.api import ProblemSummary
 
+    # Seeded before the app exists: an empty index makes lc download one on
+    # mount, and that background sync would blank a index seeded afterwards.
+    store.replace_index([
+        ProblemSummary("322", "Coin Change", "coin-change", "Medium",
+                       48.9, False, "ac", []),
+        ProblemSummary("1", "Two Sum", "two-sum", "Easy",
+                       50.0, False, None, []),
+    ])
+
     async def view():
         app = tui.LeetCodeTUI()
         async with app.run_test(size=(140, 40)) as pilot:
             await pilot.pause()
-            store.replace_index([ProblemSummary(
-                "322", "Coin Change", "coin-change", "Medium",
-                48.9, False, "ac", [])])
-            app.current_slug = "coin-change"
+            # Drive it the way a person does — move the cursor. Assigning
+            # current_slug races the row-highlight handler, which owns it.
+            assert app.select_slug("coin-change")
+            await pilot.pause()
             await pilot.press("n")
             await pilot.pause()
             st = app.query_one("#statement")
@@ -3013,7 +3022,8 @@ def test_tui_n_shows_this_problems_cards(tmp_path, monkeypatch):
             await pilot.press("n")
             await pilot.pause()
             toggled = app._notes_for == ""
-            app.current_slug = "two-sum"   # nothing on disk for this one
+            assert app.select_slug("two-sum")   # nothing on disk for this one
+            await pilot.pause()
             await pilot.press("n")
             await pilot.pause()
             return shown, toggled, app._notes_for == ""
@@ -3565,3 +3575,45 @@ def test_a_judge_that_explodes_does_not_take_the_session(tmp_path, monkeypatch):
 
     result = asyncio.run(drive())
     assert all(result.values()), {k: v for k, v in result.items() if not v}
+
+
+def test_the_editor_footer_never_advertises_a_dead_key(tmp_path, monkeypatch):
+    """With Vim keys on the editor owns escape, so the footer must not offer
+    `esc Back` — pressing the key a UI promises and getting nothing is how
+    this was reported. The way out (ZZ) is named on the status line, which
+    the footer cannot carry: it is two keystrokes, and Textual keeps single
+    uppercase letters out of the footer regardless."""
+    import asyncio
+    import json as _json
+
+    from lc import tui
+
+    def footer_keys(vim: bool):
+        monkeypatch.setenv("LC_HOME", str(tmp_path))
+        ws = tmp_path / "ws"
+        ws.mkdir(exist_ok=True)
+        (tmp_path / "config.json").write_text(_json.dumps(
+            {"workspace": str(ws), "editor": "builtin", "builtin_vim": vim}))
+
+        async def look():
+            app = tui.LeetCodeTUI()
+            async with app.run_test(size=(170, 45)) as pilot:
+                await pilot.pause()
+                app._show(PROBLEM); app.current_slug = PROBLEM.slug
+                await pilot.pause()
+                app.action_pick(); await pilot.pause()
+                shown = {b.description for _, b, _e, _t
+                         in app.screen.active_bindings.values() if b.show}
+                status = str(app.screen.query_one("#edit-status").render())
+                return shown, status
+
+        return asyncio.run(look())
+
+    shown, status = footer_keys(vim=True)
+    assert "Back" not in shown, shown          # no dead key advertised
+    assert {"Run", "Submit", "Note", "Pause", "Reset clock"} <= shown
+    assert "ZZ back" in status                 # the way out is named instead
+
+    shown, status = footer_keys(vim=False)
+    assert "Back" in shown                     # plain editor: esc really works
+    assert "ZZ back" not in status

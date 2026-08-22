@@ -11,6 +11,14 @@ every commit bumps the version (early tags grouped a few commits); tags
 the top section for the current day — or start a new one. Say what changed
 and, when behaviour reversed, what it used to do.
 
+## 0.7.67 — 2026-08-22 · the footer stops promising a dead esc
+
+- With Vim keys on, the editor's footer advertised `esc Back` while the
+  Vim layer owned esc — pressing the key a UI promises and getting nothing
+  read as "the shortcuts are broken". The footer drops the row (the status
+  line already names `ZZ back`); with Vim keys off, `esc Back` stays and
+  works. Also fixed the flaky notes test: it raced the startup index sync.
+
 ## 0.7.66 — 2026-08-22 · the READMEs catch up
 
 - Both READMEs gained **Solving** and **Notes** sections, each with a new

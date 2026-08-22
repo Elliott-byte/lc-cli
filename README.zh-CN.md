@@ -116,7 +116,9 @@ Cookie 以 `0600` 权限写入 `~/.lc/cookies.json`；不想落盘也可以通�
 | `ctrl+n` | 开关代码下方的笔记分栏 |
 | `ctrl+b` | 弹遮罩暂停计时——表停着时按它就是继续 |
 | `ctrl+g` | 计时归零 |
-| `esc` / `ZZ` | 保存返回（开着 Vim 键时用 `ZZ`，那里 `esc` 归编辑器） |
+| `ZZ` | 保存返回——关掉 Vim 键时是 `esc`，底栏会照实显示 |
+
+状态栏会写明当前模式和出口（`ZZ back · i insert`）——底栏放不下它，因为 `ZZ` 是两下按键。
 
 它带 Python 代码高亮，并且**默认说 Vim 话**：模式切换、`hjkl w b e 0 ^ $ gg G`（支持数字
 前缀）、`i a I A o O s x r`、`dd yy cc dw cw D C p P`、`v` 可视、`u` 撤销、`U` 重做——
