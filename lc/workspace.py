@@ -51,14 +51,12 @@ def problem_dir(config: Config, problem: Problem) -> Path:
 
 def _header(problem: Problem, lang: Language) -> str:
     c = lang.comment
-    lines = [
-        f"{c} [{problem.frontend_id}] {problem.title}",
-        f"{c} {problem.difficulty}  ·  {problem.ac_rate:.1f}% acceptance"
-        if problem.ac_rate
-        else f"{c} {problem.difficulty}",
-        f"{c} {problem.url}",
-    ]
-    return "\n".join(lines) + "\n\n"
+    # One line, not three. The statement pane sits right beside this file
+    # showing the same title, difficulty and url — three lines of echo read
+    # as a rendering bug. The scheme-less url stays because it is
+    # `strip_header`'s marker for "lc wrote this comment, safe to drop".
+    url = problem.url.removeprefix("https://")
+    return f"{c} [{problem.frontend_id}] {problem.title} · {url}\n\n"
 
 
 def statement_markdown(problem: Problem) -> str:

@@ -108,6 +108,9 @@ time: quitting back to the TUI or the shell must not keep the meter
 running while you browse. Space (or `\z`) picks it back up on the next
 visit — deliberately, like the start. Only a session that actually edited
 that problem pauses it, so quitting an unrelated Vim touches nothing.
+Corollary: a clock still *running* when a session begins escaped through a
+crash or a killed terminal — `begin()` drops the phantom run and keeps the
+banked time, because nobody was solving for that stretch.
 
 **Only an accepted submit stops it — and only a *fresh* one.** — *standing.*
 A failed submit keeps the clock running (the problem is not done). The

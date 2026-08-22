@@ -134,7 +134,10 @@ never submitted by accident.
   it). Wall-clock epoch, not monotonic — three processes read the stamps.
 - `begin(slug)` **arms**, it does not start — starting is a deliberate act
   (space in Vim → `lc timer start`). Re-opening the problem being solved
-  leaves its clock alone; a different or done slug re-arms from zero.
+  leaves its clock alone; a different or done slug re-arms from zero. A
+  clock found *running* at begin() escaped the quit-pause (crash, killed
+  terminal, pre-0.7.48 plugin): the phantom run is dropped, the banked
+  accum kept — nobody was solving for that stretch.
 - `stop_if(slug)` matches **slugs** — anything armed under a non-slug never
   stops, which is why `lc timer start` resolves ids/titles first.
 

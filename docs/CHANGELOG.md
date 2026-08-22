@@ -11,6 +11,17 @@ every commit bumps the version (early tags grouped a few commits); tags
 the top section for the current day — or start a new one. Say what changed
 and, when behaviour reversed, what it used to do.
 
+## 0.7.49 — 2026-08-22 · stale clocks, slim headers
+
+- A clock still running when a problem is opened is treated as escaped (a
+  crash or killed terminal skipped the quit-pause): the phantom stretch is
+  dropped, the banked time kept. Found as a 13-hour overnight "solve" that
+  also left space inert.
+- New solution files get a one-line header (`# [322] Coin Change ·
+  leetcode.com/problems/coin-change/`) instead of three — the statement
+  pane already shows the difficulty and acceptance right beside it.
+  Existing files keep their old headers; both kinds strip before submit.
+
 ## 0.7.48 — 2026-08-21 · the clock stays in the editor
 
 - Quitting Vim pauses a running solve clock (it used to keep counting while

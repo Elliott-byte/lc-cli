@@ -86,12 +86,21 @@ def begin(slug: str) -> Timer:
 
     Starting is deliberate: space in Vim (or `lc timer resume`). Opening a
     different problem — or one already clocked out by a submit — re-arms
-    from zero; reopening the one being solved leaves its clock exactly as
-    it was, running or paused.
+    from zero; reopening the one being solved keeps its banked time. A
+    clock still *running* here escaped the quit-pause (crash, killed
+    terminal, old plugin) and is demoted to paused — see below.
     """
     timer = load()
     if timer is None or timer.slug != slug or timer.done:
         timer = Timer(slug=slug)
+        save(timer)
+    elif timer.running:
+        # Quitting Vim pauses the clock, so a clock still running when a
+        # session *begins* escaped through a crash, a killed terminal or an
+        # old plugin — nobody was solving for that stretch. Keep what was
+        # honestly banked, drop the phantom run. (A 13-hour overnight
+        # "solve" is how this was found.)
+        timer.started = None
         save(timer)
     return timer
 

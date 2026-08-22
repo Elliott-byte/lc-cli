@@ -2514,9 +2514,11 @@ def test_the_clock_is_shared_and_stopped_by_a_cli_submit(tmp_path, monkeypatch):
     # reopening the solved problem re-arms a fresh clock
     fresh = solvetimer.begin("two-sum")
     assert fresh.armed and not fresh.done and fresh.accum == 0.0
-    # ...and reopening one being solved leaves its clock alone
+    # ...and one still running at a fresh open escaped the quit-pause
+    # (crash, killed terminal): the phantom run drops, the bank stays.
     solvetimer.resume()
-    assert solvetimer.begin("two-sum").running
+    demoted = solvetimer.begin("two-sum")
+    assert not demoted.running and not demoted.done
 
     # reset: back to zero and running, whatever state it was in
     solvetimer.pause()
@@ -2714,7 +2716,11 @@ def test_a_mornings_solve_does_not_clock_out_evening_practice(tmp_path, monkeypa
             app.action_pick()            # another visit, still no submit
             await pilot.pause()
             timer = solvetimer.load()
-            seen["still_running"] = timer is not None and timer.running
+            # A clock still running at a fresh open escaped the quit-pause
+            # (0.7.48+): the visit demotes it to paused, never to done —
+            # the practice session is interrupted, not clocked out.
+            seen["demoted_not_done"] = (timer is not None
+                                        and not timer.running and not timer.done)
 
             # A solve that actually lands inside the editor still stops it:
             # grading cleared the mark, and the editor's submit re-marks it.
@@ -2731,7 +2737,7 @@ def test_a_mornings_solve_does_not_clock_out_evening_practice(tmp_path, monkeypa
         return seen
 
     assert asyncio.run(practice()) == {
-        "armed_survives": True, "still_running": True, "real_solve_stops": True,
+        "armed_survives": True, "demoted_not_done": True, "real_solve_stops": True,
     }
     assert editor_calls, "the fake editor must actually have been entered"
 
@@ -2850,3 +2856,47 @@ def test_the_tui_rolls_the_day_over_without_a_keypress(tmp_path, monkeypatch):
     assert rolled_today == today, "the deck must be re-dated after midnight"
     assert seen == today
     assert untouched == _date(2000, 1, 1), "no rollover, no refresh"
+
+
+def test_begin_demotes_a_clock_that_escaped_the_quit_pause(tmp_path, monkeypatch):
+    """Quitting Vim pauses the clock, so one still running when a session
+    *begins* escaped through a crash, a killed terminal or an old plugin.
+    Found as a 13-hour overnight "solve": the stale run made the statusline
+    absurd and space inert (a running clock is not space's to touch).
+    Proven to fail on 0.7.48, whose begin() left the run counting."""
+    import json as _json
+    import time as _time
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    from lc import solvetimer
+
+    (tmp_path / "timer.json").write_text(_json.dumps(
+        {"slug": "x", "accum": 120.0,
+         "started": _time.time() - 13 * 3600, "done": False}))
+    timer = solvetimer.begin("x")
+    assert not timer.running          # the phantom stretch is dropped...
+    assert timer.accum == 120.0       # ...what was honestly banked survives
+    assert not timer.done             # and space can start it again
+
+
+def test_solution_header_is_one_line(tmp_path, monkeypatch):
+    """The statement pane sits beside the file showing the same title,
+    difficulty and url — a three-line echo of it read as a bug."""
+    import json as _json
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    from lc import workspace
+    from lc.config import Config
+
+    cfg = Config()
+    cfg.workspace = str(tmp_path / "ws")
+    sol = workspace.create(cfg, PROBLEM, resolve("python3"))
+    head, blank, body = sol.code.split("\n", 2)
+    assert head == "# [322] Coin Change · leetcode.com/problems/coin-change/"
+    assert blank == ""
+    # ...and it still carries strip_header's marker, so it never reaches
+    # the judge. Old three-line headers in existing files strip too.
+    assert workspace.strip_header(sol.code, resolve("python3")) == body
+    old = ("# [1] Two Sum\n# Easy  ·  50.0% acceptance\n"
+           "# https://leetcode.com/problems/two-sum/\n\nx = 1\n")
+    assert workspace.strip_header(old, resolve("python3")) == "x = 1\n"
