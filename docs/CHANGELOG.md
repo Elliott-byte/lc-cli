@@ -11,6 +11,12 @@ every commit bumps the version (early tags grouped a few commits); tags
 the top section for the current day — or start a new one. Say what changed
 and, when behaviour reversed, what it used to do.
 
+## 0.7.57 — 2026-08-22 · say builtin when it is
+
+- `lc config show` names the builtin editor instead of showing the editor
+  as unset (its display went through resolve_editor, which rightly refuses
+  to treat "builtin" as a command).
+
 ## 0.7.56 — 2026-08-22 · the built-in edit screen
 
 - `lc config editor builtin` (or no editor at all): `enter` now opens an

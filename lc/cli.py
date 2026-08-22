@@ -1299,7 +1299,10 @@ def config_show() -> None:
     curve = review.curve_of(cfg)
     table.add_row("workspace", str(cfg.workspace_path))
     table.add_row("lang", cfg.lang)
-    table.add_row("editor", cfg.resolve_editor() or Text("— (set $EDITOR)", style="dim"))
+    table.add_row("editor", "builtin — the TUI's own edit screen"
+                  if (cfg.editor or "").strip() == "builtin"
+                  else cfg.resolve_editor()
+                  or Text("builtin (the TUI's own; or set $EDITOR)", style="dim"))
     table.add_row("favorite_langs", ", ".join(cfg.favorite_langs))
     table.add_row(
         "review curve",
