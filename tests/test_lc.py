@@ -2051,7 +2051,8 @@ def test_clicking_the_url_in_the_builtin_editor_opens_the_browser(tmp_path, monk
     shown = PROBLEM.url.removeprefix("https://").rstrip("/")
     assert cells and cells >= len(shown) - 2
     assert opened == [PROBLEM.url]
-    assert after == before + "o"
+    assert before.endswith("\n")
+    assert after == before[:-1] + "o\n"
 
 
 def test_the_key_list_can_be_closed_without_quitting(tmp_path, monkeypatch):
@@ -3333,6 +3334,46 @@ def test_builtin_editor_speaks_vim(tmp_path, monkeypatch):
     assert all(result.values()), {k: v for k, v in result.items() if not v}
 
 
+def test_builtin_editor_starts_before_the_terminal_newline(tmp_path, monkeypatch):
+    """A normal final newline creates an extra sentinel row in TextArea. The
+    initial cursor belongs at the end of the user's last line, not one blank
+    line below the starter body."""
+    import asyncio
+    import json as _json
+    import time as _time
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    ws = tmp_path / "ws"; ws.mkdir()
+    (tmp_path / "config.json").write_text(_json.dumps(
+        {"workspace": str(ws), "editor": "builtin", "builtin_vim": True}))
+
+    from lc import store, tui
+    from lc.api import ProblemSummary
+
+    store.replace_index([ProblemSummary(
+        PROBLEM.frontend_id, PROBLEM.title, PROBLEM.slug, PROBLEM.difficulty,
+        PROBLEM.ac_rate, PROBLEM.paid_only, None, PROBLEM.tags)])
+    store.put_statement(PROBLEM)
+    store.set_meta("daily_date", _time.strftime("%Y-%m-%d", _time.gmtime()))
+    store.set_meta("daily_slug", PROBLEM.slug)
+
+    async def cursor_on_entry():
+        app = tui.LeetCodeTUI()
+        async with app.run_test(size=(160, 45)) as pilot:
+            await pilot.pause()
+            app._show(PROBLEM); app.current_slug = PROBLEM.slug
+            await pilot.pause()
+            app.action_pick(); await pilot.pause()
+            code = app.screen.query_one("#edit-code")
+            row = code.document.line_count - 2
+            expected = (row, len(code.document.get_line(row)))
+            return code.text.endswith("\n"), code.cursor_location, expected
+
+    trailing_newline, cursor, expected = asyncio.run(cursor_on_entry())
+    assert trailing_newline
+    assert cursor == expected
+
+
 def test_vim_normal_mode_uses_easy_global_commands(tmp_path, monkeypatch):
     """Outside Insert, editor commands use single non-conflicting letters and
     the footer follows the mode. Insert must restore ctrl chords so uppercase
@@ -3455,11 +3496,14 @@ def test_reset_code_confirms_and_keeps_the_old_buffer_undoable(
             await pilot.press("y"); await pilot.pause()
             reset = code.text == workspace.starter_code(
                 PROBLEM, edit.solution.language)
+            reset_row = code.document.line_count - 2
+            reset_cursor = code.cursor_location == (
+                reset_row, len(code.document.get_line(reset_row)))
             await pilot.press("u"); await pilot.pause()
             undone = code.text == old
-            return asked, unchanged, cancelled, reset, undone
+            return asked, unchanged, cancelled, reset, reset_cursor, undone
 
-    assert asyncio.run(drive()) == (True, True, True, True, True)
+    assert asyncio.run(drive()) == (True, True, True, True, True, True)
 
 
 def test_builtin_editor_clock_keys(tmp_path, monkeypatch):

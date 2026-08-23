@@ -11,6 +11,12 @@ every commit bumps the version (early tags grouped a few commits); tags
 the top section for the current day — or start a new one. Say what changed
 and, when behaviour reversed, what it used to do.
 
+## 0.7.71 — 2026-08-23 · the cursor starts on the code
+
+- Opening or resetting a solution in the built-in editor now puts the cursor
+  at the end of the last real line. TextArea used to expose the file's normal
+  final newline as one extra blank row and place the cursor there.
+
 ## 0.7.70 — 2026-08-22 · new lines keep their indentation
 
 - Vim Normal/Visual mode now has a clickable `X Reset code` command. It asks

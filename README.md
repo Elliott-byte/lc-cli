@@ -151,6 +151,8 @@ line stays with the current Vim mode.
 `X Reset code` asks first, then restores the current language's LeetCode
 starter in one undoable edit; it does not overwrite the solution file until
 the editor is saved.
+Opening or resetting the editor leaves the cursor at the end of the last real
+code line, before the file's standard final newline.
 Enter keeps the current indentation; after a Python line ending in `:`, the
 editor starts the new line one level deeper.
 Run and Submit immediately switch to a waiting screen until LeetCode answers,

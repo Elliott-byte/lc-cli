@@ -271,6 +271,9 @@ never submitted by accident.
 - `X Reset code` is Normal/Visual-only and confirms before replacing the live
   buffer. It uses one TextArea history batch rather than `load_text`, so `u`
   restores the previous answer; the disk file changes only on a later save.
+- A trailing `\n` becomes an extra empty sentinel row in TextArea. Initial and
+  reset cursor placement must step over that row without deleting the newline,
+  or every edit opens one blank line below the actual starter body.
 - Clock keys: ctrl+b pauses *running* clocks behind the cover and starts
   stopped ones (never a no-op key; covering a stopped clock would hide the
   statement with nothing counting), ctrl+g resets. `space` cannot be the

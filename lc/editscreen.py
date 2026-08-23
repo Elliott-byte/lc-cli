@@ -33,6 +33,15 @@ _TS_LANG = {"python3": "python", "python": "python", "java": "java",
             "javascript": "javascript", "typescript": "javascript"}
 
 
+def _move_to_code_end(area: TextArea) -> None:
+    """Place the cursor before TextArea's sentinel row for a final newline."""
+    row, column = area.document.end
+    if row > 0 and column == 0 and not area.document.get_line(row):
+        row -= 1
+        column = len(area.document.get_line(row))
+    area.move_cursor((row, column))
+
+
 class PauseScreen(ModalScreen[None]):
     """The break cover — opaque, so the statement cannot be read while the
     clock is stopped. Closing it is the resume, exactly like Vim's."""
@@ -265,7 +274,7 @@ class EditScreen(Screen):
         code = self.query_one("#edit-code", TextArea)
         code.focus()
         # Below the header comment, at the function body — where typing starts.
-        code.move_cursor(code.document.end)
+        _move_to_code_end(code)
         if self.app.config.timer_on:
             solvetimer.begin(self.problem.slug)
         self.set_interval(1.0, self._tick)
@@ -379,7 +388,7 @@ class EditScreen(Screen):
             area.replace(code, (0, 0), area.document.end,
                          maintain_selection_offset=False)
             area.history.checkpoint()
-            area.move_cursor(area.document.end)
+            _move_to_code_end(area)
             area.focus()
 
         self.app.push_screen(ResetCodeScreen(), reset)
