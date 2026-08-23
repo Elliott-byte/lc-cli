@@ -329,6 +329,9 @@ never submitted by accident.
   `lc show` (README fallback), marked by `b:lc_statement_for`.
 - The pane's terminal quirks are all commented in place (term_start options,
   QuitPre semantics — `:q` in the pane means "leave Vim", `q` closes it).
+  Native `ZZ` cannot own the pane because it tries to write the read-only
+  terminal; map `ZZ` in both Normal and Terminal mode to `LcQuitAll`, so the
+  same save-and-exit works after the cursor moves left.
 - The clock is drawn on the solution's statusline (the pane shows only
   `q close` — both statuslines share a screen row, so anything else doubles)
   from `timer.json` by a 1s ticker that holds its repaint while a prompt

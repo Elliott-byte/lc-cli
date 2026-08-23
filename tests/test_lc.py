@@ -431,6 +431,17 @@ def test_vim_quit_never_fights_the_statement_terminal():
     assert 'getbufvar(v:val.bufnr, "&buftype") ==# ""' in text
 
 
+def test_vim_statement_pane_maps_zz_to_save_and_quit():
+    """The statement terminal cannot use native ZZ: that tries to write the
+    read-only pane. Both possible terminal states must route ZZ through lc's
+    save-all exit so moving left never changes the way out."""
+    pane = editors.VIM_PLUGIN.split(
+        "function! s:LcOpenStatement")[1].split("endfunction")[0]
+    quit_call = ":call <SID>LcQuitAll()<CR>"
+    assert f"nnoremap <buffer> ZZ {quit_call}" in pane
+    assert f"tnoremap <buffer> ZZ <C-\\><C-N>{quit_call}" in pane
+
+
 def test_setup_vim_is_idempotent(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     editors.install_vim_plugin()

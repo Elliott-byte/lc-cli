@@ -356,8 +356,9 @@ Opening a solution file opens the statement beside it automatically — hide it
 with `\p` (or `q` inside the pane), bring it back with `\p`, or set
 `let g:lc_auto_statement = 0` to open it manually. `:q` means "leave" from
 either window — the pane is an accessory, not a second document to close
-separately — and so do `:qa`, `:x`, `ZZ` and `\q`. Anything unsaved still
-vetoes it, exactly as in plain Vim.
+separately — and so do `:qa`, `:x`, `ZZ` and `\q`. The pane maps `ZZ`
+directly to lc's save-all exit instead of asking its read-only terminal to
+write itself. Anything unsaved still vetoes the exit, exactly as in plain Vim.
 
 The pane shows the statement fully rendered — `lc show` in a small terminal
 split, same colors and example boxes as the CLI — whenever your Vim has

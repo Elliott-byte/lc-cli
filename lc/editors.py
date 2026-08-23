@@ -25,6 +25,7 @@ VIM_PLUGIN = r'''" lc.vim — Vim integration for the lc LeetCode CLI.
 "   <leader>Z   reset the solve clock to 00:00 (asks first)
 " Quitting Vim pauses a running clock; space resumes it on the next visit.
 "   <leader>q   write everything, then quit Vim (back to the lc TUI/shell)
+"   ZZ           write everything and quit, from solution or statement pane
 " The statement pane shows `lc show` fully rendered in a terminal split when
 " the editor supports it, the raw README.md otherwise; `let
 " g:lc_statement_render = 0` forces the plain file. The pane opens
@@ -182,6 +183,10 @@ function! s:LcOpenStatement() abort
   " The same keys as the solution buffer: landing in the pane and pressing
   " \t used to do nothing at all, with no hint why.
   nnoremap <buffer> q :call <SID>LcCloseStatement()<CR>
+  " Native ZZ tries to write this read-only terminal/README buffer. Route it
+  " through the same save-real-files exit regardless of which pane has focus.
+  nnoremap <buffer> ZZ :call <SID>LcQuitAll()<CR>
+  tnoremap <buffer> ZZ <C-\><C-N>:call <SID>LcQuitAll()<CR>
   nnoremap <buffer> <leader>t :call <SID>LcJudge('test')<CR>
   nnoremap <buffer> <leader>s :call <SID>LcJudge('submit')<CR>
   nnoremap <buffer> <leader>p :call <SID>LcCloseStatement()<CR>

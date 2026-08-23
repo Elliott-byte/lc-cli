@@ -11,6 +11,12 @@ every commit bumps the version (early tags grouped a few commits); tags
 the top section for the current day — or start a new one. Say what changed
 and, when behaviour reversed, what it used to do.
 
+## 0.7.72 — 2026-08-23 · ZZ leaves from either Vim pane
+
+- `ZZ` in the Vim statement pane now saves the real solution and exits just
+  as it does from the solution pane. The read-only terminal previously tried
+  to handle native `ZZ` itself, so moving left to read made the exit fail.
+
 ## 0.7.71 — 2026-08-23 · the cursor starts on the code
 
 - Opening or resetting a solution in the built-in editor now puts the cursor
