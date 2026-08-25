@@ -14,7 +14,7 @@ from __future__ import annotations
 from rich.console import Group, RenderableType
 from rich.text import Text
 
-from textual import on
+from textual import events, on
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, Vertical, VerticalScroll
@@ -157,6 +157,33 @@ def statement_body(problem) -> RenderableType:
     return Group(*parts)
 
 
+class StatementPane(VerticalScroll):
+    """The question half of the Vim window pair.
+
+    The code widget owns the first ctrl+w while it has focus. Once focus is
+    here, this pane must own the same prefix or there is no keyboard path back.
+    """
+
+    def __init__(self, *children, **kwargs) -> None:
+        super().__init__(*children, **kwargs)
+        self._window_pending = False
+
+    async def _on_key(self, event: events.Key) -> None:
+        if self.app.config.vim_keys_on and event.key == "ctrl+w":
+            event.stop()
+            event.prevent_default()
+            self._window_pending = True
+            return
+        if self._window_pending:
+            event.stop()
+            event.prevent_default()
+            self._window_pending = False
+            if event.character == "l" or event.key == "right":
+                self.screen.action_focus_code()
+            return
+        await super()._on_key(event)
+
+
 class EditScreen(Screen):
     """Statement · code · judge · clock · notes, in one screen."""
 
@@ -250,7 +277,7 @@ class EditScreen(Screen):
 
     def compose(self) -> ComposeResult:
         with Horizontal(id="edit-body"):
-            with VerticalScroll(id="edit-left"):
+            with StatementPane(id="edit-left"):
                 yield Static(statement_body(self.problem), id="edit-statement")
             with Vertical(id="edit-right"):
                 lang = _TS_LANG.get(self.solution.language.slug)
@@ -280,6 +307,14 @@ class EditScreen(Screen):
         self.set_interval(1.0, self._tick)
         self._tick()
         self.refresh_bindings()
+
+    def action_focus_statement(self) -> None:
+        """Vim ctrl+w h — focus the question as the left-hand window."""
+        self.query_one("#edit-left", VerticalScroll).focus()
+
+    def action_focus_code(self) -> None:
+        """Vim ctrl+w l — return to the right-hand code window."""
+        self.query_one("#edit-code", TextArea).focus()
 
     # -------------------------------------------------------------- clock
 

@@ -11,6 +11,13 @@ every commit bumps the version (early tags grouped a few commits); tags
 the top section for the current day — or start a new one. Say what changed
 and, when behaviour reversed, what it used to do.
 
+## 0.7.73 — 2026-08-25 · the question scrolls without a mouse
+
+- With Vim keys on, `ctrl+w h` now moves from code to the built-in editor's
+  question pane, where arrows and Page Up/Down scroll even when a terminal
+  does not forward mouse-wheel events (as can happen under WSL). `ctrl+w l`
+  returns to the code.
+
 ## 0.7.72 — 2026-08-23 · ZZ leaves from either Vim pane
 
 - `ZZ` in the Vim statement pane now saves the real solution and exits just

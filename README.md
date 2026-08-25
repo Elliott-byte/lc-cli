@@ -135,6 +135,7 @@ typing.
 
 | Key | Action |
 | --- | --- |
+| `ctrl+w h` / `ctrl+w l` | With Vim keys on, move to the question / back to code |
 | `R` / `ctrl+r` | Run the samples |
 | `S` / `ctrl+s` | Submit |
 | `N` / `ctrl+n` | Toggle the note split below the code |

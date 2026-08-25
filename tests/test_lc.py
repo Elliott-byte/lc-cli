@@ -3272,6 +3272,63 @@ def test_builtin_editor_solves_inside_the_tui(tmp_path, monkeypatch):
     }
 
 
+def test_vim_window_keys_scroll_builtin_question(tmp_path, monkeypatch):
+    """ctrl+w h/l gives the question keyboard scrolling. WSL terminals may
+    not forward wheel events, and code owns Page Down until focus moves; both
+    Vim panes must also provide the way back."""
+    import asyncio
+    from dataclasses import replace
+    import json as _json
+    import time as _time
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    ws = tmp_path / "ws"; ws.mkdir()
+    (tmp_path / "config.json").write_text(_json.dumps(
+        {"workspace": str(ws), "editor": "builtin"}))
+
+    from textual.containers import VerticalScroll
+    from textual.widgets import TextArea
+
+    from lc import store, tui
+    from lc.api import ProblemSummary
+
+    # This interaction is local; do not leave Textual's daily thread in the
+    # event loop's executor while asyncio.run tears the test app down.
+    monkeypatch.setattr(tui.LeetCodeTUI, "_daily_worker", lambda self: None)
+
+    problem = replace(PROBLEM, content="".join(
+        f"<p>question line {line}</p>" for line in range(100)))
+    store.replace_index([ProblemSummary(
+        problem.frontend_id, problem.title, problem.slug, problem.difficulty,
+        problem.ac_rate, problem.paid_only, None, problem.tags)])
+    store.put_statement(problem)
+    store.set_meta("daily_date", _time.strftime("%Y-%m-%d", _time.gmtime()))
+    store.set_meta("daily_slug", problem.slug)
+
+    async def scroll():
+        app = tui.LeetCodeTUI()
+        async with app.run_test(size=(100, 25)) as pilot:
+            await pilot.pause()
+            app._show(problem); app.current_slug = problem.slug
+            await pilot.pause()
+            app.action_pick(); await pilot.pause()
+            pane = app.screen.query_one("#edit-left", VerticalScroll)
+            code = app.screen.query_one("#edit-code", TextArea)
+            assert app.focused is code and pane.max_scroll_y > 0
+
+            # A Vim count may precede a window command; it is consumed by the
+            # command and must not leak into the next code motion.
+            await pilot.press("2", "ctrl+w", "h", "pagedown")
+            await pilot.pause()
+            question_scrolled = app.focused is pane and pane.scroll_y > 0
+            await pilot.press("ctrl+w", "l")
+            await pilot.pause()
+            return (question_scrolled, app.focused is code,
+                    getattr(code, "_count", None) == "")
+
+    assert asyncio.run(scroll()) == (True, True, True)
+
+
 def test_builtin_editor_speaks_vim(tmp_path, monkeypatch):
     """The vim layer: modes, motions, operators, registers, counts, ZZ.
     Proven against the real key pipeline, not by calling methods."""

@@ -302,6 +302,10 @@ never submitted by accident.
   actions are disabled while the editor is on top, so pointing the link at
   the app makes it look clickable but do nothing. Do not re-enable app
   `open_web` here, or the `o` key leaks through into the code area.
+- The question pane cannot depend on the mouse wheel: some WSL terminal paths
+  do not forward it. With Vim keys on, `ctrl+w h` / `ctrl+w l` move between
+  code and question; both panes must own the prefix so keyboard focus can make
+  the round trip, and the question's native arrows and Page Up/Down scroll it.
 
 ### `lc/vimtext.py` — the built-in editor's Vim layer
 - A deliberate subset (docstring lists it), not an emulator; one unnamed

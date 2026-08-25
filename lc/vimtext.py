@@ -7,7 +7,8 @@ matters working *inside* the TUI.
 
 Normal mode:  h j k l  w b e  0 ^ $  gg G  (counts on h j k l w b x, and NG)
               i a I A o O s  x  r<ch>  dd yy cc  dw de db  cw ce cb  D C
-              p P  u (undo)  U (redo — ctrl+r runs the samples)  v  ZZ ZQ
+              p P  u (undo)  U (redo — ctrl+r runs the samples)  v
+              ctrl+w h/l  ZZ ZQ
 Insert/visual behave as expected; esc never leaves the screen — ZZ does.
 """
 
@@ -30,7 +31,7 @@ class VimTextArea(TextArea):
         # code_editor() cannot forward extra kwargs — set_vim() after building.
         self.vim_enabled = True
         self.mode = "normal"          # normal | insert | visual
-        self._pending = ""            # d y c g r Z awaiting their second key
+        self._pending = ""            # d y c g r Z ^W await their second key
         self._count = ""
         self._register: tuple[str, bool] = ("", False)   # text, linewise
         self.source_language = ""
@@ -111,6 +112,23 @@ class VimTextArea(TextArea):
         command = _GLOBAL_COMMANDS.get(char)
         screen = getattr(self, "screen", None)
         dispatch = getattr(screen, "action_global_command", None)
+
+        if self._pending == "^W":
+            self._pending = ""
+            self._count = ""
+            action = ("action_focus_statement" if char == "h" or key == "left"
+                      else "action_focus_code" if char == "l" or key == "right"
+                      else "")
+            focus_pane = getattr(screen, action, None)
+            if callable(focus_pane):
+                focus_pane()
+            self._touch()
+            return
+        if key == "ctrl+w":
+            self._pending = "^W"
+            self._touch()
+            return
+
         if not self._pending and command is not None and callable(dispatch):
             dispatch(command)
             return
