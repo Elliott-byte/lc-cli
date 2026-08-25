@@ -302,7 +302,8 @@ lc setup vim
 
 只要你的 Vim 带 `+terminal`（或用 Neovim），这个面板显示的就是完整渲染的题面——一个小终端
 分屏里跑 `lc show`，颜色和示例框和 CLI 里一模一样。不支持时回退到目录里的原始 `README.md`；
-`let g:lc_statement_render = 0` 可强制所有情况都用纯文件。
+`let g:lc_statement_render = 0` 可强制所有情况都用纯文件。新打开题面时会从题目标题开始，不再跟着
+terminal 的输出光标停在最后一行。
 
 Python buffer 会保持空格缩进：Tab 键输出空格，粘贴进来的真 Tab 在保存时转换。LeetCode 的
 起始代码用空格，判题机对一个混入的 Tab 直接报 `TabError`——`let g:lc_python_indent = 0`

@@ -121,6 +121,44 @@ function! s:LcFocusSolution(dir) abort
   endif
 endfunction
 
+function! s:LcStatementTop(buf, ...) abort
+  " A terminal follows its job's cursor as `lc show` prints, so touching the
+  " view when the split is created is too early: the finished job leaves a
+  " long question at its last page. Its exit callbacks land here only after
+  " all output and a short terminal-settle delay, while the README fallback
+  " calls it immediately.
+  let l:win = bufwinid(a:buf)
+  if l:win == -1
+    return
+  endif
+  if exists('*win_execute')
+    call win_execute(l:win, 'silent! normal! gg0zt')
+  else
+    " Old +terminal Vims predate win_execute(). Preserve the code window;
+    " stealing focus here would put the user's next key in the question.
+    let l:here = win_getid()
+    if win_gotoid(l:win)
+      silent! normal! gg0zt
+      call win_gotoid(l:here)
+    endif
+  endif
+endfunction
+
+function! s:LcVimStatementDone(job, status) abort
+  for l:buf in term_list()
+    if term_getjob(l:buf) is a:job
+      " Vim redraws the terminal once more after exit_cb; a zero timer moves
+      " to line one and then that final redraw immediately drags it back.
+      call timer_start(50, function('s:LcStatementTop', [l:buf]))
+      return
+    endif
+  endfor
+endfunction
+
+function! s:LcNvimStatementDone(buf, job, status, event) abort
+  call timer_start(50, function('s:LcStatementTop', [a:buf]))
+endfunction
+
 function! s:LcOpenStatement() abort
   let l:dir = expand('%:p:h')
   let l:slug = s:LcSlug()
@@ -134,7 +172,9 @@ function! s:LcOpenStatement() abort
     topleft vertical new
     execute 'vertical resize ' . l:width
     if has('nvim')
-      call termopen('lc show ' . shellescape(l:slug))
+      let l:buf = bufnr('')
+      call termopen('lc show ' . shellescape(l:slug),
+            \ {'on_exit': function('s:LcNvimStatementDone', [l:buf])})
       execute 'silent! file' fnameescape('[statement] ' . l:slug)
     else
       " Started hidden and then shown, never with ++curwin: a terminal opened
@@ -153,7 +193,8 @@ function! s:LcOpenStatement() abort
       " "'two-sum'"". A list is passed through untouched, spaces and all.
       let l:cmd = ['lc', 'show', l:slug]
       let l:opts = {'hidden': 1, 'norestore': 1, 'curwin': 0,
-            \ 'term_name': '[statement] ' . l:slug, 'term_kill': 'term'}
+            \ 'term_name': '[statement] ' . l:slug, 'term_kill': 'term',
+            \ 'exit_cb': function('s:LcVimStatementDone')}
       try
         let l:buf = term_start(l:cmd, l:opts)
       catch /E475\|E118/
@@ -169,6 +210,7 @@ function! s:LcOpenStatement() abort
     execute 'topleft vertical split ' . fnameescape(s:LcReadme())
     setlocal readonly nomodifiable wrap linebreak
     execute 'vertical resize ' . l:width
+    call s:LcStatementTop(bufnr(''))
   endif
   let b:lc_statement_for = l:dir
   setlocal winfixwidth nonumber norelativenumber

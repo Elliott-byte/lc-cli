@@ -11,6 +11,12 @@ every commit bumps the version (early tags grouped a few commits); tags
 the top section for the current day — or start a new one. Say what changed
 and, when behaviour reversed, what it used to do.
 
+## 0.7.77 — 2026-08-25 · Vim questions begin at the beginning
+
+- A newly opened Vim or Neovim statement pane now starts at the question
+  heading. Its terminal previously followed `lc show`'s output cursor and
+  settled on the final page; lc now resets the view after that job exits.
+
 ## 0.7.76 — 2026-08-25 · the first attempt stands
 
 - The Review mark now keeps the day's first submitted verdict. A failed first

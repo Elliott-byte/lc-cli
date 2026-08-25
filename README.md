@@ -366,7 +366,9 @@ write itself. Anything unsaved still vetoes the exit, exactly as in plain Vim.
 The pane shows the statement fully rendered — `lc show` in a small terminal
 split, same colors and example boxes as the CLI — whenever your Vim has
 `+terminal` (or on Neovim). Without it, the directory's raw `README.md` is
-used; `let g:lc_statement_render = 0` forces the plain file everywhere.
+used; `let g:lc_statement_render = 0` forces the plain file everywhere. A
+newly opened pane starts at the question heading rather than following the
+terminal output cursor to the last line.
 
 Python buffers are kept space-indented: Tab inserts spaces, and pasted tabs
 are converted on save. LeetCode's starters use spaces and the judge answers a

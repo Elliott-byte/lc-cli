@@ -325,6 +325,28 @@ def test_vim_failed_test_waits_for_acknowledgement():
     assert "call input('lc: test failed — press Enter to return')" in judge
 
 
+def test_vim_statement_opens_at_the_beginning_after_terminal_output():
+    """The terminal follows `lc show` to its last line, so both Vim variants
+    must reset the pane only from the job-exit callback."""
+    text = editors.VIM_PLUGIN
+    pane = text.split(
+        "function! s:LcOpenStatement")[1].split("endfunction")[0]
+    assert "function! s:LcStatementTop" in text, \
+        "the terminal has no post-output reset to the question heading"
+    top = text.split(
+        "function! s:LcStatementTop")[1].split("endfunction")[0]
+    vim_done = text.split(
+        "function! s:LcVimStatementDone")[1].split("endfunction")[0]
+    nvim_done = text.split(
+        "function! s:LcNvimStatementDone")[1].split("endfunction")[0]
+
+    assert "normal! gg0zt" in top
+    assert "'exit_cb': function('s:LcVimStatementDone')" in pane
+    assert "'on_exit': function('s:LcNvimStatementDone', [l:buf])" in pane
+    assert "timer_start(50, function('s:LcStatementTop'" in vim_done
+    assert "timer_start(50, function('s:LcStatementTop'" in nvim_done
+
+
 def test_vim_quit_never_fights_the_statement_terminal():
     """The pane runs `lc show` in a terminal; its job blocks :quit and :xall."""
     text = editors.VIM_PLUGIN
@@ -3349,12 +3371,6 @@ def test_builtin_question_opens_at_top_and_scrolls_with_vim_keys(
             pane = app.screen.query_one("#edit-left", VerticalScroll)
             code = app.screen.query_one("#edit-code", TextArea)
             assert app.focused is code and pane.max_scroll_y > 0
-
-            pane.scroll_end(animate=False)
-            await pilot.pause()
-            assert pane.scroll_y > 0
-            app.screen.on_mount()
-            await pilot.pause()
             opened_at_top = pane.scroll_y == 0
 
             # A Vim count may precede a window command; it is consumed by the

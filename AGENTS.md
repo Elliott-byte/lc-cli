@@ -343,6 +343,12 @@ never submitted by accident.
   Native `ZZ` cannot own the pane because it tries to write the read-only
   terminal; map `ZZ` in both Normal and Terminal mode to `LcQuitAll`, so the
   same save-and-exit works after the cursor moves left.
+- **Reset the statement view only after the terminal job exits.** `lc show`
+  writes asynchronously, so an earlier `gg` looks right inside the open
+  function but the output cursor subsequently drags a long question back to
+  its final page. Vim and Neovim have separate exit callbacks; both wait 50ms
+  before the final `gg0zt` because Vim performs one more terminal redraw after
+  a zero-delay callback and otherwise drags the view straight back down.
 - `LcJudge` snapshots `v:shell_error` immediately after its shell command and
   waits for Enter when `lc test` fails. Without that explicit acknowledgement,
   some terminal/Vim combinations redraw the editor over the case details.
