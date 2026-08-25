@@ -300,7 +300,7 @@ class EditScreen(Screen):
     def on_mount(self) -> None:
         code = self.query_one("#edit-code", TextArea)
         code.focus()
-        # Below the header comment, at the function body — where typing starts.
+        # At the end of the starter's last real line — where typing starts.
         _move_to_code_end(code)
         if self.app.config.timer_on:
             solvetimer.begin(self.problem.slug)

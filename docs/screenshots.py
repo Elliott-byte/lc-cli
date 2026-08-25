@@ -9,6 +9,7 @@ output is reproducible and needs no network or account.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import sys
 import tempfile
@@ -17,8 +18,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-os.environ["LC_HOME"] = tempfile.mkdtemp(prefix="lc-shots-")
+SHOT_HOME = Path(tempfile.mkdtemp(prefix="lc-shots-"))
+os.environ["LC_HOME"] = str(SHOT_HOME)
 os.environ["LC_NO_FX"] = "1"
+(SHOT_HOME / "config.json").write_text(json.dumps({
+    "workspace": str(SHOT_HOME / "workspace"),
+    "editor": "builtin",
+}) + "\n")
 
 from rich.console import Console  # noqa: E402
 from rich.text import Text  # noqa: E402
@@ -169,8 +175,6 @@ def shot_test() -> None:
 
 #: A solve in progress — enough real code that the syntax colours show.
 SOLUTION_IN_PROGRESS = """\
-# [42] Trapping Rain Water · leetcode.com/problems/trapping-rain-water/
-
 class Solution:
     def trap(self, height: List[int]) -> int:
         left, right = 0, len(height) - 1
@@ -279,6 +283,8 @@ async def shot_tui() -> None:
         store.put_statement(TRAP_PROBLEM)
         app.select_slug("trapping-rain-water")
         await pilot.pause(0.4)
+        app._show(TRAP_PROBLEM)
+        app.current_slug = TRAP_PROBLEM.slug
         app.action_pick()
         await pilot.pause(0.5)
         from lc import solvetimer
@@ -286,7 +292,7 @@ async def shot_tui() -> None:
 
         code = app.screen.query_one("#edit-code", VimTextArea)
         code.load_text(SOLUTION_IN_PROGRESS)
-        code.move_cursor((7, 8))
+        code.move_cursor((5, 8))
         # A clock that has been running a few minutes reads better than 00:00.
         timer = solvetimer.load()
         if timer is not None:

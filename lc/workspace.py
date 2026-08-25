@@ -2,11 +2,11 @@
 
     ~/leetcode/0001-two-sum/
         README.md      rendered statement, for reading in an editor
-        solution.py    starter code + a header comment
+        solution.py    starter code + the user's work
         .lc.json       which problem/language this directory is for
 
-The whole solution file is what gets submitted — the header is a comment in the
-target language, so the judge ignores it.
+The whole solution file is what gets submitted. Older lc versions added a
+generated comment header; `strip_header` still removes those before judging.
 """
 
 from __future__ import annotations
@@ -49,16 +49,6 @@ def problem_dir(config: Config, problem: Problem) -> Path:
     return config.workspace_path / slug_dir_name(problem.frontend_id, problem.slug)
 
 
-def _header(problem: Problem, lang: Language) -> str:
-    c = lang.comment
-    # One line, not three. The statement pane sits right beside this file
-    # showing the same title, difficulty and url — three lines of echo read
-    # as a rendering bug. The scheme-less url stays because it is
-    # `strip_header`'s marker for "lc wrote this comment, safe to drop".
-    url = problem.url.removeprefix("https://")
-    return f"{c} [{problem.frontend_id}] {problem.title} · {url}\n\n"
-
-
 def starter_code(problem: Problem, lang: Language) -> str:
     """Build the exact initial solution text used on disk and in the editor."""
     snippet = problem.snippets.get(lang.slug, "")
@@ -70,7 +60,7 @@ def starter_code(problem: Problem, lang: Language) -> str:
         )
     # Only trailing newlines come off: LeetCode's Python snippets end with the
     # body's indentation, and stripping that leaves a file that will not compile.
-    return _header(problem, lang) + snippet.rstrip("\n") + "\n"
+    return snippet.rstrip("\n") + "\n"
 
 
 def statement_markdown(problem: Problem) -> str:
@@ -215,10 +205,10 @@ def find_by_path(config: Config, path: Path) -> tuple[str, Language, Path] | Non
 
 
 def strip_header(code: str, lang: Language) -> str:
-    """Drop lc's own header comment before submitting.
+    """Drop a legacy lc-generated header comment before submitting.
 
-    Only a leading comment block containing the problem URL is removed, so a
-    comment the user wrote themselves is never silently deleted.
+    New solutions contain only starter code. Older lc versions wrote a leading
+    comment block; the problem URL distinguishes it from the user's comments.
     """
     marker = re.escape(lang.comment)
     match = re.match(rf"\A(?:{marker}[^\n]*\n)+[ \t]*\n", code)

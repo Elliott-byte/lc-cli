@@ -2964,9 +2964,9 @@ def test_begin_demotes_a_clock_that_escaped_the_quit_pause(tmp_path, monkeypatch
     assert not timer.done             # and space can start it again
 
 
-def test_solution_header_is_one_line(tmp_path, monkeypatch):
-    """The statement pane sits beside the file showing the same title,
-    difficulty and url — a three-line echo of it read as a bug."""
+def test_new_solution_contains_only_leetcode_starter_code(tmp_path, monkeypatch):
+    """The statement and README already identify the problem; repeating that
+    identity as a generated comment made every solution start with noise."""
     import json as _json
 
     monkeypatch.setenv("LC_HOME", str(tmp_path))
@@ -2976,15 +2976,7 @@ def test_solution_header_is_one_line(tmp_path, monkeypatch):
     cfg = Config()
     cfg.workspace = str(tmp_path / "ws")
     sol = workspace.create(cfg, PROBLEM, resolve("python3"))
-    head, blank, body = sol.code.split("\n", 2)
-    assert head == "# [322] Coin Change · leetcode.com/problems/coin-change/"
-    assert blank == ""
-    # ...and it still carries strip_header's marker, so it never reaches
-    # the judge. Old three-line headers in existing files strip too.
-    assert workspace.strip_header(sol.code, resolve("python3")) == body
-    old = ("# [1] Two Sum\n# Easy  ·  50.0% acceptance\n"
-           "# https://leetcode.com/problems/two-sum/\n\nx = 1\n")
-    assert workspace.strip_header(old, resolve("python3")) == "x = 1\n"
+    assert sol.code == PROBLEM.snippets["python3"].rstrip("\n") + "\n"
 
 
 def test_notes_cards_append_parse_and_reuse_blank(tmp_path):

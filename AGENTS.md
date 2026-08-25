@@ -213,11 +213,13 @@ never submitted by accident.
 - `create` refreshes `README.md` + `.lc.json` every time but never touches an
   existing solution file unless `overwrite`. Python snippets keep their
   trailing indentation (`rstrip("\n")` only) — stripping it breaks compiles.
-- `starter_code` is the single constructor for header + snippet text. The
-  built-in editor's reset and `create(overwrite=True)` must use the same path,
-  or reset can silently produce a different file from a fresh pick.
+- `starter_code` is the single constructor for the exact snippet text — new
+  solutions have no generated title/URL header. The built-in editor's reset
+  and `create(overwrite=True)` must use the same path, or reset can silently
+  produce a different file from a fresh pick.
 - `strip_header` removes only a leading comment block that contains the
-  problem URL — a user's own comment is never deleted.
+  problem URL. This is compatibility for files written by older lc versions;
+  a user's own comment is never deleted.
 
 - The judge worker's boundary is **guarded twice**: unexpected exceptions
   from the judge, and from the bookkeeping that files a verdict away, are
@@ -436,6 +438,8 @@ if people type something shorter. Everything else follows from the registry.
   problem whose statement is beside it (a mismatch documents a bug that
   does not exist), and leaving the edit screen needs `ZZ` — `esc` belongs
   to the Vim layer, and pressing it wrote the same shot twice.
+  Its workspace and editor must stay pinned inside the temporary `LC_HOME`;
+  ambient `~/leetcode` or `$EDITOR` would touch user data or hang generation.
 
 ## Shipping a change
 

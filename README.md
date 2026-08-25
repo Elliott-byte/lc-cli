@@ -450,8 +450,9 @@ control:
     .lc.json       which problem and language this is
 ```
 
-The whole solution file is submitted; the header lc writes is a comment in the
-target language, so the judge ignores it.
+The whole solution file is submitted. New files contain LeetCode's starter code
+directly, with no generated title or URL comment above it; existing files are
+left untouched.
 
 Everything lc owns is under `~/.lc` (set `$LC_HOME` to move it):
 

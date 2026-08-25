@@ -198,9 +198,15 @@ file; a helper file the user drops alongside is never submitted by
 accident, and lc never falls back to another language's file (submitting
 Python as Go wastes a real submission).
 
-**The whole file is submitted; only lc's header comes off.** — *standing.*
-`strip_header` removes a leading comment block only when it contains the
-problem URL — a comment the user wrote is never deleted.
+**The whole file is submitted; only lc's header comes off.** — *superseded in
+0.7.74 by starter-code-only files.* lc used to prepend the problem identity as
+a comment and remove it before judging.
+
+**New solutions are starter code only; legacy headers still strip.** —
+*standing.* The statement pane and workspace README already identify the
+problem, so repeating the title and URL above every answer is noise. Existing
+files are user data and stay untouched; `strip_header` continues recognising
+older lc-generated headers without deleting a comment the user wrote.
 
 **Judge polling survives drops.** — *standing.* The submission already
 went in, so network errors, 429 and 5xx during `/check/` polling mean
