@@ -32,6 +32,11 @@ guard ("has a *submit* graded this today?") let hand grades be silently
 re-promoted; the second (attempt mark) blocked the day's first real grade
 after a mid-day toggle. Both are in the tests as regressions.
 
+**The first submitted verdict owns the visible attempt mark.** — *standing.*
+The mark is a recall signal, not a live report of the latest code: a successful
+retry must not repaint an initial miss green and erase the useful evidence.
+A hand grade still clears the mark, and an uncleared mark fades after that day.
+
 **A lapse is not one level down.** — *standing.* `0` resets to level 1;
 `-` steps down one. A level-9 problem stepped to 8 still buys three months,
 which is no way to treat something you just blanked on — and pressing `-`

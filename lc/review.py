@@ -421,7 +421,9 @@ def record_submit(
     re-submitting cannot ratchet the level (five green submits are one
     recall), a + / - / 0 pressed by hand stands against any later submit,
     and on the day a problem is added its schedule stays at level 1 no
-    matter how the solve went. The attempt is marked either way.
+    matter how the solve went. The first submitted verdict behind a visible
+    attempt mark stands until the user grades it or the day changes, so a
+    successful retry does not hide an initial miss.
 
     Returns a short human-readable line, or None when the problem is not on
     the deck. Only real submits belong here — passing the samples proves
@@ -433,6 +435,9 @@ def record_submit(
     if item is None or item.removed:
         return None
 
+    today_text = today.isoformat()
+    first_attempt = item.attempted != today_text
+    first_verdict = item.attempt_passed
     verdict = "solved" if accepted else "not solved"
 
     if not curve:
@@ -462,11 +467,17 @@ def record_submit(
                  else f"still at level {item.level}")
         note = f"review: {verdict} — {moved}, next in {item.due_in(today)}d"
 
-    # Whatever the level did, the attempt itself is recorded: the mark tints
-    # the row — the cue to grade by hand when nothing has graded yet, and the
-    # record of what today's code actually did when something already has.
-    item.attempted = today.isoformat()
-    item.attempt_passed = accepted
-    item.updated = _stamp()
+    # Keep the recall signal honest: fixing the code on a later submission
+    # must not repaint an initial miss as if it never happened. A hand grade
+    # clears the mark, at which point a later submit can begin a new one.
+    if first_attempt:
+        item.attempted = today_text
+        item.attempt_passed = accepted
+        item.updated = _stamp()
+    else:
+        # Autograding calls _schedule(), whose manual-grade contract clears
+        # the mark. Restore the first verdict without giving a retry ownership.
+        item.attempted = today_text
+        item.attempt_passed = first_verdict
     save(items)
     return note

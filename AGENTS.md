@@ -101,7 +101,9 @@ never submitted by accident.
   only. With curve (autograde): **whoever grades first that day wins** — an
   earlier submit, a hand `+`/`-`/`0`, or `add()` itself (all stamp `graded`),
   so a submit can never stack on any of them, and day zero is
-  order-independent. The attempt mark is recorded in every branch.
+  order-independent. The first submitted verdict behind a visible attempt
+  mark wins too: a retry cannot repaint an initial failure green. A hand grade
+  clears that mark, so a later submit may begin a new one.
 - All mutations go through `@_atomic` (an RLock — judge/sync workers are
   threads) and `save()` writes tmp-then-rename.
 - Coercion in `items_from_raw` is deliberate: the file is hand-editable, and

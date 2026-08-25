@@ -889,11 +889,11 @@ def test_a_submit_marks_the_problem_without_grading_it(tmp_path, monkeypatch):
     assert after.attempt_today(d) == "passed"
     assert note is not None and "solved" in note and "level 3" in note
 
-    # A failed submit marks it the other way, still without touching the level.
+    # A later failure cannot rewrite the day's first mark or touch the level.
     review.record_submit("s", False, today=d)
     after = review.load()["s"]
     assert (after.level, after.due) == (before.level, before.due)
-    assert after.attempt_today(d) == "failed"
+    assert after.attempt_today(d) == "passed"
 
     # Grading by hand moves it and clears the mark.
     graded = review.shift_level("s", +1, curve, today=d)
@@ -907,6 +907,26 @@ def test_a_submit_marks_the_problem_without_grading_it(tmp_path, monkeypatch):
 
     # A problem that is not on the deck is simply ignored.
     assert review.record_submit("ghost", True, today=d) is None
+
+
+def test_first_submit_verdict_owns_the_daily_attempt_mark(tmp_path, monkeypatch):
+    """A successful retry must not hide that the first recall attempt failed."""
+    from datetime import date
+
+    review = _review_env(tmp_path, monkeypatch)
+    curve = [1, 2, 4, 7]
+    past, today = date(2026, 8, 10), date(2026, 8, 15)
+    review.add("s", curve=curve, today=past)
+
+    review.record_submit("s", False, today=today, curve=curve)
+    review.record_submit("s", True, today=today, curve=curve)
+    item = review.load()["s"]
+    assert item.attempt_today(today) == "failed"
+    assert item.level == 1, "the first verdict owns the grade and mark"
+
+    tomorrow = date(2026, 8, 16)
+    review.record_submit("s", True, today=tomorrow, curve=curve)
+    assert review.load()["s"].attempt_today(tomorrow) == "passed"
 
 
 def test_autograde_moves_the_level_with_the_verdict(tmp_path, monkeypatch):
@@ -2255,7 +2275,9 @@ def test_autograde_turned_on_mid_day_still_grades(tmp_path, monkeypatch):
 
     # Switched on later the same day: this is still the first grade of the day.
     assert "level 3 → 4" in review.record_submit("s", True, today=today, curve=curve)
-    assert review.load()["s"].level == 4
+    item = review.load()["s"]
+    assert item.level == 4
+    assert item.attempt_today(today) == "passed"
 
     # And only the first.
     note = review.record_submit("s", True, today=today, curve=curve)

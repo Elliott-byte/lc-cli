@@ -11,6 +11,12 @@ every commit bumps the version (early tags grouped a few commits); tags
 the top section for the current day — or start a new one. Say what changed
 and, when behaviour reversed, what it used to do.
 
+## 0.7.76 — 2026-08-25 · the first attempt stands
+
+- The Review mark now keeps the day's first submitted verdict. A failed first
+  attempt remains red after a successful retry instead of being repainted
+  green; grading still clears the mark, and a new day starts fresh.
+
 ## 0.7.75 — 2026-08-25 · visible beginnings and failures
 
 - The built-in editor now explicitly resets the question pane to the top when
