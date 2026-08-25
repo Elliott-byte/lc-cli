@@ -308,6 +308,9 @@ never submitted by accident.
   do not forward it. With Vim keys on, `ctrl+w h` / `ctrl+w l` move between
   code and question; both panes must own the prefix so keyboard focus can make
   the round trip, and the question's native arrows and Page Up/Down scroll it.
+- A newly opened edit screen resets the question to the top both on mount and
+  after the first refresh. Focus/layout can settle late on some terminals and
+  otherwise override the initial scroll position with the bottom of the pane.
 
 ### `lc/vimtext.py` — the built-in editor's Vim layer
 - A deliberate subset (docstring lists it), not an emulator; one unnamed
@@ -338,6 +341,9 @@ never submitted by accident.
   Native `ZZ` cannot own the pane because it tries to write the read-only
   terminal; map `ZZ` in both Normal and Terminal mode to `LcQuitAll`, so the
   same save-and-exit works after the cursor moves left.
+- `LcJudge` snapshots `v:shell_error` immediately after its shell command and
+  waits for Enter when `lc test` fails. Without that explicit acknowledgement,
+  some terminal/Vim combinations redraw the editor over the case details.
 - The clock is drawn on the solution's statusline (the pane shows only
   `q close` — both statuslines share a screen row, so anything else doubles)
   from `timer.json` by a 1s ticker that holds its repaint while a prompt

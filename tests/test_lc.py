@@ -315,6 +315,16 @@ def test_setup_vim_installs_the_plugin(tmp_path, monkeypatch):
     assert "lc review add" in text  # \m saves the problem mid-solve
 
 
+def test_vim_failed_test_waits_for_acknowledgement():
+    """A failed `\\t` must leave its case details visible until Enter."""
+    judge = editors.VIM_PLUGIN.split(
+        "function! s:LcJudge")[1].split("endfunction")[0]
+
+    assert "let l:failed = v:shell_error != 0" in judge
+    assert "a:action ==# 'test' && l:failed" in judge
+    assert "call input('lc: test failed — press Enter to return')" in judge
+
+
 def test_vim_quit_never_fights_the_statement_terminal():
     """The pane runs `lc show` in a terminal; its job blocks :quit and :xall."""
     text = editors.VIM_PLUGIN
@@ -3033,6 +3043,7 @@ def test_tui_n_shows_this_problems_cards(tmp_path, monkeypatch):
     """`n` on a problem renders its notes.md as cards, newest first; n again
     restores the statement; a problem without notes just says so."""
     import asyncio
+    from dataclasses import replace
     import json as _json
 
     monkeypatch.setenv("LC_HOME", str(tmp_path))
@@ -3049,6 +3060,10 @@ def test_tui_n_shows_this_problems_cards(tmp_path, monkeypatch):
     from lc import store, tui
     from lc.api import ProblemSummary
 
+    # This interaction is local; a daily refresh rebuilding the table emits a
+    # row highlight that intentionally restores the statement over the notes.
+    monkeypatch.setattr(tui.LeetCodeTUI, "_daily_worker", lambda self: None)
+
     # Seeded before the app exists: an empty index makes lc download one on
     # mount, and that background sync would blank a index seeded afterwards.
     store.replace_index([
@@ -3057,6 +3072,10 @@ def test_tui_n_shows_this_problems_cards(tmp_path, monkeypatch):
         ProblemSummary("1", "Two Sum", "two-sum", "Easy",
                        50.0, False, None, []),
     ])
+    store.put_statement(PROBLEM)
+    store.put_statement(replace(
+        PROBLEM, question_id="1", frontend_id="1", title="Two Sum",
+        slug="two-sum"))
 
     async def view():
         app = tui.LeetCodeTUI()
@@ -3264,10 +3283,11 @@ def test_builtin_editor_solves_inside_the_tui(tmp_path, monkeypatch):
     }
 
 
-def test_vim_window_keys_scroll_builtin_question(tmp_path, monkeypatch):
-    """ctrl+w h/l gives the question keyboard scrolling. WSL terminals may
-    not forward wheel events, and code owns Page Down until focus moves; both
-    Vim panes must also provide the way back."""
+def test_builtin_question_opens_at_top_and_scrolls_with_vim_keys(
+        tmp_path, monkeypatch):
+    """A long question opens at its beginning, then ctrl+w h/l gives it
+    keyboard scrolling. WSL terminals may not forward wheel events, and both
+    Vim panes must provide the way back."""
     import asyncio
     from dataclasses import replace
     import json as _json
@@ -3308,6 +3328,13 @@ def test_vim_window_keys_scroll_builtin_question(tmp_path, monkeypatch):
             code = app.screen.query_one("#edit-code", TextArea)
             assert app.focused is code and pane.max_scroll_y > 0
 
+            pane.scroll_end(animate=False)
+            await pilot.pause()
+            assert pane.scroll_y > 0
+            app.screen.on_mount()
+            await pilot.pause()
+            opened_at_top = pane.scroll_y == 0
+
             # A Vim count may precede a window command; it is consumed by the
             # command and must not leak into the next code motion.
             await pilot.press("2", "ctrl+w", "h", "pagedown")
@@ -3315,10 +3342,10 @@ def test_vim_window_keys_scroll_builtin_question(tmp_path, monkeypatch):
             question_scrolled = app.focused is pane and pane.scroll_y > 0
             await pilot.press("ctrl+w", "l")
             await pilot.pause()
-            return (question_scrolled, app.focused is code,
+            return (opened_at_top, question_scrolled, app.focused is code,
                     getattr(code, "_count", None) == "")
 
-    assert asyncio.run(scroll()) == (True, True, True)
+    assert asyncio.run(scroll()) == (True, True, True, True)
 
 
 def test_builtin_editor_speaks_vim(tmp_path, monkeypatch):

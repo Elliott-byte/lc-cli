@@ -131,7 +131,7 @@ Nothing suspends; nothing hands off to another program.
 
 The statement's `url` line on the left is still clickable here; app-level
 keys such as `o` stay out of the code area, so plain typing stays plain
-typing.
+typing. The statement starts at the top whenever the editor opens.
 
 | Key | Action |
 | --- | --- |
@@ -342,7 +342,7 @@ In a solution buffer (any file next to a `.lc.json`), normal mode:
 
 | Key | Action |
 | --- | --- |
-| `\t` | save, then `lc test` |
+| `\t` | save, then `lc test`; a failure stays visible until Enter |
 | `\s` | save, then `lc submit` |
 | `\p` | show/hide the problem statement in a left split |
 | `\o` | open the problem page in your browser (figures render there) |

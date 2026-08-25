@@ -11,6 +11,14 @@ every commit bumps the version (early tags grouped a few commits); tags
 the top section for the current day — or start a new one. Say what changed
 and, when behaviour reversed, what it used to do.
 
+## 0.7.75 — 2026-08-25 · visible beginnings and failures
+
+- The built-in editor now explicitly resets the question pane to the top when
+  it opens. Some terminal/layout paths could previously settle with a long
+  statement already scrolled to its bottom.
+- A failed Vim `\t` test now leaves its case details visible until Enter is
+  pressed instead of immediately redrawing the edit page over the result.
+
 ## 0.7.74 — 2026-08-25 · solutions start with the solution
 
 - New solution files and the built-in editor's explicit Reset now contain

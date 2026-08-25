@@ -1,3 +1,3 @@
 """lc — practice LeetCode from your terminal."""
 
-__version__ = "0.7.74"
+__version__ = "0.7.75"

@@ -302,6 +302,11 @@ class EditScreen(Screen):
         code.focus()
         # At the end of the starter's last real line — where typing starts.
         _move_to_code_end(code)
+        statement = self.query_one("#edit-left", VerticalScroll)
+        statement.scroll_home(animate=False)
+        # Focus and layout settle after mount on some terminal paths; repeat
+        # after that refresh so they cannot leave a new question at the bottom.
+        self.call_after_refresh(statement.scroll_home, animate=False)
         if self.app.config.timer_on:
             solvetimer.begin(self.problem.slug)
         self.set_interval(1.0, self._tick)

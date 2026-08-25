@@ -14,7 +14,7 @@ VIM_PLUGIN = r'''" lc.vim — Vim integration for the lc LeetCode CLI.
 " Installed by `lc setup vim`; delete this file to uninstall.
 "
 " In a buffer whose directory contains .lc.json (an `lc pick` workspace):
-"   <leader>t   write the file, then run `lc test`
+"   <leader>t   write the file, then run `lc test`; failures wait for Enter
 "   <leader>s   write the file, then run `lc submit`
 "   <leader>p   show/hide the problem statement in a left split
 "   <leader>o   open the problem page in your browser (for figures/animations)
@@ -93,6 +93,10 @@ function! s:LcJudge(action) abort
     write
   endif
   execute '!cd ' . shellescape(l:dir) . ' && lc ' . a:action
+  let l:failed = v:shell_error != 0
+  if a:action ==# 'test' && l:failed
+    call input('lc: test failed — press Enter to return')
+  endif
 endfunction
 
 function! s:LcStatementWin() abort
