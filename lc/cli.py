@@ -65,6 +65,25 @@ def die(message: str, hint: str = "") -> None:
     raise typer.Exit(1)
 
 
+def _sync_after_level_change(config, before: int, after: int) -> None:
+    """Synchronise a real level move when a review repo is configured.
+
+    The grade is already safely local when this runs. A network failure is
+    therefore reported without turning a successful grading command into a
+    lie, and a clamped/same-level operation does not create sync traffic.
+    """
+    url = config.review_repo.strip()
+    if before == after or not url:
+        return
+    try:
+        with console.status("syncing the level change…", spinner="dots"):
+            gitsync.sync(url)
+    except gitsync.SyncError as exc:
+        _error(f"level changed, but automatic review sync failed: {exc}", exc.hint)
+        return
+    console.print(Text("  ↻ review synced", style="dim"))
+
+
 def client(require_auth: bool = False) -> LeetCode:
     creds = load_credentials()
     if require_auth and not creds:
@@ -887,10 +906,14 @@ def submit(
         store.update_status(problem.slug, "notac")
     cfg = load_config()
     autograde = cfg.autograde
+    before_item = review.live(review.load()).get(problem.slug)
+    before_level = before_item.level if before_item is not None else 0
     note = review.record_submit(
         problem.slug, result.accepted,
         curve=review.curve_of(cfg) if autograde else None,
     )
+    after_item = review.live(review.load()).get(problem.slug)
+    after_level = after_item.level if after_item is not None else before_level
 
     if result.accepted:
         fx.play(console, big=True)
@@ -912,6 +935,7 @@ def submit(
                 Text(f"  grade it: `lc review level {problem.frontend_id} <level>`",
                      style="dim")
             )
+    _sync_after_level_change(cfg, before_level, after_level)
     raise typer.Exit(0 if result.accepted else 1)
 
 
@@ -1090,6 +1114,7 @@ def review_add(
     item = review.add(
         slug, title=title, frontend_id=frontend_id, difficulty=difficulty, curve=curve
     )
+    before_level = item.level
     # Only an explicit --level moves an already-saved problem: a plain re-add
     # must never knock a level-3 problem back to 1.
     if level is not None and level != item.level:
@@ -1101,6 +1126,7 @@ def review_add(
         + Text(f"— level {item.level}, next review in {item.due_in(date.today())}d",
                style="dim")
     )
+    _sync_after_level_change(config, before_level, item.level)
 
 
 @review_app.command("rm")
@@ -1125,7 +1151,8 @@ def review_level(
     if item is None:
         die(f"{ref!r} is not on the review deck", "add it with `lc review add`")
         return
-    curve = review.curve_of(load_config())
+    config = load_config()
+    curve = review.curve_of(config)
     updated = review.shift_level(item.slug, level - item.level, curve)
     assert updated is not None
     console.print(
@@ -1134,6 +1161,7 @@ def review_level(
         + Text(f"— level {updated.level}, next review in "
                f"{updated.due_in(date.today())}d", style="dim")
     )
+    _sync_after_level_change(config, item.level, updated.level)
 
 
 @review_app.command("postpone")

@@ -158,6 +158,8 @@ Enter keeps the current indentation; after a Python line ending in `:`, the
 editor starts the new line one level deeper.
 Run and Submit immediately switch to a waiting screen until LeetCode answers,
 so a second click or keypress cannot accidentally send the request again.
+Recording a submit and displaying its verdict are separate guarded steps, so a
+successfully recorded attempt is not followed by a spurious bookkeeping error.
 
 It highlights Python and **speaks a Vim subset** by default: modes,
 `hjkl w b e 0 ^ $ gg G` with counts, `i a I A o O s x r`,
@@ -282,6 +284,11 @@ lc config curve reset            # back to the Ebbinghaus default
 
 Point lc at a git repo you own and the deck follows you around — a laptop and
 a WSL box stay in step.
+
+Once the repo is configured, every real level change automatically runs a
+sync — whether it came from `+` / `-` / `0`, `lc review level`, or autograde.
+A command clamped at the current level does not make an unnecessary network
+request. `g` and the commands below remain available for all other deck edits.
 
 ```bash
 lc config repo https://github.com/you/lc-review.git

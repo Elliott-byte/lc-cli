@@ -84,6 +84,14 @@ repo's commit — the sync resets onto it, finds nothing to commit, and
 reports success while the new repo stays empty. Re-cloning is cheap; the
 clone holds nothing of record.
 
+**A level change publishes itself.** — *standing.* Once a review repo is
+configured, a real level transition automatically runs the same pull/merge/
+push used by `g`: hand grades in the TUI and CLI, plus autograde verdicts.
+Compare the level before and after instead of treating every grading command
+as a change — curve bounds and repeated commands can leave it unchanged.
+The local grade is already durable before the network begins, so an automatic
+sync failure is visible but never pretends the grade itself failed.
+
 ## Identity
 
 **Deck commits are yours by default, lc's as last resort.** — *standing

@@ -1804,6 +1804,45 @@ def test_cli_review_sync_without_a_repo_explains_itself(tmp_path, monkeypatch):
     assert "lc config repo" in result.output
 
 
+def test_changing_a_level_automatically_syncs_once(tmp_path, monkeypatch):
+    """A grade should reach the other machine without a separate `review sync`.
+
+    A clamped or repeated level command has not changed the level and must not
+    start another network round trip merely because it rescheduled the row.
+    """
+    import json as _json
+    import sys
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    (tmp_path / "config.json").write_text(_json.dumps({
+        "review_repo": "git@example.com:me/reviews.git",
+        "review_curve": [1, 2],
+    }))
+    for mod in [m for m in sys.modules if m.startswith("lc.")]:
+        del sys.modules[mod]
+    from typer.testing import CliRunner
+
+    from lc import gitsync, review
+    from lc.cli import app
+
+    review.add("coin-change", title="Coin Change", frontend_id="322",
+               curve=[1, 2])
+    calls = []
+    monkeypatch.setattr(
+        gitsync, "sync",
+        lambda url: calls.append(url) or (0, 0, 0, True),
+    )
+
+    runner = CliRunner()
+    moved = runner.invoke(app, ["review", "level", "322", "2"])
+    repeated = runner.invoke(app, ["review", "level", "322", "2"])
+
+    assert moved.exit_code == repeated.exit_code == 0
+    assert calls == ["git@example.com:me/reviews.git"]
+    assert "review synced" in moved.output
+    assert "review synced" not in repeated.output
+
+
 def test_cli_config_repo_roundtrip(tmp_path, monkeypatch):
     monkeypatch.setenv("LC_HOME", str(tmp_path))
     from typer.testing import CliRunner
@@ -2273,6 +2312,98 @@ def test_a_submit_aims_the_deck_cursor_at_the_problem(tmp_path, monkeypatch):
     assert aimed == "move-zeroes", "the submit must aim the cursor"
     assert (deck["move-zeroes"].level, deck["two-sum"].level) == (4, 3)
     assert after == "two-sum", "focus is one-shot, not sticky"
+
+
+def test_tui_grading_starts_the_same_automatic_sync(tmp_path, monkeypatch):
+    """The Review footer's + / - keys must publish grades just like the CLI."""
+    import asyncio
+    import sys
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    (tmp_path / "config.json").write_text(json.dumps({
+        "review_repo": "git@example.com:me/reviews.git",
+        "review_curve": [1, 2],
+    }))
+    for mod in [m for m in sys.modules if m.startswith("lc.")]:
+        del sys.modules[mod]
+    from lc import review, store, tui
+    from lc.api import ProblemSummary
+
+    review.add(PROBLEM.slug, title=PROBLEM.title,
+               frontend_id=PROBLEM.frontend_id, curve=[1, 2])
+    store.replace_index([ProblemSummary(
+        frontend_id=PROBLEM.frontend_id, title=PROBLEM.title,
+        slug=PROBLEM.slug, difficulty=PROBLEM.difficulty,
+        ac_rate=PROBLEM.ac_rate, paid_only=False, status="", tags=[],
+    )])
+    store.put_statement(PROBLEM)
+    calls = []
+    monkeypatch.setattr(
+        tui.LeetCodeTUI, "_review_sync_worker",
+        lambda self, url: calls.append(url),
+    )
+
+    async def grade_twice():
+        app = tui.LeetCodeTUI()
+        async with app.run_test(size=(140, 40)) as pilot:
+            await pilot.pause()
+            await pilot.press("tab", "plus", "plus")
+            await pilot.pause()
+
+    asyncio.run(grade_twice())
+    assert review.load()[PROBLEM.slug].level == 2
+    assert calls == ["git@example.com:me/reviews.git"]
+
+
+def test_tui_autograde_syncs_only_when_the_verdict_moves_a_level(
+        tmp_path, monkeypatch):
+    """Built-in-editor submits bypass the CLI, so their autograde needs the hook."""
+    import asyncio
+    import sys
+    from datetime import date as _date, timedelta
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    (tmp_path / "config.json").write_text(json.dumps({
+        "review_repo": "git@example.com:me/reviews.git",
+        "review_curve": [1, 2],
+        "review_autograde": True,
+    }))
+    for mod in [m for m in sys.modules if m.startswith("lc.")]:
+        del sys.modules[mod]
+    from lc import review, store, tui
+    from lc.api import JudgeResult, ProblemSummary
+
+    review.add(PROBLEM.slug, title=PROBLEM.title,
+               frontend_id=PROBLEM.frontend_id, curve=[1, 2],
+               today=_date.today() - timedelta(days=1))
+    store.replace_index([ProblemSummary(
+        frontend_id=PROBLEM.frontend_id, title=PROBLEM.title,
+        slug=PROBLEM.slug, difficulty=PROBLEM.difficulty,
+        ac_rate=PROBLEM.ac_rate, paid_only=False, status="", tags=[],
+    )])
+    calls = []
+    monkeypatch.setattr(
+        tui.LeetCodeTUI, "_review_sync_worker",
+        lambda self, url: calls.append(url),
+    )
+    accepted = JudgeResult(
+        raw={}, accepted=True, status="Accepted", is_run=False,
+    )
+
+    async def submit_twice():
+        app = tui.LeetCodeTUI()
+        async with app.run_test(size=(140, 40)) as pilot:
+            await pilot.pause()
+            await asyncio.to_thread(app._record_submit, PROBLEM, accepted)
+            await pilot.pause()
+            # Whoever grades first today wins, so the retry cannot ratchet the
+            # level or start a second sync.
+            await asyncio.to_thread(app._record_submit, PROBLEM, accepted)
+            await pilot.pause()
+
+    asyncio.run(submit_twice())
+    assert review.load()[PROBLEM.slug].level == 2
+    assert calls == ["git@example.com:me/reviews.git"]
 
 
 def test_autograde_turned_on_mid_day_still_grades(tmp_path, monkeypatch):

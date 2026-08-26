@@ -132,6 +132,7 @@ Vim Normal/Visual 模式下，底栏使用好按的单键 `R S N B T X`；进入
 回车会继承当前缩进；Python 行以 `:` 结尾时，新行会自动再缩进一级。
 Run 和 Submit 触发后会立即切到等待画面，LeetCode 返回结果后自动回到编辑器；等待期间不会因为
 重复点击或按键再次发送请求。
+提交记录和结果显示分别受保护；记录已经成功时，不会再跟着冒出一条假的记账失败提示。
 
 它带 Python 代码高亮，并且**默认说 Vim 话**：模式切换、`hjkl w b e 0 ^ $ gg G`（支持数字
 前缀）、`i a I A o O s x r`、`dd yy cc dw cw D C p P`、`v` 可视、`u` 撤销、`U` 重做——
@@ -229,6 +230,10 @@ lc config curve reset            # 回到默认的艾宾浩斯曲线
 ## 跨机器同步
 
 指一个你自己的 git 仓库给 lc，刷题本就跟着你走——笔记本和 WSL 机器保持一致。
+
+仓库配置好以后，每次等级真正发生变化都会自动同步——无论来自 `+` / `-` / `0`、
+`lc review level`，还是 autograde。已经卡在当前等级的操作不会多跑一次网络请求；其他刷题本
+改动仍可随时用 `g` 或下面的命令同步。
 
 ```bash
 lc config repo https://github.com/you/lc-review.git

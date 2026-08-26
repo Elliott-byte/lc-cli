@@ -134,6 +134,11 @@ never submitted by accident.
 - `status()` is computed from local files only — the strip redraws on every
   deck refresh and must never touch the network. "synced" means "agreed with
   the clone at last contact".
+- A **real level transition** automatically calls the normal sync when a repo
+  is configured: TUI `+`/`-`/`0`, CLI `review level`/`add --level`, and
+  autograde submits. Compare before/after levels so a curve clamp or repeated
+  command does not make a needless network request; sync failure never rolls
+  back the already-durable local grade.
 
 ### `lc/solvetimer.py` — the clock
 - One `Timer` in `timer.json`: `armed` (created, never started), running
@@ -187,7 +192,8 @@ never submitted by accident.
   `.lc.json`, and it never falls back to another language's file.
 - `submit` mirrors the TUI: status update never downgrades a solve
   (`notac` only when not already `ac`), `record_submit` with curve iff
-  autograde, timer `stop_if` on accept.
+  autograde, timer `stop_if` on accept. If autograde actually changes the
+  level, it synchronises the configured review repo after recording locally.
 - `resolve_problem` short-circuits through the statement cache so re-reading
   works offline; `store.find` accepts id (zero-padded too), slug, or title.
 
@@ -234,7 +240,9 @@ never submitted by accident.
   from the judge, and from the bookkeeping that files a verdict away, are
   reported in full and never allowed to kill the session — the app dying
   mid-solve takes the unsaved buffer with it. `api.py` wraps what it knows
-  into `LeetCodeError`; this is for what it does not.
+  into `LeetCodeError`; this is for what it does not. `_record_submit` only
+  records; `_judge_worker` owns the one result display because its `cases`
+  input does not exist at the bookkeeping boundary.
 
 ### `lc/notes.py` — note cards
 - `open_card` **creates the directory** — it can be gone by the time a note

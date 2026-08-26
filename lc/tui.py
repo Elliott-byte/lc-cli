@@ -894,12 +894,16 @@ class LeetCodeTUI(App):
         slug = self._review_slug()
         if not slug:
             return
+        before = review.live(review.load()).get(slug)
         item = review.shift_level(slug, delta, self.curve)
         if item:
             self.notify(
                 f"level {item.level} — next review in {item.due_in(date.today())}d"
             )
             self.refresh_review()
+            self._sync_after_level_change(
+                before.level if before is not None else item.level, item.level
+            )
 
     def action_review_level_up(self) -> None:
         self._review_shift(+1)
@@ -911,6 +915,7 @@ class LeetCodeTUI(App):
         slug = self._review_slug()
         if not slug:
             return
+        before = review.live(review.load()).get(slug)
         item = review.forget(slug, self.curve)
         if item:
             self.notify(
@@ -918,6 +923,9 @@ class LeetCodeTUI(App):
                 f"{item.due_in(date.today())}d"
             )
             self.refresh_review()
+            self._sync_after_level_change(
+                before.level if before is not None else item.level, item.level
+            )
 
     def action_review_snooze(self) -> None:
         slug = self._review_slug()
@@ -948,6 +956,14 @@ class LeetCodeTUI(App):
         # reporting the problem list, and the notification says what the sync
         # actually did. Three channels repeating "syncing…" is noise.
         self.refresh_sync_bar("⟳ syncing…", "syncing")
+        self._review_sync_worker(url)
+
+    def _sync_after_level_change(self, before: int, after: int) -> None:
+        """Start a background sync only when a grade truly moved the level."""
+        url = self.config.review_repo.strip()
+        if before == after or not url:
+            return
+        self.refresh_sync_bar("⟳ syncing level change…", "syncing")
         self._review_sync_worker(url)
 
     @work(thread=True, exclusive=True, group="review-sync")
@@ -1326,10 +1342,14 @@ class LeetCodeTUI(App):
             if known is not None and not known.solved:
                 store.update_status(problem.slug, "notac")
         autograde = self.config.autograde
+        before_item = review.live(review.load()).get(problem.slug)
+        before_level = before_item.level if before_item is not None else 0
         note = review.record_submit(
             problem.slug, result.accepted,
             curve=self.curve if autograde else None,
         )
+        after_item = review.live(review.load()).get(problem.slug)
+        after_level = after_item.level if after_item is not None else before_level
         self.call_from_thread(self.refresh_list)
         # Leave the deck's cursor on the problem just submitted, so tabbing
         # over lands on it and + / - grade what was actually re-solved
@@ -1348,10 +1368,11 @@ class LeetCodeTUI(App):
                     "+" if result.accepted else "-")
             self.call_from_thread(self.notify, f"{note}{tail}", timeout=8)
         self.call_from_thread(
+            self._sync_after_level_change, before_level, after_level
+        )
+        self.call_from_thread(
             self._timer_submit, problem.slug, result.accepted
         )
-
-        self.call_from_thread(self._show_result, result, cases)
 
     def _show_result(self, result: JudgeResult, cases: list[str] | None = None) -> None:
         lines: list[RenderableType] = [
