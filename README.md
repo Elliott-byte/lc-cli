@@ -202,6 +202,12 @@ Due problems sort to the top and the tab title counts them: `Review (3)`;
 the status bar counts the whole deck — `69 on the deck · 3 due` — and
 narrows with the `/` filter.
 
+Opening a due problem from **Review** begins a clean recall attempt: on the
+first open that day, lc replaces the previous answer with that language's
+starter code. Reopening it again the same day keeps the work you have just
+written. Opening from **Problems** (or with `lc edit`) still reopens the
+existing answer unchanged.
+
 ![the review deck](docs/review.svg)
 
 **You grade, lc remembers.** Re-solve a due problem and submit: lc marks the

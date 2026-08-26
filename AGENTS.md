@@ -153,6 +153,10 @@ never submitted by accident.
   language**; only choose a language and `create()` when nothing exists.
   Re-picking would write a second file in the config default and repoint
   `.lc.json`, stranding the real work and aiming `r`/`s` at starter code.
+- A due problem opened from Review resets that recorded solution to starter
+  code **once per local day**. `.lc.json`'s `review_started` stamp prevents a
+  same-day reopen from erasing the new attempt; Problems-tab/CLI opens and
+  already-attempted rows remain ordinary reopens.
 - Editor-return heuristics in `action_pick`: snapshot **at the door, every
   visit** — both the store's solved flag and the deck's ✔ mark. Both mean
   "today", not "while I was in the editor"; acting on a standing value
@@ -219,6 +223,9 @@ never submitted by accident.
   solutions have no generated title/URL header. The built-in editor's reset
   and `create(overwrite=True)` must use the same path, or reset can silently
   produce a different file from a fresh pick.
+- `restart_review` keeps the existing recorded language/file and stamps the
+  local day in `.lc.json`; never infer the reset from the deck alone, or a
+  second editor visit that day destroys the attempt in progress.
 - `strip_header` removes only a leading comment block that contains the
   problem URL. This is compatibility for files written by older lc versions;
   a user's own comment is never deleted.

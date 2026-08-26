@@ -2495,6 +2495,76 @@ def test_enter_reopens_the_language_you_started_in(tmp_path, monkeypatch):
     assert judged.code == "// half-finished\n", "r/s must judge the real work"
 
 
+def test_a_due_review_starts_clean_once_without_re_erasing_today(
+        tmp_path, monkeypatch):
+    """A due recall attempt must not expose yesterday's submitted answer.
+
+    Clearing on every enter is worse: leaving Vim and reopening it on the same
+    day would erase the new attempt too. The workspace date stamp makes the
+    destructive reset exactly once per machine and day, while retaining the
+    language and file selected when the problem was first picked.
+    """
+    import asyncio
+    import contextlib
+    import sys
+    from datetime import date as _date, timedelta
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    for var in ("LC_EDITOR", "VISUAL", "EDITOR"):
+        monkeypatch.delenv(var, raising=False)
+    (tmp_path / "config.json").write_text(json.dumps({
+        "workspace": str(tmp_path / "ws"), "editor": "true",
+    }))
+    for mod in [m for m in sys.modules if m.startswith("lc.")]:
+        del sys.modules[mod]
+    from textual.widgets import TabbedContent
+
+    from lc import review, store, tui, workspace
+    from lc.config import load_config
+    from lc.langs import resolve
+
+    started = workspace.create(load_config(), PROBLEM, resolve("python3"))
+    started.file.write_text("# yesterday's submitted answer\n")
+    review.add(
+        PROBLEM.slug, title=PROBLEM.title, frontend_id=PROBLEM.frontend_id,
+        difficulty=PROBLEM.difficulty, curve=[1],
+        today=_date.today() - timedelta(days=1),
+    )
+    store.put_statement(PROBLEM)
+
+    opened = []
+
+    def edit(config, target):
+        opened.append(target.read_text())
+        target.write_text("# today's unfinished attempt\n")
+        return True
+
+    monkeypatch.setattr(tui.workspace, "open_in_editor", edit)
+    monkeypatch.setattr(tui.LeetCodeTUI, "suspend",
+                        lambda self: contextlib.nullcontext())
+
+    async def practice_twice():
+        app = tui.LeetCodeTUI()
+        async with app.run_test(size=(140, 40)) as pilot:
+            await pilot.pause()
+            app.query_one(TabbedContent).active = "pane-review"
+            app.current, app.current_slug = PROBLEM, PROBLEM.slug
+            app.action_pick()
+            await pilot.pause()
+            app.current = app.current or PROBLEM
+            app.action_pick()
+            await pilot.pause()
+
+    asyncio.run(practice_twice())
+    assert opened == [
+        PROBLEM.snippets["python3"].rstrip("\n") + "\n",
+        "# today's unfinished attempt\n",
+    ]
+    meta = json.loads((started.directory / ".lc.json").read_text())
+    assert meta["review_started"] == _date.today().isoformat()
+    assert (meta["lang"], meta["file"]) == ("python3", "solution.py")
+
+
 def test_opening_a_problem_clocks_it_and_an_accept_stops_it(tmp_path, monkeypatch):
     """The clock is an editing-session thing — the TUI only starts it when a
     problem is opened and stops it when a submit comes back accepted. The

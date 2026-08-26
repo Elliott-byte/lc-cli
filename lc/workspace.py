@@ -16,6 +16,7 @@ import re
 import shlex
 import subprocess
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 
 from .api import Problem
@@ -121,6 +122,41 @@ def create(
         question_id=problem.question_id,
         frontend_id=problem.frontend_id,
     )
+
+
+def restart_review(problem: Problem, solution: Solution, today: date) -> bool:
+    """Restore starter code once for this day's due-review session.
+
+    The date lives beside the recorded solution rather than in the synced deck:
+    opening the editor twice on one machine must not erase work from the first
+    visit, while another machine should still begin its own clean recall attempt.
+    Returns whether this call performed the reset.
+    """
+    meta_path = solution.directory / ".lc.json"
+    try:
+        raw = json.loads(meta_path.read_text()) if meta_path.exists() else {}
+    except json.JSONDecodeError:
+        raw = {}
+    meta = raw if isinstance(raw, dict) else {}
+    stamp = today.isoformat()
+    if meta.get("review_started") == stamp:
+        return False
+
+    # Keep the language and recorded filename that were already in use. A
+    # review restart clears the answer; it must not strand it by re-picking in
+    # the config default language, the failure ordinary reopen avoids.
+    solution.file.write_text(starter_code(problem, solution.language))
+    meta.update({
+        "slug": problem.slug,
+        "question_id": problem.question_id,
+        "frontend_id": problem.frontend_id,
+        "title": problem.title,
+        "lang": solution.language.slug,
+        "file": solution.file.name,
+        "review_started": stamp,
+    })
+    meta_path.write_text(json.dumps(meta, indent=2) + "\n")
+    return True
 
 
 def load(config: Config, problem: Problem, lang: Language | None = None) -> Solution | None:

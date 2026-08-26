@@ -1098,6 +1098,22 @@ class LeetCodeTUI(App):
                 self.notify(escape(str(exc)), severity="error")
                 return
 
+        # The Review tab is recall practice, not continuation: the first open
+        # of a due problem today starts from its original prompt. Persisting a
+        # per-machine day stamp prevents a second visit from erasing the answer
+        # being written in this practice session. Ordinary Problems-tab opens,
+        # future reviews, and today's already-submitted attempts still reopen.
+        today = date.today()
+        if self.query_one(TabbedContent).active == "pane-review":
+            item = review.live(review.load()).get(problem.slug)
+            if (item is not None and item.due_in(today) <= 0
+                    and not item.attempt_today(today)):
+                try:
+                    workspace.restart_review(problem, solution, today)
+                except (ValueError, OSError) as exc:
+                    self.notify(escape(str(exc)), severity="error")
+                    return
+
         self._timer_begin(problem.slug)
         # Snapshot solved-ness at the door, every visit: the editor-return
         # check needs "became solved while I was in there", and a value

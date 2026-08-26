@@ -11,6 +11,13 @@ every commit bumps the version (early tags grouped a few commits); tags
 the top section for the current day — or start a new one. Say what changed
 and, when behaviour reversed, what it used to do.
 
+## 0.7.78 — 2026-08-26 · clean recall attempts
+
+- The first time a due problem is opened from Review each day, its previous
+  answer is now replaced with starter code in the language already selected.
+  Reopening it later that day preserves the new attempt; Problems-tab and
+  `lc edit` opens still preserve existing files as before.
+
 ## 0.7.77 — 2026-08-25 · Vim questions begin at the beginning
 
 - A newly opened Vim or Neovim statement pane now starts at the question

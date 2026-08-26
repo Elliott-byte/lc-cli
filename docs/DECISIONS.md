@@ -156,12 +156,22 @@ clock chrome.
 
 ## TUI
 
-**`enter` reopens; `pick` creates.** — *standing.* A problem you already
+**`enter` reopens; `pick` creates.** — *superseded in 0.7.78 for due Review
+attempts; retained for ordinary opens.* A problem you already
 started reopens as-is, whatever language it was picked in — re-picking
 would write a second file in the config default and repoint `.lc.json`,
 stranding the half-written one and aiming `r`/`s` at fresh starter code.
 The CLI's `lc pick` keeps create semantics (with `--lang`/`--overwrite`);
 `lc edit` and the TUI's enter are the reopen paths.
+
+**Ordinary enter reopens; a due Review entry restarts once a day.** —
+*standing.* Recall practice must not display the answer submitted last time,
+so the first open of a due, not-yet-attempted problem from Review restores the
+starter code in the solution's recorded language. `.lc.json` records that
+machine's `review_started` date: reopening Vim or the built-in editor later
+that day keeps the new attempt instead of destructively resetting it again.
+Problems-tab and CLI edit paths remain ordinary reopens, and the marker is
+machine-local because each machine should begin its own recall attempt.
 
 **Cursor follows the problem, not the row number.** — *standing.* Grading
 moves a due date, which re-sorts the deck; restore by slug (with a one-shot
@@ -208,10 +218,18 @@ Python as Go wastes a real submission).
 a comment and remove it before judging.
 
 **New solutions are starter code only; legacy headers still strip.** —
-*standing.* The statement pane and workspace README already identify the
+*superseded in 0.7.78 only for the blanket claim that every existing file stays
+untouched.* The statement pane and workspace README already identify the
 problem, so repeating the title and URL above every answer is noise. Existing
 files are user data and stay untouched; `strip_header` continues recognising
 older lc-generated headers without deleting a comment the user wrote.
+
+**Existing answers persist except at an explicit due-review boundary.** —
+*standing.* Normal reopen, create without `--overwrite`, and judging never
+rewrite an answer. Entering a due Review item is the one destructive boundary:
+once per local day it replaces only `.lc.json`'s recorded solution file with
+that language's starter code. The recorded file still wins, so helper files
+are never selected or cleared.
 
 **Judge polling survives drops.** — *standing.* The submission already
 went in, so network errors, 429 and 5xx during `/check/` polling mean
