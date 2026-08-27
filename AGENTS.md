@@ -170,6 +170,9 @@ never submitted by accident.
   then row index** — grading re-sorts the deck. `load_items(focus=…)` is a
   one-shot request consumed by that single render (a resize re-renders too
   and must not yank the cursor back).
+- Review's `Diff` column is explicit, not just an id tint. `_CHROME` includes
+  all six columns and their padding; at the 40-column pane floor the title
+  yields down to nine cells so difficulty never disappears behind scrolling.
 - The status bar is per-tab: `_remember_status(pane, …)` stores each tab's
   durable line and only writes the bar when that tab is active;
   `_tab_activated` restores the arriving tab's line. Transient messages

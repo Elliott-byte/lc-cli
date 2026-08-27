@@ -2406,6 +2406,37 @@ def test_a_submit_aims_the_deck_cursor_at_the_problem(tmp_path, monkeypatch):
     assert after == "two-sum", "focus is one-shot, not sticky"
 
 
+def test_review_rows_show_the_problem_difficulty(tmp_path, monkeypatch):
+    """Review used difficulty only as the id's colour, so its name was invisible."""
+    import asyncio
+    from datetime import date
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    from lc import tui
+
+    today = date.today().isoformat()
+    (tmp_path / "review.json").write_text(json.dumps({
+        "coin-change": {
+            "title": "Coin Change", "frontend_id": "322",
+            "difficulty": "Medium", "level": 2, "due": today,
+        },
+    }))
+
+    async def read_row():
+        app = tui.LeetCodeTUI()
+        async with app.run_test(size=(140, 40)) as pilot:
+            await pilot.pause()
+            table = app.query_one("#review", tui.ReviewList)
+            columns = [str(key.value) for key in table.columns]
+            row = table.get_row("coin-change")
+            return columns, [cell.plain if hasattr(cell, "plain") else str(cell)
+                             for cell in row]
+
+    columns, row = asyncio.run(read_row())
+    assert columns == ["due-mark", "id", "difficulty", "level", "due", "title"]
+    assert row[2] == "Medium"
+
+
 def test_tui_grading_starts_the_same_automatic_sync(tmp_path, monkeypatch):
     """The Review footer's + / - keys must publish grades just like the CLI."""
     import asyncio

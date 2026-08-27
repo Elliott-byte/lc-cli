@@ -11,6 +11,13 @@ every commit bumps the version (early tags grouped a few commits); tags
 the top section for the current day — or start a new one. Say what changed
 and, when behaviour reversed, what it used to do.
 
+## 0.7.82 — 2026-08-27 · Review shows difficulty
+
+- The TUI Review table now has a coloured `Diff` column for Easy, Medium and
+  Hard instead of encoding difficulty only in the problem id's colour. Its
+  title budget shrinks at the pane floor so the new column remains visible
+  without horizontal scrolling.
+
 ## 0.7.81 — 2026-08-27 · judge refreshes stale CSRF
 
 - A judge request rejected with Cloudflare's HTTP 499 / HTML 403 response now

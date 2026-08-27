@@ -207,7 +207,8 @@ curve: level 1 comes back after 1 day, then 2, 4, 7, 15, out to a year at
 level 10.
 Due problems sort to the top and the tab title counts them: `Review (3)`;
 the status bar counts the whole deck — `69 on the deck · 3 due` — and
-narrows with the `/` filter.
+narrows with the `/` filter. Each row keeps the problem's coloured difficulty
+visible beside its id, level and due date, including in the narrowest pane.
 
 Opening a due problem from **Review** begins a clean recall attempt: on the
 first open that day, lc replaces the previous answer with that language's

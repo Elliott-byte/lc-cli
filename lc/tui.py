@@ -156,7 +156,7 @@ class ReviewList(DataTable):
     """The Review tab: the spaced-repetition deck. Row keys are problem slugs."""
 
     #: Columns other than the title, plus DataTable's per-cell padding.
-    _CHROME = 1 + 4 + 2 + 6 + 10
+    _CHROME = 1 + 4 + 6 + 2 + 6 + 12
 
     BINDINGS = [
         # These live on the widget so they only fire — and only show in the
@@ -191,12 +191,16 @@ class ReviewList(DataTable):
         self.zebra_stripes = True
         self.add_column("", width=1, key="due-mark")
         self.add_column("#", width=4, key="id")
+        self.add_column("Diff", width=6, key="difficulty")
         self.add_column("Lv", width=2, key="level")
         self.add_column("Due", width=6, key="due")
         self.add_column("Title", key="title")
 
     def _available(self) -> int:
-        return max((self.size.width or 46) - self._CHROME, 14)
+        # At the pane's 40-column floor the six fixed columns still fit; the
+        # title gives up space rather than hiding difficulty behind horizontal
+        # scrolling, but remains long enough to identify most short names.
+        return max((self.size.width or 46) - self._CHROME, 9)
 
     def load_items(self, items: Iterable[review.ReviewItem], today: date,
                    focus: str = "") -> None:
@@ -257,7 +261,8 @@ class ReviewList(DataTable):
                 label = label[: width - 1] + "…"
             self.add_row(
                 mark,
-                paint(item.frontend_id,
+                paint(item.frontend_id, "dim"),
+                paint(item.difficulty[:6],
                       DIFFICULTY_STYLE.get(item.difficulty, "dim")),
                 paint(str(item.level), "bold" if days <= 0 else ""),
                 due,
