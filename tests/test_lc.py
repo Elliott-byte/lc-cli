@@ -569,6 +569,55 @@ def test_login_opens_the_browser_and_waits_when_signed_out(tmp_path, monkeypatch
     assert load_credentials().session == "sess"
 
 
+def test_login_explains_blocked_safari_cookies_and_can_switch_to_paste(
+        tmp_path, monkeypatch):
+    """Enter cannot fix macOS denying Safari's cookie store.
+
+    The old prompt swallowed PermissionError and repeated the same instruction
+    five times even though the user was visibly signed in. Explain the actual
+    permission boundary and let p escape directly to the supported paste flow.
+    """
+    cli = _login_env(tmp_path, monkeypatch)
+
+    def unreadable():
+        cli._BROWSER_COOKIE_WARNINGS = [
+            "macOS blocked Safari cookies. If Safari is where you signed in, "
+            "enable Full Disk Access for this terminal and restart it, or type "
+            "p below to paste the cookies instead."
+        ]
+        return []
+
+    monkeypatch.setattr(cli, "_read_browser_cookies", unreadable)
+    monkeypatch.setattr(cli.browser, "open_url", lambda _url: True)
+
+    from typer.testing import CliRunner
+    result = CliRunner().invoke(cli.app, ["login"], input="p\nsess\ntok\n")
+
+    assert result.exit_code == 0, result.output
+    assert result.output.count("macOS blocked Safari cookies") == 1
+    assert "where to find your cookies" in result.output
+    assert "logged in as tester" in result.output
+
+
+def test_cookie_scan_records_safari_permission_without_cookie_values(monkeypatch):
+    """The diagnostic may name the blocked browser, never expose credentials."""
+    import sys
+    import types
+
+    import lc.cli as cli
+
+    def safari(*, domain_name):
+        assert domain_name == "leetcode.com"
+        raise PermissionError(1, "Operation not permitted", "Cookies.binarycookies")
+
+    monkeypatch.setitem(
+        sys.modules, "browser_cookie3", types.SimpleNamespace(all_browsers=[safari])
+    )
+    assert cli._read_browser_cookies() is None
+    assert len(cli._BROWSER_COOKIE_WARNINGS) == 1
+    assert "Safari" in cli._BROWSER_COOKIE_WARNINGS[0]
+
+
 # ------------------------------------------------------------------ WSL
 
 def test_is_wsl_reads_the_kernel_banner(tmp_path, monkeypatch):

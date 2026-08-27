@@ -188,6 +188,10 @@ never submitted by accident.
 ### `lc/cli.py`
 - `die(msg, hint)` prints and raises `typer.Exit(1)`. `main()` catches
   `AuthError`/`LeetCodeError` at top level so no traceback reaches the user.
+- Browser login retains no cookie values in diagnostics: a Safari
+  `PermissionError` becomes a Full Disk Access warning, and `p` at the retry
+  prompt falls through to manual cookie entry. Do not swallow the error into
+  another identical Enter prompt — OS permission cannot change by retrying.
 - `_load_for_judging` resolves ref-or-cwd; an explicit `--lang` wins over
   `.lc.json`, and it never falls back to another language's file.
 - `submit` mirrors the TUI: status update never downgrades a solve

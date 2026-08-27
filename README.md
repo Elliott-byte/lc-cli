@@ -52,7 +52,9 @@ reads them straight from a local browser (Chrome, Firefox, Safari, Edge, …)
 and verifies them. Not signed in yet? It opens the LeetCode login page — sign
 in there, press Enter, and `lc` picks up the fresh cookies. On macOS the OS
 may ask once for keychain access; reading Safari's cookies needs Full Disk
-Access for your terminal.
+Access for your terminal. If macOS blocks Safari, `lc login` now names that
+permission instead of asking you to press Enter repeatedly; type `p` at the
+retry prompt to switch straight to the manual-cookie flow.
 
 If no browser store is readable (remote box, exotic browser):
 

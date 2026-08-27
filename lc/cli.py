@@ -311,6 +311,11 @@ def print_result(result: JudgeResult, problem: Problem, data_input: str = "") ->
 
 LOGIN_URL = "https://leetcode.com/accounts/login/"
 
+# Filled by each browser-cookie scan without ever retaining cookie values.
+# The automatic login prompt uses these diagnostics to distinguish "not signed
+# in yet" from an OS permission wall that pressing Enter cannot repair.
+_BROWSER_COOKIE_WARNINGS: list[str] = []
+
 
 @app.command()
 def login(
@@ -401,6 +406,8 @@ def _read_browser_cookies() -> list[dict[str, str]] | None:
     (browser_cookie3 only knows Linux paths, and Windows Chrome/Edge encrypt
     theirs beyond reach). Returns None when no store is readable at all.
     """
+    global _BROWSER_COOKIE_WARNINGS
+    _BROWSER_COOKIE_WARNINGS = []
     candidates: list[dict[str, str]] = []
     readable = False
 
@@ -412,7 +419,14 @@ def _read_browser_cookies() -> list[dict[str, str]] | None:
     for loader in loaders:
         try:
             jar = loader(domain_name="leetcode.com")
-        except Exception:  # browser_cookie3 raises a wide variety of errors
+        except Exception as exc:  # browser_cookie3 raises a wide variety of errors
+            if (isinstance(exc, PermissionError)
+                    and getattr(loader, "__name__", "") == "safari"):
+                _BROWSER_COOKIE_WARNINGS.append(
+                    "macOS blocked Safari cookies. If Safari is where you signed "
+                    "in, enable Full Disk Access for this terminal and restart it, "
+                    "or type p below to paste the cookies instead."
+                )
             continue
         readable = True
         cookies = {c.name: c.value for c in jar}
@@ -437,8 +451,17 @@ def _login_via_browser(attempts: int = 5) -> tuple[str, str, dict] | None:
     Returns None when no cookie store is readable at all, so login() can
     fall back to pasting.
     """
+    warned: set[str] = set()
+
+    def show_warnings() -> None:
+        for warning in _BROWSER_COOKIE_WARNINGS:
+            if warning not in warned:
+                console.print(Text(warning, style="yellow"))
+                warned.add(warning)
+
     candidates = _read_browser_cookies()
     if candidates is None:
+        show_warnings()
         console.print(
             Text("could not read any browser's cookies — paste them instead", style="dim")
         )
@@ -446,6 +469,7 @@ def _login_via_browser(attempts: int = 5) -> tuple[str, str, dict] | None:
 
     opened = False
     for _ in range(attempts):
+        show_warnings()
         for cookies in candidates:
             session = cookies["LEETCODE_SESSION"]
             csrf = cookies["csrftoken"]
@@ -469,11 +493,14 @@ def _login_via_browser(attempts: int = 5) -> tuple[str, str, dict] | None:
         try:
             # Browsers flush cookies to disk lazily; a beat before re-reading
             # makes the first retry much more likely to see the new session.
-            console.input(
+            answer = console.input(
                 "sign in there, wait a few seconds, then press [bold]Enter[/] to retry "
+                "([bold]p[/] to paste cookies) "
             )
         except EOFError:
             break
+        if answer.strip().lower() == "p":
+            return None
         time.sleep(1.0)
         candidates = _read_browser_cookies() or []
     die("still no signed-in browser session",

@@ -11,6 +11,13 @@ every commit bumps the version (early tags grouped a few commits); tags
 the top section for the current day — or start a new one. Say what changed
 and, when behaviour reversed, what it used to do.
 
+## 0.7.80 — 2026-08-27 · login names the permission wall
+
+- Browser login now reports when macOS denied access to Safari's cookies and
+  offers `p` to switch directly to manual cookie entry. It previously swallowed
+  the permission error and repeated “press Enter to retry” even when the user
+  was already signed in and another retry could not reveal the session.
+
 ## 0.7.79 — 2026-08-26 · grades publish themselves
 
 - Every actual review-level change now automatically syncs the configured

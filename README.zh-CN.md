@@ -47,7 +47,9 @@ lc login
 
 会直接从本机浏览器（Chrome、Firefox、Safari、Edge 等）读取并验证。还没登录？它会打开
 LeetCode 登录页——在那里登录，回车，`lc` 就能拿到新 cookie。macOS 上系统可能会弹一次钥匙串
-授权；读取 Safari 的 cookie 需要给终端 App 完全磁盘访问权限。
+授权；读取 Safari 的 cookie 需要给终端 App 完全磁盘访问权限。如果 macOS 拦住了 Safari，
+`lc login` 会直接指出这个权限问题，不再只让你反复回车；在重试提示输入 `p` 可立即切到手动
+粘贴 cookie。
 
 如果没有任何浏览器存储可读（远程机器、小众浏览器）：
 
