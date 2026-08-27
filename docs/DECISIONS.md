@@ -244,6 +244,15 @@ went in, so network errors, 429 and 5xx during `/check/` polling mean
 "keep asking until the deadline"; only 4xx and the judge's own FAILURE are
 terminal.
 
+**Refresh CSRF only after the judge identifies the stale-token shape.** —
+*standing.* `LEETCODE_SESSION` is enough for GraphQL account reads, so a green
+`whoami` does not prove a mutating request's CSRF pair. LeetCode exposes a stale
+pair as HTTP 499 with an HTML 403 page; on exactly that response lc loads the
+problem page, discards every old/domainless CSRF cookie, adopts the new domain
+cookie for both header and cookie, and retries once. Rejected: dumping the HTML
+(not actionable), treating it as an expired login (the session is valid), or
+blind retries with the same token.
+
 ## Process
 
 **Every commit bumps the version; tags are releases.** — *standing.* The

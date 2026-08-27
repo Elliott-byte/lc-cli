@@ -85,6 +85,49 @@ def test_run_reports_pass_when_every_sample_matches():
     assert result.runtime == "48 ms"
 
 
+def test_judge_refreshes_a_rejected_csrf_token_and_retries_once():
+    """`whoami` can pass while judge POSTs reject an obsolete CSRF token.
+
+    LeetCode returns HTTP 499 with an HTML 403 page in this state. Loading the
+    problem page supplies the current token; the retry must send only that
+    cookie and header, never the stale domainless cookie beside it.
+    """
+    requests = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        url = str(request.url)
+        if len(requests) == 1:
+            assert url.endswith("/interpret_solution/")
+            return httpx.Response(
+                499, text="<html><title>403 Forbidden</title></html>",
+                headers={"content-type": "text/html; charset=utf-8"},
+            )
+        if url.endswith("/problems/coin-change/"):
+            return httpx.Response(
+                200, text="problem",
+                headers={"set-cookie": "csrftoken=fresh; Path=/"},
+            )
+        if url.endswith("/interpret_solution/"):
+            assert request.headers["x-csrftoken"] == "fresh"
+            cookie = request.headers["cookie"]
+            assert cookie.count("csrftoken=") == 1
+            assert "csrftoken=fresh" in cookie and "csrftoken=tok" not in cookie
+            return httpx.Response(200, json={"interpret_id": "retry_1"})
+        if url.endswith("/submissions/detail/retry_1/check/"):
+            return httpx.Response(200, json={
+                "state": "SUCCESS", "status_msg": "Accepted",
+                "run_success": True, "correct_answer": True,
+            })
+        raise AssertionError(url)
+
+    client = LeetCode(CREDS, transport=httpx.MockTransport(handler))
+    result = client.run(PROBLEM, "python3", "code", PROBLEM.example_testcases)
+
+    assert result.accepted
+    assert [request.method for request in requests] == ["POST", "GET", "POST", "GET"]
+
+
 def test_run_reports_failure_when_a_sample_differs():
     lc = judge_client([
         {

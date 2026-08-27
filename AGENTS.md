@@ -203,6 +203,10 @@ never submitted by accident.
 
 ### `lc/api.py` — LeetCode client
 - Cookie auth; every mutating request echoes `x-csrftoken`.
+- `whoami` can pass on `LEETCODE_SESSION` while judge POSTs reject a stale
+  CSRF token as HTTP 499 with an HTML 403 page. `_judge_post` then loads the
+  problem page once, removes **all** old/domainless `csrftoken` cookies, adopts
+  LeetCode's fresh domain cookie for both header and cookie, and retries once.
 - `_poll` treats network drops, 429 and 5xx as "keep asking until the
   deadline" — the submission already went in; only 4xx or judge FAILURE are
   terminal. Runs get 90s, submits 180s.

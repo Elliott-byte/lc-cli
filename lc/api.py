@@ -416,6 +416,25 @@ class LeetCode:
         except httpx.HTTPError as exc:
             raise LeetCodeError(f"network error talking to the judge: {exc}") from exc
 
+        # GraphQL account reads accept LEETCODE_SESSION alone, so `whoami` can
+        # succeed while a stale/wrong CSRF token makes Cloudflare answer judge
+        # POSTs with HTTP 499 and an HTML "403 Forbidden" page. A browser loads
+        # the problem page first and receives a fresh token; mirror that once,
+        # then retry the request instead of dumping the HTML at the user.
+        if self._csrf_blocked(resp):
+            self._refresh_judge_csrf(slug)
+            try:
+                resp = self._http.post(url, json=body, headers=headers)
+            except httpx.HTTPError as exc:
+                raise LeetCodeError(
+                    f"network error talking to the judge: {exc}"
+                ) from exc
+
+        if self._csrf_blocked(resp):
+            raise LeetCodeError(
+                "LeetCode blocked the judge request after refreshing CSRF"
+            )
+
         if resp.status_code in (401, 403):
             raise AuthError("LeetCode rejected the session — run `lc login` again")
         if resp.status_code == 429:
@@ -428,6 +447,57 @@ class LeetCode:
             return resp.json()
         except json.JSONDecodeError as exc:
             raise LeetCodeError("judge returned a non-JSON response") from exc
+
+    @staticmethod
+    def _csrf_blocked(resp: httpx.Response) -> bool:
+        content_type = resp.headers.get("content-type", "").lower()
+        return (
+            resp.status_code in (403, 499)
+            and "html" in content_type
+            and "403 forbidden" in resp.text[:2_000].lower()
+        )
+
+    def _refresh_judge_csrf(self, slug: str) -> None:
+        """Load the problem page and adopt the CSRF cookie it just issued."""
+        try:
+            resp = self._http.get(
+                f"{BASE}/problems/{slug}/",
+                headers={"Referer": f"{BASE}/problems/{slug}/"},
+            )
+        except httpx.HTTPError as exc:
+            raise LeetCodeError(
+                f"could not refresh the judge session: {exc}"
+            ) from exc
+        if resp.status_code >= 400:
+            raise LeetCodeError(
+                f"could not refresh the judge session (HTTP {resp.status_code})"
+            )
+
+        fresh = next(
+            (
+                cookie.value
+                for cookie in reversed(list(self._http.cookies.jar))
+                if cookie.name == "csrftoken"
+                and cookie.domain.lstrip(".") == "leetcode.com"
+            ),
+            "",
+        )
+        if not fresh:
+            raise LeetCodeError(
+                "LeetCode did not issue a fresh CSRF token — run `lc login` again"
+            )
+
+        # httpx created the configured token as a domainless cookie; retaining
+        # it beside LeetCode's new domain cookie sends two csrftoken values and
+        # still fails CSRF validation even when the header uses the fresh one.
+        jar = self._http.cookies.jar
+        for cookie in list(jar):
+            if cookie.name == "csrftoken":
+                jar.clear(cookie.domain, cookie.path, cookie.name)
+        self._http.cookies.set(
+            "csrftoken", fresh, domain="leetcode.com", path="/"
+        )
+        self._http.headers["x-csrftoken"] = fresh
 
     def _poll(
         self, token: str, slug: str, is_run: bool, timeout: float = 90.0

@@ -11,6 +11,14 @@ every commit bumps the version (early tags grouped a few commits); tags
 the top section for the current day — or start a new one. Say what changed
 and, when behaviour reversed, what it used to do.
 
+## 0.7.81 — 2026-08-27 · judge refreshes stale CSRF
+
+- A judge request rejected with Cloudflare's HTTP 499 / HTML 403 response now
+  loads the problem page, replaces the stale duplicate CSRF cookies with the
+  fresh token LeetCode issued, and retries once. Account reads could still pass
+  with `LEETCODE_SESSION`, leaving `whoami` green while every run failed and
+  printed a page of HTML.
+
 ## 0.7.80 — 2026-08-27 · login names the permission wall
 
 - Browser login now reports when macOS denied access to Safari's cookies and

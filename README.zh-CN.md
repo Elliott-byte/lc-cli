@@ -60,7 +60,9 @@ lc login --session … --csrf …    # 脚本化
 ```
 
 Cookie 以 `0600` 权限写入 `~/.lc/cookies.json`；不想落盘也可以通过 `$LEETCODE_SESSION` /
-`$LEETCODE_CSRF` 提供。会话每隔几周过期——重新 `lc login` 一次即可。
+`$LEETCODE_CSRF` 提供。会话每隔几周过期——重新 `lc login` 一次即可。如果账号 session 有效、
+但 LeetCode 已经轮换 CSRF cookie，第一次 judge 请求会从题目页刷新 token 并只重试一次，不再把
+Cloudflare 的 HTML 499/403 页面整段打印出来。
 
 ## 浏览器界面
 

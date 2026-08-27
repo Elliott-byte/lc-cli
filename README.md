@@ -67,6 +67,9 @@ lc login --session … --csrf …    # scripted
 Cookies are written to `~/.lc/cookies.json` with `0600` permissions, or read
 from `$LEETCODE_SESSION` / `$LEETCODE_CSRF` if you'd rather not store them on
 disk. The session expires every couple of weeks — just run `lc login` again.
+If the account session is valid but LeetCode has rotated its CSRF cookie, the
+first judge request refreshes it from the problem page and retries once instead
+of printing Cloudflare's HTML 499/403 page.
 
 ## The browser
 
