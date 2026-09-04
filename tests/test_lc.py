@@ -2707,6 +2707,7 @@ def test_enter_reopens_the_language_you_started_in(tmp_path, monkeypatch):
     """
     import asyncio
     import sys
+    from datetime import date as _date
 
     monkeypatch.setenv("LC_HOME", str(tmp_path))
     for var in ("LC_EDITOR", "VISUAL", "EDITOR"):
@@ -2731,6 +2732,12 @@ def test_enter_reopens_the_language_you_started_in(tmp_path, monkeypatch):
     )
     started = workspace.create(load_config(), problem, resolve("golang"))
     started.file.write_text("// half-finished\n")
+    # Stamp today's once-a-day restart as already done, so this enter is the
+    # plain reopen the test is about rather than the day's first attempt.
+    meta_path = started.directory / ".lc.json"
+    meta_path.write_text(json.dumps(
+        json.loads(meta_path.read_text())
+        | {"review_started": _date.today().isoformat()}, indent=2) + "\n")
 
     async def press_enter():
         app = tui.LeetCodeTUI()
@@ -2817,6 +2824,132 @@ def test_a_due_review_starts_clean_once_without_re_erasing_today(
     meta = json.loads((started.directory / ".lc.json").read_text())
     assert meta["review_started"] == _date.today().isoformat()
     assert (meta["lang"], meta["file"]) == ("python3", "solution.py")
+
+
+def test_the_first_open_of_the_day_restarts_any_problem_not_only_a_due_one(
+        tmp_path, monkeypatch):
+    """Every problem opens as a fresh attempt the first time each day.
+
+    The restart used to be Review-tab-only, and only for a due problem: enter
+    on the Problems tab, or on a problem whose next review is days away,
+    handed back last week's finished answer — the one thing recall practice
+    must never show. The same-day guard still holds, so a second visit keeps
+    the attempt being written, and the recorded language survives the reset.
+    """
+    import asyncio
+    import contextlib
+    import sys
+    from datetime import date as _date, timedelta
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    for var in ("LC_EDITOR", "VISUAL", "EDITOR"):
+        monkeypatch.delenv(var, raising=False)
+    (tmp_path / "config.json").write_text(json.dumps({
+        "workspace": str(tmp_path / "ws"), "editor": "true", "lang": "golang",
+    }))
+    for mod in [m for m in sys.modules if m.startswith("lc.")]:
+        del sys.modules[mod]
+    from textual.widgets import TabbedContent
+
+    from lc import review, store, tui, workspace
+    from lc.config import load_config
+    from lc.langs import resolve
+
+    started = workspace.create(load_config(), PROBLEM, resolve("python3"))
+    started.file.write_text("# last week's finished answer\n")
+    # Not due for days, and opened from the Problems tab: neither of the old
+    # conditions for a restart is met.
+    review.add(
+        PROBLEM.slug, title=PROBLEM.title, frontend_id=PROBLEM.frontend_id,
+        difficulty=PROBLEM.difficulty, curve=[7],
+        today=_date.today() - timedelta(days=1),
+    )
+    store.put_statement(PROBLEM)
+
+    opened = []
+
+    def edit(config, target):
+        opened.append(target.read_text())
+        target.write_text("# today's unfinished attempt\n")
+        return True
+
+    monkeypatch.setattr(tui.workspace, "open_in_editor", edit)
+    monkeypatch.setattr(tui.LeetCodeTUI, "suspend",
+                        lambda self: contextlib.nullcontext())
+
+    async def open_twice():
+        app = tui.LeetCodeTUI()
+        async with app.run_test(size=(140, 40)) as pilot:
+            await pilot.pause()
+            assert app.query_one(TabbedContent).active == "pane-problems"
+            app.current, app.current_slug = PROBLEM, PROBLEM.slug
+            app.action_pick()
+            await pilot.pause()
+            app.current = app.current or PROBLEM
+            app.action_pick()
+            await pilot.pause()
+
+    asyncio.run(open_twice())
+    assert opened == [
+        PROBLEM.snippets["python3"].rstrip("\n") + "\n",
+        "# today's unfinished attempt\n",
+    ], "first open of the day is clean, the second keeps the new attempt"
+    meta = json.loads((started.directory / ".lc.json").read_text())
+    assert meta["review_started"] == _date.today().isoformat()
+    assert (meta["lang"], meta["file"]) == ("python3", "solution.py"), \
+        "the reset must not re-pick in the config default language"
+    assert not (started.directory / "solution.go").exists()
+
+
+def test_a_problem_without_starter_code_still_opens(tmp_path, monkeypatch):
+    """A reset that cannot happen must not cost you the problem.
+
+    The daily restart needs LeetCode's snippet for the recorded language, and a
+    premium problem the account can no longer see has none. Reporting that as
+    an error and returning — which is right when the *write* fails — would make
+    a problem already on disk impossible to open at all.
+    """
+    import asyncio
+    import contextlib
+    import sys
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path))
+    for var in ("LC_EDITOR", "VISUAL", "EDITOR"):
+        monkeypatch.delenv(var, raising=False)
+    (tmp_path / "config.json").write_text(json.dumps({
+        "workspace": str(tmp_path / "ws"), "editor": "true",
+    }))
+    for mod in [m for m in sys.modules if m.startswith("lc.")]:
+        del sys.modules[mod]
+    from dataclasses import replace
+
+    from lc import store, tui, workspace
+    from lc.config import load_config
+    from lc.langs import resolve
+
+    started = workspace.create(load_config(), PROBLEM, resolve("python3"))
+    started.file.write_text("# the answer, and the only copy\n")
+    # What lc knows about the problem now: no snippets to restart from.
+    gone = replace(PROBLEM, snippets={}, paid_only=True)
+    store.put_statement(gone)
+
+    opened = []
+    monkeypatch.setattr(tui.workspace, "open_in_editor",
+                        lambda config, target: opened.append(target.read_text()) or True)
+    monkeypatch.setattr(tui.LeetCodeTUI, "suspend",
+                        lambda self: contextlib.nullcontext())
+
+    async def open_it():
+        app = tui.LeetCodeTUI()
+        async with app.run_test(size=(140, 40)) as pilot:
+            await pilot.pause()
+            app.current, app.current_slug = gone, gone.slug
+            app.action_pick()
+            await pilot.pause()
+
+    asyncio.run(open_it())
+    assert opened == ["# the answer, and the only copy\n"], \
+        "the editor still opens, on the work that is there"
 
 
 def test_opening_a_problem_clocks_it_and_an_accept_stops_it(tmp_path, monkeypatch):
@@ -4416,3 +4549,99 @@ def test_clicking_zz_in_the_editor_footer_saves_and_goes_back(tmp_path, monkeypa
             return isinstance(app.screen, editscreen.EditScreen)
 
     assert not asyncio.run(click_back())
+
+
+def test_two_syncs_at_once_are_serialised(tmp_path, monkeypatch):
+    """Grading two problems in a row starts two syncs, and they share one
+    clone. Left to overlap, git's own index and ref locks make one of them
+    die — `Unable to create index.lock`, `cannot lock ref 'HEAD'` — and lc
+    reports that to the user as a failed sync."""
+    import threading
+    import time
+
+    monkeypatch.setenv("LC_HOME", str(tmp_path / "home"))
+    remote = _bare_repo(tmp_path)
+    from lc import gitsync, review
+
+    curve = [1, 3, 7, 14]
+    for i in (1, 2):
+        review.add(f"p{i}", title=f"P{i}", frontend_id=str(i), curve=curve)
+    gitsync.sync(remote)
+
+    inside, peak, seen = [], [0], []
+    fetch = gitsync.fetch_remote_deck
+
+    def watched(url):
+        inside.append(1)
+        peak[0] = max(peak[0], len(inside))
+        time.sleep(0.2)       # hold the window open, so an overlap is certain
+        try:
+            return fetch(url)
+        finally:
+            inside.pop()
+
+    monkeypatch.setattr(gitsync, "fetch_remote_deck", watched)
+
+    def grade_and_sync(slug):
+        try:
+            review.shift_level(slug, -1, curve)
+            gitsync.sync(remote)
+        except Exception as exc:            # noqa: BLE001 - the point of the test
+            seen.append(f"{type(exc).__name__}: {exc}")
+
+    threads = [threading.Thread(target=grade_and_sync, args=(f"p{i}",))
+               for i in (1, 2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert peak[0] == 1, "two syncs were inside the same clone at once"
+    assert seen == [], f"a sync failed: {seen}"
+
+
+def test_a_deck_committed_underneath_us_is_not_a_failed_sync(tmp_path, monkeypatch):
+    """`_commit_and_push` asks git whether anything is staged and then commits.
+    Something committing in that gap used to surface as a sync error reading
+    "git commit: On branch main" — git's own informational line, kept because
+    it exits 1 and prints to stdout."""
+    monkeypatch.setenv("LC_HOME", str(tmp_path / "home"))
+    remote = _bare_repo(tmp_path)
+    from lc import gitsync, review
+
+    review.add("two-sum", title="Two Sum", frontend_id="1", curve=[1, 3])
+    gitsync.sync(remote)
+    review.shift_level("two-sum", 1, [1, 3])
+
+    path = gitsync.repo_dir()
+    gitsync.write_deck(path, review.load())
+    author = gitsync.author
+
+    def commit_first(where):
+        # `author()` is called between the staged-changes check and the
+        # commit; committing here reproduces exactly that window.
+        name, email, source = author(where)
+        gitsync._git("-c", "user.name=other", "-c", "user.email=o@example.com",
+                     "commit", "--quiet", "-m", "beat lc to it", cwd=where)
+        return name, email, source
+
+    monkeypatch.setattr(gitsync, "author", commit_first)
+    assert gitsync._commit_and_push(path, "review: 1 problem(s)") is False, \
+        "nothing left to commit is an outcome, not an error"
+
+
+def test_a_git_lock_left_by_something_else_is_explained(tmp_path):
+    """lc serialises its own syncs, so these mean another git is in the clone
+    — or a killed one left its lock file behind, which unlike flock does not
+    die with the process."""
+    from lc.gitsync import _explain
+
+    stale = _explain("reset", "fatal: Unable to create "
+                              "'/home/me/.lc/review-repo/.git/index.lock': File exists.")
+    assert "another git" in str(stale), str(stale)
+    assert "review-repo" in stale.hint and stale.retryable
+
+    moved = _explain("reset", "error: update_ref failed for ref 'HEAD': "
+                              "cannot lock ref 'HEAD': is at aaa but expected bbb")
+    assert "another git" in str(moved), str(moved)
+    assert moved.retryable

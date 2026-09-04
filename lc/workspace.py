@@ -124,12 +124,18 @@ def create(
     )
 
 
-def restart_review(problem: Problem, solution: Solution, today: date) -> bool:
-    """Restore starter code once for this day's due-review session.
+def restart_today(problem: Problem, solution: Solution, today: date) -> bool:
+    """Restore starter code the first time this problem is opened today.
 
-    The date lives beside the recorded solution rather than in the synced deck:
-    opening the editor twice on one machine must not erase work from the first
-    visit, while another machine should still begin its own clean recall attempt.
+    Solving is recall practice, not continuation: whatever was left in the file
+    last session answers the question before it has been asked. The date lives
+    beside the recorded solution rather than in the synced deck, so opening the
+    editor twice on one machine must not erase work from the first visit, while
+    another machine should still begin its own clean attempt.
+
+    The stamp is still spelled ``review_started``: the reset began as a
+    Review-tab rule, and renaming the key would make every workspace written by
+    an older lc look unopened — destroying an attempt in progress on upgrade.
     Returns whether this call performed the reset.
     """
     meta_path = solution.directory / ".lc.json"
@@ -142,9 +148,9 @@ def restart_review(problem: Problem, solution: Solution, today: date) -> bool:
     if meta.get("review_started") == stamp:
         return False
 
-    # Keep the language and recorded filename that were already in use. A
-    # review restart clears the answer; it must not strand it by re-picking in
-    # the config default language, the failure ordinary reopen avoids.
+    # Keep the language and recorded filename that were already in use. The
+    # restart clears the answer; it must not strand it by re-picking in the
+    # config default language, the failure ordinary reopen avoids.
     solution.file.write_text(starter_code(problem, solution.language))
     meta.update({
         "slug": problem.slug,

@@ -77,9 +77,10 @@ Bare `lc` (or `lc tui`) opens two panes: problems on the left, the statement
 on the right. On a fresh machine it downloads the problem index by itself.
 
 The loop is: move to a problem, `enter` to open it, write, run, submit —
-repeat. `enter` on a problem you already started reopens your existing file,
-in the language you started it in. Where that happens is up to you — see
-[Solving](#solving).
+repeat. `enter` on a problem you already started keeps the file and the
+language you started it in — and the first time each day it restores that
+file's starter code, so a session begins with the question rather than with
+your last answer. Where that happens is up to you — see [Solving](#solving).
 
 Today's daily challenge is pinned to the top with a yellow `★` and selected
 when the app opens, so it is always one keypress away; `D` jumps back to it.
@@ -210,11 +211,12 @@ the status bar counts the whole deck — `69 on the deck · 3 due` — and
 narrows with the `/` filter. Each row keeps the problem's coloured difficulty
 visible beside its id, level and due date, including in the narrowest pane.
 
-Opening a due problem from **Review** begins a clean recall attempt: on the
-first open that day, lc replaces the previous answer with that language's
-starter code. Reopening it again the same day keeps the work you have just
-written. Opening from **Problems** (or with `lc edit`) still reopens the
-existing answer unchanged.
+Opening a problem begins a clean recall attempt: on the first open that day —
+from **Review** or **Problems**, due or not, whether or not you have solved it
+before — lc replaces the previous answer with that language's starter code.
+Reopening it again the same day keeps the work you have just written, and so
+does a problem you have already submitted today from anywhere else. `lc edit`
+on the command line still reopens the existing answer unchanged.
 
 ![the review deck](docs/review.svg)
 
@@ -295,6 +297,9 @@ Once the repo is configured, every real level change automatically runs a
 sync — whether it came from `+` / `-` / `0`, `lc review level`, or autograde.
 A command clamped at the current level does not make an unnecessary network
 request. `g` and the commands below remain available for all other deck edits.
+Syncs run one at a time and queue behind each other — grading several problems
+in a row, or a `\s` in Vim while the TUI is syncing, no longer has two of them
+fighting over the same clone.
 
 ```bash
 lc config repo https://github.com/you/lc-review.git

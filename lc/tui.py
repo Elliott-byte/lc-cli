@@ -1119,21 +1119,29 @@ class LeetCodeTUI(App):
                 self.notify(escape(str(exc)), severity="error")
                 return
 
-        # The Review tab is recall practice, not continuation: the first open
-        # of a due problem today starts from its original prompt. Persisting a
-        # per-machine day stamp prevents a second visit from erasing the answer
-        # being written in this practice session. Ordinary Problems-tab opens,
-        # future reviews, and today's already-submitted attempts still reopen.
+        # The first open of a problem each local day starts from its original
+        # prompt — either tab, due or not, solved before or never touched.
+        # Solving is recall practice, and last session's answer sitting in the
+        # file answers the question before it is asked. Two marks mean "today's
+        # session already began" and keep the attempt in progress: the
+        # workspace's own day stamp (a second visit from here, or from Vim),
+        # and a submit the deck recorded today from any process at all.
         today = date.today()
-        if self.query_one(TabbedContent).active == "pane-review":
-            item = review.live(review.load()).get(problem.slug)
-            if (item is not None and item.due_in(today) <= 0
-                    and not item.attempt_today(today)):
-                try:
-                    workspace.restart_review(problem, solution, today)
-                except (ValueError, OSError) as exc:
-                    self.notify(escape(str(exc)), severity="error")
-                    return
+        deck_row = review.load().get(problem.slug)
+        if deck_row is None or not deck_row.attempt_today(today):
+            try:
+                workspace.restart_today(problem, solution, today)
+            except ValueError as exc:
+                # No starter code in the recorded language (a premium problem
+                # opened before, a language LeetCode does not offer here):
+                # there is nothing to reset to, and refusing the open would
+                # leave the problem unopenable. Open what is on disk instead.
+                self.notify(escape(str(exc)), severity="warning")
+            except OSError as exc:
+                # The write itself failed, so the file may be half-truncated
+                # and may not save either — do not hand it to an editor.
+                self.notify(escape(str(exc)), severity="error")
+                return
 
         self._timer_begin(problem.slug)
         # Snapshot solved-ness at the door, every visit: the editor-return

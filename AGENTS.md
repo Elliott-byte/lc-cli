@@ -78,6 +78,7 @@ Everything lc owns lives under `$LC_HOME` (default `~/.lc`):
 | `cookies.json` | Session cookies, written `0600` from the first byte. |
 | `cache.db` | sqlite cache (problem index, statements, meta). Disposable. |
 | `review-repo/` | Private clone used by sync. **Disposable** — every sync resets it to the remote. |
+| `review-repo.lock` | The flock syncs queue on. Beside the clone, not inside it: `ensure_clone` deletes the clone. Empty, disposable. |
 | `timer.json` | The one active solve clock. Shared by TUI, CLI and Vim, hence a file. |
 | `<workspace>/<dir>/notes.md` | That problem's note cards — one `##` heading per card. User data; synced into the review repo as `notes/<slug>.md`. |
 
@@ -130,7 +131,22 @@ never submitted by accident.
 - `_explain`/`_KNOWN` map git stderr to one sentence + hint. **Order
   matters**: GH007 (email privacy) must precede "failed to push some refs" —
   GH007's output *contains* that line, and the race rule's advice ("run it
-  again") retries into the same wall.
+  again") retries into the same wall. `SyncError.output` keeps git's raw text:
+  the summary is for the user, and a caller that has to recognise one failure
+  cannot read it back out of a sentence.
+- **`pull`/`push`/`sync` are `@_serialised`** — one sync at a time, across
+  threads *and* processes (an `RLock` plus an flock on
+  `$LC_HOME/review-repo.lock`, beside the clone because `ensure_clone` deletes
+  the clone). They all work in the one clone, and git guards its index and refs
+  with lock files of its own: two at once kill one with `Unable to create
+  index.lock` or `cannot lock ref 'HEAD'`, reported to the user as a failed
+  sync. Two are easy to start — grading two problems in a row, or a `\s` in
+  Vim while the TUI syncs. Reentrant, because `sync()` is `pull()` + `push()`.
+- `_commit_and_push` treats **"nothing to commit" as False, not an error**.
+  git prints it on *stdout* and still exits 1, and the one-sentence summary
+  keeps the useless first line ("On branch main"), so the check reads
+  `SyncError.output`. The staged-changes pre-check cannot cover it: anything
+  committing between that check and the commit lands in the gap.
 - `status()` is computed from local files only — the strip redraws on every
   deck refresh and must never touch the network. "synced" means "agreed with
   the clone at last contact".
@@ -158,10 +174,15 @@ never submitted by accident.
   language**; only choose a language and `create()` when nothing exists.
   Re-picking would write a second file in the config default and repoint
   `.lc.json`, stranding the real work and aiming `r`/`s` at starter code.
-- A due problem opened from Review resets that recorded solution to starter
-  code **once per local day**. `.lc.json`'s `review_started` stamp prevents a
-  same-day reopen from erasing the new attempt; Problems-tab/CLI opens and
-  already-attempted rows remain ordinary reopens.
+- `action_pick` resets the recorded solution to starter code on the **first
+  open of each local day** — either tab, due or not, solved before or never
+  touched. Two things mean the day's session already began and must not be
+  erased: `.lc.json`'s `review_started` stamp (a same-day reopen from here or
+  from Vim) and a deck row already attempted today (a submit filed by another
+  process). CLI `lc edit`/`lc pick` are not part of this. A missing starter
+  snippet only warns — the reset cannot happen, but refusing the open would
+  leave a problem already on disk unopenable; a failed *write* still blocks,
+  since that file may be half-truncated.
 - Editor-return heuristics in `action_pick`: snapshot **at the door, every
   visit** — both the store's solved flag and the deck's ✔ mark. Both mean
   "today", not "while I was in the editor"; acting on a standing value
@@ -240,9 +261,12 @@ never submitted by accident.
   solutions have no generated title/URL header. The built-in editor's reset
   and `create(overwrite=True)` must use the same path, or reset can silently
   produce a different file from a fresh pick.
-- `restart_review` keeps the existing recorded language/file and stamps the
+- `restart_today` keeps the existing recorded language/file and stamps the
   local day in `.lc.json`; never infer the reset from the deck alone, or a
-  second editor visit that day destroys the attempt in progress.
+  second editor visit that day destroys the attempt in progress. The stamp is
+  still keyed `review_started` (the reset began Review-only): renaming it makes
+  every workspace an older lc wrote look unopened, and the upgrade wipes the
+  attempt in progress.
 - `strip_header` removes only a leading comment block that contains the
   problem URL. This is compatibility for files written by older lc versions;
   a user's own comment is never deleted.
@@ -415,6 +439,7 @@ never submitted by accident.
 | "N changes to push" that pushing never clears | the save guards in `gitsync.pull`/`_push_once` (`merged != local`) and `status()` |
 | deck cursor lands on the wrong problem | `ReviewList._render_rows` restore chain; `load_items(focus=…)` is one-shot |
 | wrong file or language opened / judged | `workspace.load` + `.lc.json`; the TUI's reopen-first `action_pick` |
+| an answer erased, or last session's answer still on screen | `workspace.restart_today` and the day stamp / attempt guards in `action_pick` |
 | a level moved when it should not have (or refused to) | `review.record_submit` — the graded-today guard and its docstring |
 | clock stops, starts or re-arms by itself | `solvetimer.begin`/`stop_if` + the door snapshots in `tui.action_pick` |
 | statement renders oddly / styling bleeds into padding | `render._StatementParser`; use spans, never base styles, where text wraps |

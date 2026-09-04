@@ -13,12 +13,20 @@ a divergence is a merge lc controls, never a conflict git asks about.
 
 from __future__ import annotations
 
+import functools
 import json
 import shutil
 import subprocess
+import threading
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+
+try:                      # pragma: no cover - Windows has no flock
+    import fcntl
+except ImportError:
+    fcntl = None
 
 from . import notes, review, store
 from .config import (
@@ -45,11 +53,17 @@ class SyncError(Exception):
     ``hint`` is the next thing to try, when lc recognises the failure.
     """
 
-    def __init__(self, message: str, hint: str = "", retryable: bool = False) -> None:
+    def __init__(self, message: str, hint: str = "", retryable: bool = False,
+                 output: str = "") -> None:
         super().__init__(message)
         self.hint = hint
         #: True when simply doing the whole sync again is the right response.
         self.retryable = retryable
+        #: Everything git printed. `_explain` boils that down to one sentence,
+        #: which is right for the user and wrong for a caller that needs to
+        #: recognise a particular failure — git says "nothing to commit" in a
+        #: line the summary throws away.
+        self.output = output
 
 
 #: Lines git prints that say nothing on their own. The last two are the tail of
@@ -92,6 +106,18 @@ _KNOWN = (
     ("failed to push some refs",
      "the other machine pushed while this sync was running",
      "run the sync again — lc will merge both sides", True),
+    # lc serialises its own syncs (see `_exclusive`), so these two mean
+    # something outside lc is in the clone — a git command run by hand, an
+    # editor's git plugin, or the lock file a killed git left behind. Unlike
+    # flock, git's locks are plain files and do not die with the process.
+    ("index.lock",
+     "another git is using lc's clone of the deck",
+     "wait for it to finish; if nothing is running, the clone is disposable "
+     "— `rm -rf ~/.lc/review-repo` and sync again", True),
+    ("cannot lock ref",
+     "another git moved lc's clone while this sync was reading it",
+     "run the sync again; if it keeps happening, `rm -rf ~/.lc/review-repo`",
+     True),
 )
 
 
@@ -104,19 +130,101 @@ def _explain(command: str, output: str) -> SyncError:
     lowered = " ".join(lines).lower()
     for needle, reason, hint, retryable in _KNOWN:
         if needle in lowered:
-            return SyncError(f"git {command}: {reason}", hint, retryable)
+            return SyncError(f"git {command}: {reason}", hint, retryable,
+                             output=output)
 
     # Nothing recognised: prefer the line git meant as the diagnosis over the
     # last one it happened to print.
     for prefix in ("remote:", "fatal:", "error:"):
         for line in lines:
             if line.lower().startswith(prefix):
-                return SyncError(f"git {command}: {line}")
-    return SyncError(f"git {command}: {lines[0] if lines else 'failed'}")
+                return SyncError(f"git {command}: {line}", output=output)
+    return SyncError(f"git {command}: {lines[0] if lines else 'failed'}",
+                     output=output)
 
 
 def repo_dir() -> Path:
     return home() / "review-repo"
+
+
+def lock_path() -> Path:
+    """Beside the clone, never inside it: `ensure_clone` deletes the clone
+    wholesale when the configured URL changes, and a lock file that vanishes
+    from under its holder is not a lock."""
+    return home() / "review-repo.lock"
+
+
+#: Serialising syncs within this process. Reentrant because `sync()` is itself
+#: a `pull()` and a `push()`, each of which may also be called on its own.
+_SYNC_LOCK = threading.RLock()
+_HELD = threading.local()
+#: How long a sync waits for the one in front of it, matched to the patience
+#: `_git` already gives a single command. Shorter reads as an error on a slow
+#: link — the very toast this lock exists to remove — and the wait is a
+#: background worker's, not the user's.
+LOCK_WAIT = float(TIMEOUT)
+
+
+def _serialised(fn):
+    """Run *fn* with the sync lock held — see `_exclusive`."""
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        with _exclusive():
+            return fn(*args, **kwargs)
+
+    return wrapper
+
+
+@contextmanager
+def _exclusive():
+    """One sync at a time, in this process and across processes.
+
+    Every git command here runs inside the one clone, and git guards its index
+    and its refs with lock files: two syncs at once make one of them die with
+    `Unable to create index.lock` or `cannot lock ref 'HEAD'`, which lc then
+    reports to the user as a failed sync. That is not a rare collision —
+    grading two problems in a row starts two syncs, and a `\\s` in Vim starts
+    one from a different process entirely — so both cases are serialised: a
+    thread lock for this process, a file lock for the others.
+    """
+    with _SYNC_LOCK:
+        if getattr(_HELD, "on", False):     # sync() -> pull() -> here
+            yield
+            return
+        _HELD.on = True
+        try:
+            if fcntl is None:               # no flock: threads still queue
+                yield
+                return
+            path = lock_path()
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("a+") as handle:
+                _take_lock(handle)
+                try:
+                    yield
+                finally:
+                    fcntl.flock(handle, fcntl.LOCK_UN)
+        finally:
+            _HELD.on = False
+
+
+def _take_lock(handle) -> None:
+    """Wait for the sync ahead of us, then take the lock — or give up saying
+    so. Blocking outright would hang a sync behind a git that is sitting on a
+    credential prompt with nobody watching it."""
+    deadline = time.monotonic() + LOCK_WAIT
+    while True:
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return
+        except OSError:
+            if time.monotonic() >= deadline:
+                raise SyncError(
+                    f"another sync has been running for over {LOCK_WAIT:.0f}s",
+                    "wait for it to finish, then sync again",
+                    retryable=True,
+                ) from None
+            time.sleep(0.05)
 
 
 def _git(*args: str, cwd: Path | None = None) -> str:
@@ -356,8 +464,19 @@ def _commit_and_push(path: Path, message: str) -> bool:
     # -c rather than writing the clone's config: lc states who it commits as
     # on every call and never edits a git config of yours.
     name, email, _ = author(path)
-    _git("-c", f"user.name={name}", "-c", f"user.email={email}",
-         "commit", "--quiet", "-m", message, cwd=path)
+    try:
+        _git("-c", f"user.name={name}", "-c", f"user.email={email}",
+             "commit", "--quiet", "-m", message, cwd=path)
+    except SyncError as exc:
+        # "nothing to commit" is not a failure — something else committed the
+        # same deck between the check above and this call. git says so on
+        # *stdout* and still exits 1, and the one-sentence summary keeps the
+        # useless first line ("On branch main"), so the raw output is what
+        # this has to read. Syncs are serialised now, which leaves the window
+        # to a git run by hand inside the clone.
+        if "nothing to commit" not in exc.output.lower():
+            raise
+        return False
     _git("push", "--quiet", "origin", f"HEAD:{_branch(path)}", cwd=path)
     return True
 
@@ -466,6 +585,7 @@ def summary(config: Config) -> str:
     return f"{state.icon} synced {when}"
 
 
+@_serialised
 def pull(url: str) -> tuple[int, int, int]:
     """Merge the repo's deck into this machine's. Returns (added, updated,
     removed) — what the pull did to the deck as the user sees it."""
@@ -491,6 +611,7 @@ def pull(url: str) -> tuple[int, int, int]:
     return added, updated, removed
 
 
+@_serialised
 def push(url: str) -> tuple[int, bool]:
     """Publish the local deck. Returns (problems pushed, whether it changed).
 
@@ -528,6 +649,7 @@ def _push_once(url: str) -> tuple[int, bool]:
     return count, _commit_and_push(path, f"review: {count} problem(s)")
 
 
+@_serialised
 def sync(url: str) -> tuple[int, int, int, bool]:
     """Pull then push. Returns (added, updated, removed, remote changed)."""
     added, updated, removed = pull(url)

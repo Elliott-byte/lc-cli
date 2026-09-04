@@ -92,6 +92,21 @@ as a change — curve bounds and repeated commands can leave it unchanged.
 The local grade is already durable before the network begins, so an automatic
 sync failure is visible but never pretends the grade itself failed.
 
+**One sync at a time — threads and processes both.** — *standing.* Every git
+command runs inside the single clone, and git guards its index and refs with
+lock files of its own, so two syncs at once kill one of them with `Unable to
+create index.lock` or `cannot lock ref 'HEAD'` — which lc reports to the user
+as a failed sync even though the deck is fine. Two are easy to start: grading
+two problems in a row fires two, and a `\s` in Vim fires one from another
+process. An `RLock` covers this process, an flock beside the clone covers the
+others, and a sync that waits too long says so rather than spinning. The lock
+file lives *beside* the clone because `ensure_clone` deletes the clone whole.
+
+**"Nothing to commit" is an outcome, not a failure.** — *standing.* git says
+it on stdout and still exits 1, which every other call here is right to treat
+as an error. `_commit_and_push` therefore reads `SyncError.output` rather than
+the one-sentence summary, whose first line is git's useless "On branch main".
+
 ## Identity
 
 **Deck commits are yours by default, lc's as last resort.** — *standing
@@ -165,7 +180,8 @@ clock chrome.
 ## TUI
 
 **`enter` reopens; `pick` creates.** — *superseded in 0.7.78 for due Review
-attempts; retained for ordinary opens.* A problem you already
+attempts and in 0.7.83 for the first open of any problem each day; the file
+and language it reopens are still never re-picked.* A problem you already
 started reopens as-is, whatever language it was picked in — re-picking
 would write a second file in the config default and repoint `.lc.json`,
 stranding the half-written one and aiming `r`/`s` at fresh starter code.
@@ -173,13 +189,27 @@ The CLI's `lc pick` keeps create semantics (with `--lang`/`--overwrite`);
 `lc edit` and the TUI's enter are the reopen paths.
 
 **Ordinary enter reopens; a due Review entry restarts once a day.** —
-*standing.* Recall practice must not display the answer submitted last time,
+*superseded in 0.7.83: the restart no longer depends on the tab or the due
+date.* Recall practice must not display the answer submitted last time,
 so the first open of a due, not-yet-attempted problem from Review restores the
 starter code in the solution's recorded language. `.lc.json` records that
 machine's `review_started` date: reopening Vim or the built-in editor later
 that day keeps the new attempt instead of destructively resetting it again.
 Problems-tab and CLI edit paths remain ordinary reopens, and the marker is
 machine-local because each machine should begin its own recall attempt.
+
+**Every enter restarts once a day.** — *standing.* Which tab a problem was
+opened from, and whether the deck calls it due, is not what makes an open a
+fresh attempt — the day is. A problem opened again from Problems, or ahead of
+its due date, is being practised just the same, and the finished answer sitting
+in the file answers the question before it has been asked. So the first `enter`
+of each local day restores the starter code for any problem. What carried over
+are the two guards about *today*: `.lc.json`'s day stamp, so a second visit
+from the TUI or Vim keeps the attempt in progress, and a submit the deck
+already recorded today, which covers a session begun in another process. The
+stamp keeps its `review_started` name — renaming it would make every workspace
+an older lc wrote look unopened, and the upgrade itself would wipe an attempt.
+`lc edit` and `lc pick` are unchanged: they are file commands, not the loop.
 
 **Cursor follows the problem, not the row number.** — *standing.* Grading
 moves a due date, which re-sorts the deck; restore by slug (with a one-shot
@@ -233,11 +263,12 @@ files are user data and stay untouched; `strip_header` continues recognising
 older lc-generated headers without deleting a comment the user wrote.
 
 **Existing answers persist except at an explicit due-review boundary.** —
-*standing.* Normal reopen, create without `--overwrite`, and judging never
-rewrite an answer. Entering a due Review item is the one destructive boundary:
-once per local day it replaces only `.lc.json`'s recorded solution file with
-that language's starter code. The recorded file still wins, so helper files
-are never selected or cleared.
+*widened in 0.7.83: the boundary is the first open of any problem each day, not
+only a due Review entry.* Reopening later the same day, create without
+`--overwrite`, and judging never rewrite an answer. The day's first enter is
+the one destructive boundary: it replaces only `.lc.json`'s recorded solution
+file with that language's starter code. The recorded file still wins, so
+helper files are never selected or cleared.
 
 **Judge polling survives drops.** — *standing.* The submission already
 went in, so network errors, 429 and 5xx during `/check/` polling mean

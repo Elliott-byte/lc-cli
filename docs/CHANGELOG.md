@@ -11,6 +11,27 @@ every commit bumps the version (early tags grouped a few commits); tags
 the top section for the current day — or start a new one. Say what changed
 and, when behaviour reversed, what it used to do.
 
+## 0.7.83 — 2026-09-04 · A fresh start each day, and syncs that queue
+
+- The first time you open a problem on a given day, its solution file goes back
+  to the starter code — from either tab, due or not, and whether or not you
+  have ever solved it. Only a due problem opened from Review used to do this;
+  everywhere else handed back the answer you wrote last time, so re-practising
+  began by reading your own solution.
+- Opening it again the same day keeps the attempt you are writing, and a
+  problem you already submitted today is left alone as well. The reset keeps
+  the language and file the problem was picked in, and `lc edit` on the command
+  line still reopens an answer unchanged.
+- Grading two problems in a row no longer fails a sync. Each grade starts one,
+  they shared a single git clone, and git's own index and ref locks made one
+  of them die — `Unable to create index.lock`, `cannot lock ref 'HEAD'`, or
+  the baffling `git commit: On branch main`. Syncs now run one at a time,
+  across processes too, so a `\s` in Vim and the TUI no longer collide. The
+  deck was never at risk; the errors were.
+- "Nothing to commit" is reported as nothing to do rather than a failed sync.
+- A git lock left behind by something outside lc is now explained, with the
+  reminder that the clone is disposable.
+
 ## 0.7.82 — 2026-08-27 · Review shows difficulty
 
 - The TUI Review table now has a coloured `Diff` column for Easy, Medium and
